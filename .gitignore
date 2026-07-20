@@ -52,7 +52,10 @@ Thumbs.db
 minio-data/
 
 # Dataset files and images (large — download/provide separately)
-backend/data/
+# DV_Data is tracked and pushed to the repo; everything else under
+# backend/data/ (e.g. the generated library/ file store) stays ignored.
+backend/data/*
+!backend/data/DV_Data/
 images/
 *.zip
 *.tar.gz

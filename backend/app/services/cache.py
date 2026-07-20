@@ -1,35 +1,27 @@
-"""Redis caching service for embedding vectors."""
+"""
+In-process embedding cache.
+
+Replaces Redis: a plain dict keyed by SHA-256 hash of the image bytes.
+This isn't shared across worker processes (each Gunicorn worker gets its
+own cache), so the hit rate is lower with multiple workers than a shared
+Redis would give — an acceptable trade for not running a separate service.
+"""
 
 import hashlib
-import json
 from typing import Optional
-
-import redis.asyncio as redis
-
-from app.core.config import settings
-from app.core.logging_config import logger
 
 
 class CacheService:
-    def __init__(self, redis_url: str, ttl_hours: int = 24):
-        self._redis_url = redis_url
-        self._ttl_seconds = ttl_hours * 3600
-        self._client: Optional[redis.Redis] = None
+    def __init__(self):
+        self._store: dict[str, list[float]] = {}
 
     async def connect(self):
-        self._client = redis.from_url(self._redis_url, decode_responses=True)
-        await self._client.ping()
-        logger.info("Connected to Redis", extra={"url": self._redis_url})
+        pass
 
     async def disconnect(self):
-        if self._client:
-            await self._client.close()
-            logger.info("Disconnected from Redis")
+        pass
 
     async def health_check(self) -> bool:
-        if not self._client:
-            return False
-        await self._client.ping()
         return True
 
     @staticmethod
@@ -37,24 +29,10 @@ class CacheService:
         return hashlib.sha256(image_bytes).hexdigest()
 
     async def get_embedding(self, image_hash: str) -> Optional[list[float]]:
-        if not self._client:
-            return None
-        data = await self._client.get(f"emb:{image_hash}")
-        if data:
-            return json.loads(data)
-        return None
+        return self._store.get(image_hash)
 
     async def set_embedding(self, image_hash: str, embedding: list[float]):
-        if not self._client:
-            return
-        await self._client.setex(
-            f"emb:{image_hash}",
-            self._ttl_seconds,
-            json.dumps(embedding),
-        )
+        self._store[image_hash] = embedding
 
 
-cache_service = CacheService(
-    redis_url=settings.redis_url,
-    ttl_hours=settings.cache_ttl_hours,
-)
+cache_service = CacheService()

@@ -31,9 +31,7 @@ def test_health_check_endpoint():
 
     assert data["status"] == "healthy"
     assert data["services"]["api"] == "up"
-    assert data["services"]["postgres"] == "up"
-    assert data["services"]["qdrant"] == "up"
-    assert data["services"]["minio"] == "up"
+    assert data["services"]["storage"] == "up"
     assert data["services"]["clip"] == "up"
 
 
@@ -47,7 +45,7 @@ def test_health_check_response_structure():
         assert field in data, f"Missing required field: {field}"
 
     assert isinstance(data["services"], dict)
-    assert len(data["services"]) >= 5
+    assert len(data["services"]) == 3
 
 
 def test_api_documentation_accessible():

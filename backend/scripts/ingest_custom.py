@@ -1,13 +1,13 @@
 """
 Custom image ingestion script.
 
-Ingests images from a local folder into MinIO, Qdrant, and PostgreSQL.
-Designed for the 'flawed' microscopy images in the project images/ directory.
+Ingests images from a local folder into the local file store (metadata +
+embeddings) and local image storage.
 
 Usage:
     cd backend
-    python -m scripts.ingest_custom --image-dir ../images/flawed
-    python -m scripts.ingest_custom --image-dir ../images/flawed --limit 100
+    python -m scripts.ingest_custom --image-dir ./data/DV_Data
+    python -m scripts.ingest_custom --image-dir ./data/DV_Data --limit 10
 """
 
 import argparse
@@ -18,10 +18,9 @@ import time
 from pathlib import Path
 from uuid import uuid4
 
-from app.services.database import db_service
 from app.services.embedding import embedding_service
-from app.services.qdrant import qdrant_service
-from app.services.storage import storage_service
+from app.services.file_store import file_store_service
+from app.services.local_storage import local_storage_service
 from app.models.image import Image
 
 logging.basicConfig(
@@ -73,34 +72,21 @@ async def ingest_single_image(
     object_name = f"custom/{dataset_label}/{image_name}{image_path.suffix}"
     content_type = "image/png" if suffix == ".png" else "image/jpeg"
 
-    storage_service.upload_image(object_name, image_bytes, content_type)
+    await local_storage_service.upload_image(object_name, image_bytes, content_type)
 
     embedding = await embedding_service.get_embedding(image_bytes)
 
-    async with db_service.get_session() as session:
-        image_record = Image(
-            id=image_id,
-            dataset_source=f"custom_{dataset_label}",
-            image_path=object_name,
-            diagnosis=dataset_label,
-            tissue_type=None,
-            benign_malignant=None,
-            age=None,
-            sex=None,
-        )
-        session.add(image_record)
-        await session.commit()
-
-    await qdrant_service.upsert(
-        id=str(image_id),
-        vector=embedding,
-        payload={
-            "diagnosis": dataset_label,
-            "tissue_type": None,
-            "benign_malignant": None,
-            "dataset": f"custom_{dataset_label}",
-        },
+    image_record = Image(
+        id=image_id,
+        dataset_source=f"custom_{dataset_label}",
+        image_path=object_name,
+        diagnosis=dataset_label,
+        tissue_type=None,
+        benign_malignant=None,
+        age=None,
+        sex=None,
     )
+    await file_store_service.upsert_image(image_record, embedding)
 
     checkpoint.mark_processed(image_name)
     return True
@@ -134,10 +120,8 @@ async def main():
     dataset_label = args.label or image_dir.name
 
     logger.info("Initializing services...")
-    await db_service.connect()
-    await qdrant_service.connect()
-    await qdrant_service.ensure_collection(vector_size=512)
-    storage_service.connect()
+    file_store_service.connect()
+    local_storage_service.connect()
     await embedding_service.load_model()
 
     checkpoint_path = image_dir / ".ingest_checkpoint.db"
@@ -178,8 +162,6 @@ async def main():
     logger.info(f"Done: processed={processed}, skipped={skipped}, total_time={elapsed:.1f}s")
 
     checkpoint.close()
-    await db_service.disconnect()
-    await qdrant_service.disconnect()
 
 
 if __name__ == "__main__":

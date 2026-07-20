@@ -31,9 +31,8 @@ from app.middleware.error_handler import (
 )
 from app.middleware.metrics import PrometheusMiddleware, metrics_endpoint
 from app.api.v1.endpoints.router import api_router
-from app.services.database import db_service
-from app.services.qdrant import qdrant_service
-from app.services.storage import storage_service
+from app.services.file_store import file_store_service
+from app.services.local_storage import local_storage_service
 from app.services.embedding import embedding_service
 from app.services.cache import cache_service
 
@@ -56,38 +55,26 @@ async def lifespan(app: FastAPI):
 
     # Connect services (failures are logged but don't prevent startup)
     try:
-        await db_service.connect()
+        file_store_service.connect()
     except Exception as e:
-        logger.error(f"Failed to connect to PostgreSQL: {e}")
+        logger.error(f"Failed to initialize file store: {e}")
 
     try:
-        await qdrant_service.connect()
-        await qdrant_service.ensure_collection(vector_size=512)
+        local_storage_service.connect()
     except Exception as e:
-        logger.error(f"Failed to connect to Qdrant: {e}")
-
-    try:
-        storage_service.connect()
-    except Exception as e:
-        logger.error(f"Failed to connect to MinIO: {e}")
+        logger.error(f"Failed to initialize local image storage: {e}")
 
     try:
         await embedding_service.load_model()
     except Exception as e:
         logger.error(f"Failed to load CLIP model: {e}")
 
-    try:
-        await cache_service.connect()
-    except Exception as e:
-        logger.error(f"Failed to connect to Redis: {e}")
+    await cache_service.connect()
 
     yield
 
     # Shutdown
     logger.info("Application shutting down")
-    await db_service.disconnect()
-    await qdrant_service.disconnect()
-    storage_service.disconnect()
     await cache_service.disconnect()
 
 

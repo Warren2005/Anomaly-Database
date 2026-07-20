@@ -2,22 +2,19 @@
 Health check endpoint.
 
 Checks connectivity to all backend services:
-- PostgreSQL
-- Qdrant
-- MinIO
+- Local file store (metadata.json / feedback.json)
+- Local image storage
+- CLIP model
 """
 
 from fastapi import APIRouter
 from datetime import datetime
 
 from app.core.config import settings
-from app.core.logging_config import logger
 from app.schemas.health import HealthResponse, ServiceStatus
-from app.services.database import db_service
-from app.services.qdrant import qdrant_service
-from app.services.storage import storage_service
+from app.services.file_store import file_store_service
+from app.services.local_storage import local_storage_service
 from app.services.embedding import embedding_service
-from app.services.cache import cache_service
 
 router = APIRouter()
 
@@ -34,25 +31,12 @@ async def health_check():
     """
     service_checks = {"api": "up"}
 
-    # Check PostgreSQL
+    # Check local storage (file store + image directory)
     try:
-        await db_service.health_check()
-        service_checks["postgres"] = "up"
+        storage_ok = file_store_service.health_check() and local_storage_service.health_check()
+        service_checks["storage"] = "up" if storage_ok else "down"
     except Exception:
-        service_checks["postgres"] = "down"
-
-    # Check Qdrant
-    try:
-        await qdrant_service.health_check()
-        service_checks["qdrant"] = "up"
-    except Exception:
-        service_checks["qdrant"] = "down"
-
-    # Check MinIO
-    try:
-        service_checks["minio"] = "up" if storage_service.health_check() else "down"
-    except Exception:
-        service_checks["minio"] = "down"
+        service_checks["storage"] = "down"
 
     # Check CLIP model
     try:
@@ -60,14 +44,8 @@ async def health_check():
     except Exception:
         service_checks["clip"] = "down"
 
-    # Check Redis
-    try:
-        service_checks["redis"] = "up" if await cache_service.health_check() else "down"
-    except Exception:
-        service_checks["redis"] = "down"
-
     # Determine overall status
-    external_services = ["postgres", "qdrant", "minio"]
+    external_services = ["storage"]
     up_count = sum(1 for s in external_services if service_checks[s] == "up")
 
     if up_count == len(external_services):

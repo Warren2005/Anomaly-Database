@@ -5,11 +5,8 @@ from pydantic import BaseModel
 
 class ServiceStatus(BaseModel):
     api: str
-    postgres: str
-    qdrant: str
-    minio: str
+    storage: str
     clip: str
-    redis: str
 
 
 class HealthResponse(BaseModel):

@@ -7,27 +7,18 @@ GET /api/v1/jobs/{job_id} — Poll job status and retrieve results.
 
 import asyncio
 import io
-import json
 import time
 import uuid
 import zipfile
 from typing import Optional
 
 from fastapi import APIRouter, File, Query, UploadFile
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import select
-from uuid import UUID
 
 from app.core.errors import ValidationError
 from app.core.logging_config import logger
-from app.models.image import Image
-from app.schemas.image import ImageResponse
-from app.services.database import db_service
 from app.services.embedding import embedding_service
-from app.services.qdrant import qdrant_service
-from app.services.storage import storage_service
-from app.services.search_helpers import build_qdrant_filter
+from app.services.file_store import file_store_service
 
 router = APIRouter()
 
@@ -120,31 +111,26 @@ async def _process_batch(
 ):
     """Process a batch of images in parallel."""
     job = _jobs[job_id]
-    query_filter = build_qdrant_filter(diagnosis, tissue_type, benign_malignant)
 
     async def process_single(filename: str) -> dict:
         image_bytes = zf.read(filename)
         embedding = await embedding_service.get_embedding(image_bytes)
-        qdrant_results = await qdrant_service.search(
-            vector=embedding, limit=limit, query_filter=query_filter
+        matches = await file_store_service.search(
+            vector=embedding,
+            limit=limit,
+            diagnosis=diagnosis,
+            tissue_type=tissue_type,
+            benign_malignant=benign_malignant,
         )
 
-        results = []
-        if qdrant_results:
-            image_ids = [UUID(str(point.id)) for point in qdrant_results]
-            async with db_service.get_session() as session:
-                stmt = select(Image).where(Image.id.in_(image_ids))
-                result = await session.execute(stmt)
-                images_by_id = {img.id: img for img in result.scalars().all()}
-
-            for point in qdrant_results:
-                image = images_by_id.get(UUID(str(point.id)))
-                if image:
-                    results.append({
-                        "image_id": str(image.id),
-                        "diagnosis": image.diagnosis,
-                        "similarity_score": point.score,
-                    })
+        results = [
+            {
+                "image_id": str(image.id),
+                "diagnosis": image.diagnosis,
+                "similarity_score": score,
+            }
+            for image, score in matches
+        ]
 
         return {
             "query_filename": filename,

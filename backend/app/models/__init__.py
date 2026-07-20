@@ -1,4 +1,4 @@
-from app.models.base import Base
 from app.models.image import Image
+from app.models.feedback import Feedback
 
-__all__ = ["Base", "Image"]
+__all__ = ["Image", "Feedback"]

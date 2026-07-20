@@ -13,20 +13,6 @@ python-dotenv==1.0.0
 # Async Support
 aiofiles==23.2.1
 
-# Database - PostgreSQL (async)
-sqlalchemy[asyncio]==2.0.25
-asyncpg==0.29.0
-alembic==1.13.1
-
-# Vector Database - Qdrant
-qdrant-client==1.7.3
-
-# Object Storage - MinIO
-minio==7.2.3
-
-# Redis Cache
-redis[hiredis]==5.0.1
-
 # ML - CLIP Embeddings
 open-clip-torch==2.24.0
 Pillow==10.2.0

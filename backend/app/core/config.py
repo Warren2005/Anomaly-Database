@@ -28,31 +28,17 @@ class Settings(BaseSettings):
     # API Settings
     api_host: str = "0.0.0.0"
     api_port: int = 8000
-    
-    # Database - PostgreSQL
-    database_url: str = "postgresql://localhost:5432/medical_microscopy"
-    
-    # Vector Database - Qdrant
-    qdrant_host: str = "localhost"
-    qdrant_port: int = 6333
-    qdrant_collection_name: str = "medical_images"
-    
-    # Object Storage - MinIO
-    minio_endpoint: str = "localhost:9000"
-    minio_public_endpoint: str = "localhost:9000"  # Used in presigned URLs — must be reachable by the browser
-    minio_access_key: str = "minioadmin"
-    minio_secret_key: str = "minioadmin"
-    minio_bucket: str = "medical-images"
-    minio_secure: bool = False  # False for local development (http), True for production (https)
-    
+
+    # Local file-based storage — replaces Postgres + Qdrant + MinIO + Redis.
+    # library_data_dir holds metadata.json, feedback.json, and an images/
+    # subdirectory of raw image files. See app/services/file_store.py and
+    # app/services/local_storage.py.
+    library_data_dir: str = "./data/library"
+
     # CLIP Model Settings
     clip_model_name: str = "ViT-B/32"
     clip_device: str = "cpu"  # or "cuda" if GPU available
     inference_workers: int = 4
-    
-    # Redis Cache
-    redis_url: str = "redis://localhost:6379/0"
-    cache_ttl_hours: int = 24
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"

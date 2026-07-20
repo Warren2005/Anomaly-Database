@@ -1,5 +1,21 @@
 {
-    "env": {
-        "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
-    }
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  },
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:dl.min.io)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:www.enterprisedb.com)",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/feedback -H \"Content-Type: application/json\" -d '{\"result_image_id\":\"00000000-0000-0000-0000-000000000001\",\"vote\":1}')",
+      "PowerShell(& \"C:\\\\Users\\\\warred2\\\\dev-tools\\\\pgsql\\\\bin\\\\psql.exe\" -U postgres -h localhost -d medical_microscopy -c \"DELETE FROM feedback WHERE result_image_id = '00000000-0000-0000-0000-000000000001';\")",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/search/similar -F file=@backend/data/DV_Data/GirthweldBF.png)",
+      "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\('result_count:', d['result_count']\\); print\\('top score:', d['results'][0]['similarity_score']\\)\")",
+      "Bash(curl -s -o /dev/null -w \"vite: %{http_code}\\\\n\" http://localhost:5173)",
+      "Bash(curl -s -o /dev/null -w \"backend: %{http_code}\\\\n\" http://localhost:8001/api/v1/health)",
+      "Bash(tail -30 \"/c/Users/warred2/AppData/Local/Temp/claude/c--Users-warred2-Coop-Project-medical-microscopy/b9099f6f-3917-4724-8095-3b135e2e29f4/tasks/b6le02siw.output\" 2>&1)",
+      "Read(//c/Users/warred2/AppData/Local/Temp/claude/c--Users-warred2-Coop-Project-medical-microscopy/b9099f6f-3917-4724-8095-3b135e2e29f4/tasks/**)"
+    ]
+  }
 }

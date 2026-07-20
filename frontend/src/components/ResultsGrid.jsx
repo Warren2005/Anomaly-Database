@@ -36,7 +36,7 @@ export default function ResultsGrid({ results, onResultClick, queryImageId }) {
           <div className="result-rank">#{index + 1}</div>
           <img
             src={resolveImageUrl(result.image_url)}
-            alt={result.image.diagnosis || "Medical image"}
+            alt={result.image.diagnosis || "Inspection image"}
             className="result-image"
             loading="lazy"
           />
@@ -60,6 +60,11 @@ export default function ResultsGrid({ results, onResultClick, queryImageId }) {
                   }`}
                 >
                   {result.image.benign_malignant}
+                </span>
+              )}
+              {result.image.anomaly_type && (
+                <span className="badge badge-anomaly">
+                  {result.image.anomaly_type}
                 </span>
               )}
               <div className="feedback-buttons">

@@ -518,6 +518,11 @@ body {
   color: var(--success);
 }
 
+.badge-anomaly {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
 /* ============================================================
    FEEDBACK BUTTONS
    ============================================================ */

@@ -18,7 +18,7 @@ def test_root_endpoint():
     data = response.json()
 
     assert data["status"] == "ok"
-    assert data["name"] == "Medical Microscopy Similarity Engine"
+    assert data["name"] == "Inspection Image Similarity Engine"
     assert data["version"] == "1.0.0"
 
 

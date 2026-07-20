@@ -42,7 +42,7 @@ export default function ImageDetail({ result, onBack }) {
         <div className="detail-image-container">
           <img
             src={showHeatmap && heatmapUrl ? heatmapUrl : resolveImageUrl(image_url)}
-            alt={image.diagnosis || "Medical image"}
+            alt={image.diagnosis || "Inspection image"}
             className="detail-image"
           />
           <div className="heatmap-controls">
@@ -69,13 +69,22 @@ export default function ImageDetail({ result, onBack }) {
 
           <table className="detail-table">
             <tbody>
-              <DetailRow label="Diagnosis" value={image.diagnosis} />
-              <DetailRow label="Classification" value={image.benign_malignant} />
-              <DetailRow label="Tissue Type" value={image.tissue_type} />
-              <DetailRow label="Age" value={image.age} />
-              <DetailRow label="Sex" value={image.sex} />
+              <DetailRow label="Dataset Label" value={image.diagnosis} />
               <DetailRow label="Dataset" value={image.dataset_source} />
               <DetailRow label="Image ID" value={image.id} />
+              {(image.benign_malignant || image.tissue_type || image.age || image.sex) && (
+                <>
+                  <tr>
+                    <td colSpan={2} className="detail-section-divider">
+                      Dermatology Data
+                    </td>
+                  </tr>
+                  <DetailRow label="Classification" value={image.benign_malignant} />
+                  <DetailRow label="Tissue Type" value={image.tissue_type} />
+                  <DetailRow label="Age" value={image.age} />
+                  <DetailRow label="Sex" value={image.sex} />
+                </>
+              )}
               {(image.anomaly_type || image.analyst || image.anomaly_status) && (
                 <>
                   <tr>

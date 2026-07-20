@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     """
     
     # Application Info
-    app_name: str = "Medical Microscopy Similarity Engine"
+    app_name: str = "Inspection Image Similarity Engine"
     app_version: str = "1.0.0"
     environment: Literal["development", "production", "test"] = "development"
     

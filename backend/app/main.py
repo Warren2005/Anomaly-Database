@@ -95,7 +95,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.app_name,
     version=settings.app_version,
-    description="REST API for medical microscopy image similarity search",
+    description="REST API for industrial inspection image similarity search",
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,

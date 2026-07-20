@@ -2,70 +2,20 @@
 
 ## Prerequisites
 
-- macOS with Homebrew
-- Python 3.11
-- Node.js (for Electron/React frontend)
+- Docker Desktop (for the full stack)
+- Node.js (only needed if you want frontend hot-reload during development)
 
 ---
 
-## Step 1 — Install & Start Services
-
-### PostgreSQL
+## Quickstart — everything in one command
 
 ```bash
-brew install postgresql@16
-brew services start postgresql@16
-createdb medical_microscopy
+docker compose up -d --build
 ```
 
-### Qdrant
+This builds and starts all six services: PostgreSQL, Qdrant, MinIO, Redis, the FastAPI backend, and the Nginx-served frontend. The backend's `entrypoint.sh` runs `alembic upgrade head` automatically before starting, so the schema is always current.
 
-```bash
-brew install qdrant/tap/qdrant
-
-# Run in a dedicated terminal tab (foreground process)
-qdrant
-```
-
-If the Homebrew tap isn't available, download the binary directly:
-
-```bash
-curl -LO https://github.com/qdrant/qdrant/releases/download/v1.7.4/qdrant-aarch64-apple-darwin.tar.gz
-tar -xzf qdrant-aarch64-apple-darwin.tar.gz
-./qdrant
-```
-
-### MinIO
-
-```bash
-brew install minio/stable/minio
-
-# Run in a dedicated terminal tab (foreground process)
-minio server ~/minio-data
-```
-
-Default credentials: `minioadmin` / `minioadmin`
-
----
-
-## Step 2 — Start the Backend
-
-```bash
-cd backend
-source venv/bin/activate
-
-# Apply the database migration (first time only)
-alembic upgrade head
-
-# Start the API server
-uvicorn app.main:app --reload
-```
-
-The backend runs at http://localhost:8000.
-
----
-
-## Step 3 — Validate Everything Is Healthy
+Check everything is healthy:
 
 ```bash
 curl http://localhost:8000/api/v1/health
@@ -81,121 +31,65 @@ You should see:
     "postgres": "up",
     "qdrant": "up",
     "minio": "up",
-    "clip": "up"
+    "clip": "up",
+    "redis": "up"
   }
 }
 ```
 
-If any service shows `"down"`, check that it is running in its terminal tab.
+Open the app at **http://localhost:3000**. Interactive API docs are at **http://localhost:8000/docs**.
 
-You can also view the interactive API docs at http://localhost:8000/docs.
+Stop everything with:
+
+```bash
+docker compose down
+```
 
 ---
 
-## Step 4 — Download & Ingest the Dataset
+## Ingesting images
 
-### Download ISIC 2019
-
-```bash
-mkdir -p backend/data/isic2019
-cd backend/data/isic2019
-
-# Download metadata CSVs
-curl -O https://isic-challenge-data.s3.amazonaws.com/2019/ISIC_2019_Training_GroundTruth.csv
-curl -O https://isic-challenge-data.s3.amazonaws.com/2019/ISIC_2019_Training_Metadata.csv
-
-# Download training images (~9GB)
-curl -O https://isic-challenge-data.s3.amazonaws.com/2019/ISIC_2019_Training_Input.zip
-unzip ISIC_2019_Training_Input.zip
-```
-
-Your directory should look like:
-
-```
-backend/data/isic2019/
-├── ISIC_2019_Training_GroundTruth.csv
-├── ISIC_2019_Training_Metadata.csv
-└── ISIC_2019_Training_Input/
-    ├── ISIC_0000000.jpg
-    ├── ISIC_0000001.jpg
-    └── ... (25,331 images)
-```
-
-### Run Ingestion
+Place image folders under `backend/data/` (gitignored — not part of version control) and run the ingestion script inside the backend container:
 
 ```bash
-cd backend
-source venv/bin/activate
-
-# Test with a small batch first
-python -m scripts.ingest_isic --data-dir ./data/isic2019 --limit 10
-
-# Run the full dataset
-python -m scripts.ingest_isic --data-dir ./data/isic2019
+docker compose exec backend python -m scripts.ingest_custom --image-dir ./data/DV_Data
 ```
 
-The script is resumable. If interrupted, re-run the same command and it skips already-processed images.
+- `--label` sets the dataset label tag (defaults to the folder name)
+- `--limit N` processes only the first N images, useful for a quick test
+- The script is resumable via a per-folder `.ingest_checkpoint.db` checkpoint file — if interrupted, re-running the same command skips already-processed images. If you point it at a **different** Postgres/Qdrant instance (e.g. after resetting containers), delete the checkpoint file first so it doesn't skip images that were never actually ingested into the new instance.
 
-### Verify Data Landed
+Verify the data landed:
 
 ```bash
-# PostgreSQL
-psql medical_microscopy -c "SELECT COUNT(*) FROM images;"
-
-# Qdrant
+docker compose exec postgres psql -U postgres -d medical_microscopy -c "SELECT dataset_source, COUNT(*) FROM images GROUP BY dataset_source;"
 curl http://localhost:6333/collections/medical_images
-
-# MinIO web console
-open http://localhost:9000
 ```
 
 ---
 
-## Step 5 — Start the Frontend
+## Local development (frontend hot-reload)
+
+If you're actively editing frontend code, the production Nginx build won't hot-reload. Instead, keep the backend and infra running via Docker Compose, and run the frontend dev server locally against it:
 
 ```bash
 cd frontend
-npm run start
+npm install
+npm run dev
 ```
 
-This builds the React app with Vite and opens the Electron desktop window.
+This starts Vite on **http://localhost:5173**, proxying `/api` requests to the backend on port 8000 (see `vite.config.js`'s `server.proxy`). Backend port 8000 stays exposed to the host either way, so this works alongside the containerized stack without any extra configuration.
 
-- Drag a microscopy image onto the drop zone
-- View the top-10 similar cases in the results grid
-- Click a result for full metadata
-- Use filter dropdowns to narrow by diagnosis or classification
-
----
-
-## Quick Test (API only, no frontend needed)
+After editing frontend code for real, rebuild the production image with:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/search/similar \
-  -F "file=@backend/data/isic2019/ISIC_2019_Training_Input/ISIC_0000000.jpg"
+docker compose up -d --build frontend
 ```
 
 ---
 
-## Stopping Services
+## Troubleshooting
 
-```bash
-# PostgreSQL
-brew services stop postgresql@16
-
-# Qdrant and MinIO — Ctrl+C in their terminal tabs
-```
-
----
-
-## Terminal Tabs Summary
-
-You need 4 terminal tabs running simultaneously:
-
-| Tab | Command |
-|-----|---------|
-| 1   | `qdrant` |
-| 2   | `minio server ~/minio-data` |
-| 3   | `cd backend && source venv/bin/activate && uvicorn app.main:app --reload` |
-| 4   | `cd frontend && npm run start` |
-
-PostgreSQL runs as a background service via `brew services` and does not need its own tab.
+- **`docker compose up` can't build (network errors during `apt-get`/`npm install` inside the build)**: this is a Docker Desktop networking issue, not the project. Check Docker Desktop → Settings → Resources → Proxies, and check whether a VPN client is intercepting the Docker VM's traffic. A full restart of the Mac often clears stuck VPN-related network state; if that doesn't help, try Docker Desktop's Troubleshoot → "Clean / Purge data" (this wipes all local images/containers/volumes).
+- **Frontend shows "backend offline" in `npm run dev` mode**: confirm `vite.config.js` has a `server.proxy` entry for `/api` pointing at `http://localhost:8000`. Without it, relative `/api/v1/...` calls fall through to Vite's SPA catch-all and return HTML instead of JSON.
+- **Ports already in use**: if you previously ran Postgres/Redis/Qdrant/MinIO locally (via Homebrew or a standalone binary) instead of through Docker Compose, stop those first — Compose needs to bind the same host ports (5432, 6379, 6333/6334, 9000/9001, 8000, 3000).

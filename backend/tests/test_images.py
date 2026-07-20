@@ -12,13 +12,21 @@ from app.main import app
 def _make_image_orm(id_val):
     mock = MagicMock()
     mock.id = id_val
-    mock.dataset_source = "ISIC2019"
-    mock.image_path = "isic2019/test.jpg"
-    mock.diagnosis = "melanoma"
-    mock.tissue_type = "skin"
-    mock.benign_malignant = "malignant"
-    mock.age = 50
-    mock.sex = "male"
+    mock.dataset_source = "custom_test"
+    mock.image_path = "custom/test/test.jpg"
+    mock.diagnosis = "test_label"
+    mock.tissue_type = None
+    mock.benign_malignant = None
+    mock.age = None
+    mock.sex = None
+    mock.anomaly_description = None
+    mock.anomaly_status = None
+    mock.anomaly_type = None
+    mock.identification = None
+    mock.wall_location = None
+    mock.run_number = None
+    mock.analysis_comment = None
+    mock.analyst = None
     mock.created_at = datetime(2026, 1, 1)
     mock.updated_at = datetime(2026, 1, 1)
     return mock
@@ -30,18 +38,12 @@ class TestGetImage:
         image_id = uuid4()
         mock_image = _make_image_orm(image_id)
 
-        with (
-            patch("app.api.v1.endpoints.images.db_service") as mock_db,
-            patch("app.api.v1.endpoints.images.storage_service") as mock_storage,
-        ):
+        with patch("app.api.v1.endpoints.images.db_service") as mock_db:
             mock_session = AsyncMock()
             mock_session.get = AsyncMock(return_value=mock_image)
             mock_session.__aenter__ = AsyncMock(return_value=mock_session)
             mock_session.__aexit__ = AsyncMock(return_value=None)
             mock_db.get_session = MagicMock(return_value=mock_session)
-            mock_storage.get_presigned_url = MagicMock(
-                return_value="http://minio/test.jpg"
-            )
 
             client = TestClient(app)
             response = client.get(f"/api/v1/images/{image_id}")
@@ -49,7 +51,7 @@ class TestGetImage:
             assert response.status_code == 200
             data = response.json()
             assert data["image"]["id"] == str(image_id)
-            assert data["image_url"] == "http://minio/test.jpg"
+            assert data["image_url"] == f"/api/v1/images/{image_id}/file"
 
     def test_get_image_not_found(self):
         """GET /images/{id} returns 404 when not found."""

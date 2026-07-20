@@ -1,14 +1,9 @@
-"""Tests for the ISIC dataset ingestion script."""
+"""Tests for the custom dataset ingestion checkpoint."""
 
 import tempfile
 from pathlib import Path
 
-import pytest
-
-from scripts.ingest_isic import (
-    IngestionCheckpoint,
-    classify_benign_malignant,
-)
+from scripts.ingest_custom import IngestionCheckpoint
 
 
 class TestIngestionCheckpoint:
@@ -57,20 +52,3 @@ class TestIngestionCheckpoint:
             cp2 = IngestionCheckpoint(db_path)
             assert cp2.is_processed("IMG_001") is True
             cp2.close()
-
-
-class TestClassifyBenignMalignant:
-    def test_melanoma_is_malignant(self):
-        assert classify_benign_malignant("melanoma") == "malignant"
-
-    def test_nevus_is_benign(self):
-        assert classify_benign_malignant("melanocytic_nevus") == "benign"
-
-    def test_bcc_is_malignant(self):
-        assert classify_benign_malignant("basal_cell_carcinoma") == "malignant"
-
-    def test_none_returns_none(self):
-        assert classify_benign_malignant(None) is None
-
-    def test_unknown_returns_none(self):
-        assert classify_benign_malignant("actinic_keratosis") is None

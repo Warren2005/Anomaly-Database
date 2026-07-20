@@ -55,6 +55,12 @@ minio-data/
 backend/data/
 images/
 *.zip
+*.tar.gz
+
+# Local Qdrant binary + its data directory (Qdrant runs via Docker now)
+/qdrant
+/storage/
+/snapshots/
 
 # ML model files
 *.pt

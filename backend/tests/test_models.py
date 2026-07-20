@@ -11,6 +11,9 @@ def test_image_model_columns():
         "id", "dataset_source", "image_path", "diagnosis",
         "tissue_type", "benign_malignant", "age", "sex",
         "created_at", "updated_at",
+        "anomaly_description", "anomaly_status", "anomaly_type",
+        "identification", "wall_location", "run_number",
+        "analysis_comment", "analyst",
     }
     assert column_names == expected
 

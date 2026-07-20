@@ -29,13 +29,21 @@ def _make_image_orm(id_val):
     """Create a mock ORM-like object."""
     mock = MagicMock()
     mock.id = id_val
-    mock.dataset_source = "ISIC2019"
-    mock.image_path = "isic2019/test.jpg"
-    mock.diagnosis = "melanoma"
-    mock.tissue_type = "skin"
-    mock.benign_malignant = "malignant"
-    mock.age = 50
-    mock.sex = "male"
+    mock.dataset_source = "custom_test"
+    mock.image_path = "custom/test/test.jpg"
+    mock.diagnosis = "test_label"
+    mock.tissue_type = None
+    mock.benign_malignant = None
+    mock.age = None
+    mock.sex = None
+    mock.anomaly_description = None
+    mock.anomaly_status = None
+    mock.anomaly_type = None
+    mock.identification = None
+    mock.wall_location = None
+    mock.run_number = None
+    mock.analysis_comment = None
+    mock.analyst = None
     mock.created_at = datetime(2026, 1, 1)
     mock.updated_at = datetime(2026, 1, 1)
     return mock

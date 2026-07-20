@@ -30,7 +30,6 @@ The system also supports:
 - **Text-to-image search**: Type "melanoma with irregular borders" and retrieve matching images
 - **Attention maps**: Highlight which regions of an image drove the similarity score
 - **Feedback**: Pathologists can up/downvote results, gradually improving rankings over time
-- **DICOM support**: Upload standard medical imaging files directly
 - **Batch search**: Upload a ZIP of images and process them asynchronously
 
 ### Why It Exists
@@ -274,7 +273,7 @@ FastAPI is built on Pydantic — when you annotate a route's `response_model=Sea
 
 **Where it appears**: `backend/app/services/storage.py`, referenced in every endpoint that returns image URLs, and in the ingestion scripts.
 
-**How images flow**: Ingestion script reads image file → uploads to MinIO as `isic2019/ISIC_0024306.jpg` → stores the path string in PostgreSQL → at search time, backend reads path from PostgreSQL, fetches bytes from MinIO, returns them as HTTP response.
+**How images flow**: Ingestion script reads image file → uploads to MinIO as `custom/DV_Data/example.png` → stores the path string in PostgreSQL → at search time, backend reads path from PostgreSQL, fetches bytes from MinIO, returns them as HTTP response.
 
 ---
 
@@ -306,18 +305,6 @@ Image bytes → SHA256 hash
 **Why open-clip-torch instead of OpenAI's original**: OpenAI's original CLIP library has become less actively maintained. `open_clip_torch` is a community fork with the same models, active maintenance, and additional model variants. The model weights are identical.
 
 **Where it appears**: `backend/app/services/embedding.py`.
-
----
-
-### PyDICOM
-
-**What it is**: A Python library for reading and writing DICOM files. DICOM (Digital Imaging and Communications in Medicine) is the standard file format for medical imaging data — MRIs, CT scans, X-rays, etc.
-
-**Why it matters**: DICOM files are not just images — they contain rich metadata embedded in a standardized header (patient ID, acquisition parameters, institution, body part, etc.) plus the pixel data. PyDICOM reads these files and makes both the metadata and pixels accessible.
-
-**Where it appears**: `backend/app/services/dicom.py`, `backend/app/api/v1/endpoints/dicom_search.py`.
-
-**What happens to a DICOM file**: PyDICOM reads it → extracts pixel array → applies windowing (adjusts contrast) → normalizes to 8-bit → converts to JPEG → treats it like any other image for CLIP embedding.
 
 ---
 
@@ -689,7 +676,7 @@ If 5 users upvoted a result (+5 net vote), it gets a +0.10 boost to its similari
 - Metadata (diagnosis, age, sex) → PostgreSQL (fast text queries, joins with feedback table)
 - Image files (JPEG bytes, potentially 1-5MB each) → MinIO (efficient binary streaming)
 
-The image path (`isic2019/ISIC_0024306.jpg`) stored in PostgreSQL is the "foreign key" that points to the object in MinIO.
+The image path (`custom/DV_Data/example.png`) stored in PostgreSQL is the "foreign key" that points to the object in MinIO.
 
 ---
 
@@ -885,7 +872,6 @@ All endpoints follow REST conventions and return consistent JSON shapes.
 | GET | `/health` | Service status | None |
 | POST | `/search/similar` | Image similarity search | Rate limited |
 | POST | `/search/text` | Text-to-image search | None |
-| POST | `/search/dicom` | DICOM file search | None |
 | POST | `/search/batch` | Batch ZIP search | None |
 | GET | `/search/jobs/{id}` | Batch job status | None |
 | GET | `/images/filters` | Available filter values | None |
@@ -950,7 +936,7 @@ The core entity in the system. Every image that's been ingested into the search 
 │ Column           │ Type         │ Notes                │
 ├──────────────────┼──────────────┼──────────────────────┤
 │ id               │ UUID         │ Primary key, auto    │
-│ dataset_source   │ VARCHAR(50)  │ "isic2019", "custom" │
+│ dataset_source   │ VARCHAR(50)  │ "custom_DV_Data"     │
 │ image_path       │ VARCHAR(500) │ MinIO object key     │
 │ diagnosis        │ VARCHAR(100) │ "melanoma", "nevus"  │
 │ tissue_type      │ VARCHAR(50)  │ Anatomical site      │
@@ -1012,10 +998,10 @@ await self.client.upsert(
             id=str(image_id),
             vector=embedding,         # [0.1, -0.3, ...] (512 floats)
             payload={
-                "diagnosis": "melanoma",
-                "tissue_type": "skin",
-                "benign_malignant": "malignant",
-                "dataset": "isic2019",
+                "diagnosis": "DV_Data",
+                "tissue_type": None,
+                "benign_malignant": None,
+                "dataset": "custom_DV_Data",
             }
         )
     ]
@@ -1045,52 +1031,26 @@ Objects are stored with paths that preserve their origin:
 
 ```
 medical-images/           ← bucket name
-├── isic2019/
-│   ├── ISIC_0024306.jpg
-│   ├── ISIC_0024307.jpg
-│   └── ...
 └── custom/
-    ├── flawed/
-    │   ├── image_001.jpg
-    │   └── ...
+    └── DV_Data/
+        ├── GirthweldBF.png
+        ├── inclusion.jpg
+        └── ...
 ```
 
-The `image_path` stored in PostgreSQL is the full object key: `isic2019/ISIC_0024306.jpg`. The backend reconstructs the full URL from this path.
+The `image_path` stored in PostgreSQL is the full object key: `custom/DV_Data/GirthweldBF.png`. The backend reconstructs the full URL from this path.
 
 ---
 
-### 5.5 Data Pipeline — ISIC Dataset Ingestion
+### 5.5 Data Pipeline — Custom Dataset Ingestion
 
-The ISIC 2019 Challenge dataset contains 25,331 dermoscopy images across 8 diagnostic categories.
+**Ingestion script**: `backend/scripts/ingest_custom.py`
 
-**Ingestion script**: `backend/scripts/ingest_isic.py`
+**Usage**: `python -m scripts.ingest_custom --image-dir ./data/DV_Data`. It globs every `.jpg`/`.jpeg`/`.png` file in the target directory and, for each one, uploads it to MinIO, computes a CLIP embedding, inserts a row into PostgreSQL, and upserts the vector into Qdrant. The `--label` flag sets the `diagnosis`/`dataset_source` tag (defaults to the folder name); `--limit` caps how many images are processed, useful for a quick test run.
 
-**Input files**:
-- `ISIC_2019_Training_GroundTruth.csv`: Maps image filenames to one-hot diagnosis columns (MEL, NV, BCC, AK, BKL, DF, VASC, SCC)
-- `ISIC_2019_Training_Metadata.csv`: Maps image filenames to age, sex, anatomical site
+**Resumable processing**: A SQLite checkpoint file (`.ingest_checkpoint.db`, written inside the image directory) records which images have been processed by filename. If the script is interrupted, restarting picks up where it left off.
 
-**Diagnosis code mapping**:
-```python
-DIAGNOSIS_MAP = {
-    "MEL": "melanoma",
-    "NV": "nevus",
-    "BCC": "basal cell carcinoma",
-    "AK": "actinic keratosis",
-    "BKL": "benign keratosis",
-    "DF": "dermatofibroma",
-    "VASC": "vascular lesion",
-    "SCC": "squamous cell carcinoma",
-}
-```
-
-**Benign/malignant classification**:
-```python
-MALIGNANT_DIAGNOSES = {"melanoma", "basal cell carcinoma", "squamous cell carcinoma", "actinic keratosis"}
-```
-
-**Resumable processing**: A SQLite database (`.ingest_checkpoint.db`) records which images have been processed. If the script is interrupted, restarting picks up where it left off.
-
-**Important**: The checkpoint database is local to the machine that ran the script. If you run ingestion locally then start fresh Docker containers, the Docker databases are empty even though the checkpoint says everything is done. The fix is to delete the checkpoint file and re-run.
+**Important**: The checkpoint file is tied to whichever Postgres/Qdrant instance it ran against. If you point the same image directory at a *different* instance (e.g. after resetting Docker containers), delete the checkpoint file first — otherwise it will report those images as already done and skip re-ingesting them into the new instance, even though it's empty.
 
 ---
 
@@ -1637,14 +1597,8 @@ After services start, access the application at `http://localhost:3000`.
 
 **Initial data loading** (run once after first `docker compose up`):
 ```bash
-# ISIC 2019 dataset (must have downloaded the dataset first)
-docker compose exec backend python -m scripts.ingest_isic \
-  --data-dir /app/data/isic2019
-
-# Custom images from the images/ directory
 docker compose exec backend python -m scripts.ingest_custom \
-  --image-dir /images/flawed \
-  --label skin_lesion
+  --image-dir ./data/DV_Data
 ```
 
 #### Local Development (No Docker)

@@ -13,7 +13,17 @@ python-dotenv==1.0.0
 # Async Support
 aiofiles==23.2.1
 
+# Cross-platform file locking (file_store.py concurrency safety)
+portalocker==2.10.1
+
 # ML - CLIP Embeddings
+# open-clip-torch pulls in the default (CPU) torch/torchvision wheels. If
+# this machine has an NVIDIA GPU, set CLIP_DEVICE=cuda in .env AND reinstall
+# torch/torchvision matching your driver's CUDA version afterwards, e.g.:
+#   pip install torch==2.11.0+cu128 torchvision==0.26.0+cu128 \
+#     --index-url https://download.pytorch.org/whl/cu128
+# (pick the cuXXX index that matches your driver — check with `nvidia-smi`;
+# torch and torchvision versions must come from the same index/build).
 open-clip-torch==2.24.0
 Pillow==10.2.0
 numpy>=1.24.0

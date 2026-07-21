@@ -1,38 +1,44 @@
 """
-File-based store for image metadata + embeddings + feedback.
+File-based store for image metadata + embeddings + feedback + the shared
+embedding cache.
 
-Replaces PostgreSQL (metadata/feedback tables) and Qdrant (vector search)
-together. Two JSON files under `library_data_dir` are the entire "database":
+Replaces PostgreSQL (metadata/feedback tables), Qdrant (vector search), and
+Redis (embedding cache) together. Three JSON files under `library_data_dir`
+are the entire "database":
 
-- metadata.json — one record per image, including its 512-float CLIP
-  embedding as a plain field (mirrors a SharePoint List column holding the
-  embedding as JSON text).
+- metadata.json — one record per image, including its CLIP embedding(s) as
+  plain fields (mirrors a SharePoint List column holding the embedding as
+  JSON text).
 - feedback.json — one record per up/down vote.
+- embedding_cache.json — SHA-256(image bytes) -> embedding, shared across
+  every worker process and persisted across restarts (unlike an in-process
+  dict). Entries older than Settings.cache_ttl_days are pruned on write.
 
 Search is brute-force: filter by any provided metadata fields, then rank
 the remaining embeddings by dot product against the query vector (embeddings
 are already L2-normalized elsewhere, so dot product == cosine similarity).
 
-Concurrency: every write goes through an OS-level advisory lock (fcntl.flock
-on a `.lock` file) around a read-modify-write cycle, and lands via
-write-to-temp-then-os.replace() (atomic on POSIX). This is safe across
-multiple processes (e.g. multiple Gunicorn workers), not just within one —
-an in-process asyncio.Lock alone would not be. Reads always re-read the
-file from disk rather than trusting an in-memory cache, so every worker
-always sees the latest committed state.
+Concurrency: every write goes through a cross-platform advisory lock
+(portalocker, which wraps fcntl on POSIX / msvcrt on Windows) around a
+read-modify-write cycle, and lands via write-to-temp-then-os.replace()
+(atomic on POSIX and Windows). This is safe across multiple processes (e.g.
+multiple Gunicorn workers), not just within one — an in-process
+asyncio.Lock alone would not be. Reads always re-read the file from disk
+rather than trusting an in-memory cache, so every worker always sees the
+latest committed state.
 """
 
 import asyncio
-import fcntl
 import json
 from contextlib import contextmanager
 from dataclasses import asdict
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 from uuid import UUID
 
 import numpy as np
+import portalocker
 
 from app.core.config import settings
 from app.core.logging_config import logger
@@ -40,17 +46,23 @@ from app.models.feedback import Feedback
 from app.models.image import Image
 
 
-def _image_to_record(image: Image, embedding: list[float]) -> dict:
+def _image_to_record(
+    image: Image, embedding: list[float], rerank_embedding: Optional[list[float]] = None
+) -> dict:
     record = asdict(image)
     record["id"] = str(image.id)
     record["created_at"] = image.created_at.isoformat()
     record["updated_at"] = image.updated_at.isoformat()
     record["embedding"] = embedding
+    record["rerank_embedding"] = rerank_embedding
     return record
 
 
+_NON_IMAGE_FIELDS = {"embedding", "rerank_embedding"}
+
+
 def _record_to_image(record: dict) -> Image:
-    fields = {k: v for k, v in record.items() if k != "embedding"}
+    fields = {k: v for k, v in record.items() if k not in _NON_IMAGE_FIELDS}
     fields["id"] = UUID(fields["id"])
     fields["created_at"] = datetime.fromisoformat(fields["created_at"])
     fields["updated_at"] = datetime.fromisoformat(fields["updated_at"])
@@ -69,17 +81,21 @@ def _feedback_to_record(feedback: Feedback) -> dict:
 
 
 class FileStoreService:
-    def __init__(self, data_dir: str):
+    def __init__(self, data_dir: str, cache_ttl_days: int = 7):
         self._data_dir = Path(data_dir)
         self._images_file = self._data_dir / "metadata.json"
         self._feedback_file = self._data_dir / "feedback.json"
+        self._cache_file = self._data_dir / "embedding_cache.json"
         self._lock_file = self._data_dir / ".lock"
+        self._cache_ttl_days = cache_ttl_days
 
     def connect(self):
         self._data_dir.mkdir(parents=True, exist_ok=True)
         for f in (self._images_file, self._feedback_file):
             if not f.exists():
                 f.write_text("[]")
+        if not self._cache_file.exists():
+            self._cache_file.write_text("{}")
         self._lock_file.touch(exist_ok=True)
         logger.info("File store ready", extra={"data_dir": str(self._data_dir)})
 
@@ -88,20 +104,22 @@ class FileStoreService:
 
     @contextmanager
     def _locked(self):
+        # portalocker wraps fcntl (POSIX) / msvcrt (Windows) behind one API,
+        # so this lock is safe across multiple processes on either OS.
         with open(self._lock_file, "w") as fh:
-            fcntl.flock(fh, fcntl.LOCK_EX)
+            portalocker.lock(fh, portalocker.LOCK_EX)
             try:
                 yield
             finally:
-                fcntl.flock(fh, fcntl.LOCK_UN)
+                portalocker.unlock(fh)
 
-    def _read_json(self, path: Path) -> list[dict]:
+    def _read_json(self, path: Path, default=None) -> list[dict]:
         try:
             return json.loads(path.read_text())
         except (FileNotFoundError, json.JSONDecodeError):
-            return []
+            return [] if default is None else default
 
-    def _write_json(self, path: Path, records: list[dict]):
+    def _write_json(self, path: Path, records) -> None:
         tmp = path.with_suffix(".tmp")
         tmp.write_text(json.dumps(records, indent=2))
         tmp.replace(path)  # atomic on POSIX
@@ -123,16 +141,43 @@ class FileStoreService:
     async def get_image(self, image_id: UUID) -> Optional[Image]:
         return await asyncio.to_thread(self._get_image_sync, image_id)
 
-    def _upsert_image_sync(self, image: Image, embedding: list[float]) -> Image:
+    def _upsert_image_sync(
+        self,
+        image: Image,
+        embedding: list[float],
+        rerank_embedding: Optional[list[float]] = None,
+    ) -> Image:
         with self._locked():
             records = self._read_json(self._images_file)
             records = [r for r in records if r["id"] != str(image.id)]
-            records.append(_image_to_record(image, embedding))
+            records.append(_image_to_record(image, embedding, rerank_embedding))
             self._write_json(self._images_file, records)
         return image
 
-    async def upsert_image(self, image: Image, embedding: list[float]) -> Image:
-        return await asyncio.to_thread(self._upsert_image_sync, image, embedding)
+    async def upsert_image(
+        self,
+        image: Image,
+        embedding: list[float],
+        rerank_embedding: Optional[list[float]] = None,
+    ) -> Image:
+        return await asyncio.to_thread(
+            self._upsert_image_sync, image, embedding, rerank_embedding
+        )
+
+    def _get_rerank_embeddings_sync(
+        self, image_ids: list[UUID]
+    ) -> dict[UUID, list[float]]:
+        wanted = {str(i) for i in image_ids}
+        result: dict[UUID, list[float]] = {}
+        for r in self._read_json(self._images_file):
+            if r["id"] in wanted and r.get("rerank_embedding"):
+                result[UUID(r["id"])] = r["rerank_embedding"]
+        return result
+
+    async def get_rerank_embeddings(
+        self, image_ids: list[UUID]
+    ) -> dict[UUID, list[float]]:
+        return await asyncio.to_thread(self._get_rerank_embeddings_sync, image_ids)
 
     def _get_distinct_sync(self, field: str) -> list[str]:
         values: set[str] = set()
@@ -222,5 +267,42 @@ class FileStoreService:
     async def get_feedback_stats(self) -> dict:
         return await asyncio.to_thread(self._get_feedback_stats_sync)
 
+    # --- Embedding cache (shared across processes, persists across restarts) ---
 
-file_store_service = FileStoreService(data_dir=settings.library_data_dir)
+    def _prune_expired(self, cache: dict) -> dict:
+        cutoff = datetime.now(timezone.utc) - timedelta(days=self._cache_ttl_days)
+        kept = {}
+        for key, entry in cache.items():
+            try:
+                cached_at = datetime.fromisoformat(entry["cached_at"])
+            except (KeyError, ValueError, TypeError):
+                continue  # malformed entry — drop it rather than keep it forever
+            if cached_at > cutoff:
+                kept[key] = entry
+        return kept
+
+    def _get_cached_embedding_sync(self, key: str) -> Optional[list[float]]:
+        cache = self._read_json(self._cache_file, default={})
+        entry = cache.get(key)
+        return entry["embedding"] if entry else None
+
+    async def get_cached_embedding(self, key: str) -> Optional[list[float]]:
+        return await asyncio.to_thread(self._get_cached_embedding_sync, key)
+
+    def _set_cached_embedding_sync(self, key: str, embedding: list[float]):
+        with self._locked():
+            cache = self._read_json(self._cache_file, default={})
+            cache[key] = {
+                "embedding": embedding,
+                "cached_at": datetime.now(timezone.utc).isoformat(),
+            }
+            cache = self._prune_expired(cache)
+            self._write_json(self._cache_file, cache)
+
+    async def set_cached_embedding(self, key: str, embedding: list[float]):
+        await asyncio.to_thread(self._set_cached_embedding_sync, key, embedding)
+
+
+file_store_service = FileStoreService(
+    data_dir=settings.library_data_dir, cache_ttl_days=settings.cache_ttl_days
+)

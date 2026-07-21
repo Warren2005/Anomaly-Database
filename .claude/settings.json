@@ -15,7 +15,11 @@
       "Bash(curl -s -o /dev/null -w \"vite: %{http_code}\\\\n\" http://localhost:5173)",
       "Bash(curl -s -o /dev/null -w \"backend: %{http_code}\\\\n\" http://localhost:8001/api/v1/health)",
       "Bash(tail -30 \"/c/Users/warred2/AppData/Local/Temp/claude/c--Users-warred2-Coop-Project-medical-microscopy/b9099f6f-3917-4724-8095-3b135e2e29f4/tasks/b6le02siw.output\" 2>&1)",
-      "Read(//c/Users/warred2/AppData/Local/Temp/claude/c--Users-warred2-Coop-Project-medical-microscopy/b9099f6f-3917-4724-8095-3b135e2e29f4/tasks/**)"
+      "Read(//c/Users/warred2/AppData/Local/Temp/claude/c--Users-warred2-Coop-Project-medical-microscopy/b9099f6f-3917-4724-8095-3b135e2e29f4/tasks/**)",
+      "Bash(tail -5 \"/c/Users/warred2/AppData/Local/Temp/claude/c--Users-warred2-Coop-Project-medical-microscopy/b9099f6f-3917-4724-8095-3b135e2e29f4/tasks/b6le02siw.output\" 2>&1)",
+      "Bash(python -c \"import json; d=json.load\\(open\\('data/library/metadata.json'\\)\\); print\\(len\\(d\\), 'records'\\); print\\('embedding dims:', len\\(d[0]['embedding']\\) if d else 'n/a'\\)\")",
+      "Bash(\"./venv/Scripts/python.exe\" -c \"import fcntl\")",
+      "Bash(\"./venv/Scripts/pip.exe\" show *)"
     ]
   }
 }

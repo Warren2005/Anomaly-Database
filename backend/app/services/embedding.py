@@ -1,8 +1,10 @@
 """
 CLIP embedding service using open_clip.
 
-Loads ViT-B/32 model once at startup.
-Exposes get_embedding() to convert image bytes to a 512-dim normalized vector.
+Loads the configured model (see Settings.clip_model_name/clip_pretrained)
+once at startup. Exposes get_embedding() to convert image bytes to an
+L2-normalized vector — dimensionality depends on the model (512 for
+ViT-B/32, 768 for ViT-L/14, etc).
 """
 
 import asyncio
@@ -21,9 +23,10 @@ from app.middleware.metrics import cache_hit_total, cache_miss_total
 
 
 class EmbeddingService:
-    def __init__(self, model_name: str, device: str):
+    def __init__(self, model_name: str, device: str, pretrained: str = "openai"):
         self._model_name = model_name
         self._device = device
+        self._pretrained = pretrained
         self.model = None
         self._preprocess = None
 
@@ -36,7 +39,7 @@ class EmbeddingService:
         """Load the CLIP model. Called once at startup."""
         start = time.time()
         self.model, _, self._preprocess = open_clip.create_model_and_transforms(
-            self.clip_model_name, pretrained="openai", device=self._device
+            self.clip_model_name, pretrained=self._pretrained, device=self._device
         )
         self.model.eval()
         self._tokenizer = open_clip.get_tokenizer(self.clip_model_name)
@@ -56,27 +59,28 @@ class EmbeddingService:
         return embedding.squeeze().cpu().tolist()
 
     async def get_embedding(self, image_bytes: bytes) -> list[float]:
-        """Convert image bytes to a 512-dim L2-normalized embedding vector."""
-        image_hash = CacheService.hash_image(image_bytes)
+        """Convert image bytes to an L2-normalized embedding vector."""
+        # Cache key includes the model name: two EmbeddingService instances
+        # (primary + rerank) share one cache_service, and their embeddings
+        # for the same bytes are different vectors, not interchangeable.
+        cache_key = f"{self.clip_model_name}:{CacheService.hash_image(image_bytes)}"
 
-        # Check cache first
         try:
-            cached = await cache_service.get_embedding(image_hash)
+            cached = await cache_service.get_embedding(cache_key)
             if cached is not None:
                 cache_hit_total.inc()
-                logger.debug("Cache hit for embedding", extra={"hash": image_hash})
+                logger.debug("Cache hit for embedding", extra={"key": cache_key})
                 return cached
         except Exception:
-            logger.warning("Cache read failed, computing embedding", extra={"hash": image_hash})
+            logger.warning("Cache read failed, computing embedding", extra={"key": cache_key})
 
         cache_miss_total.inc()
         embedding = await asyncio.to_thread(self._compute_embedding, image_bytes)
 
-        # Store in cache
         try:
-            await cache_service.set_embedding(image_hash, embedding)
+            await cache_service.set_embedding(cache_key, embedding)
         except Exception:
-            logger.warning("Cache write failed", extra={"hash": image_hash})
+            logger.warning("Cache write failed", extra={"key": cache_key})
 
         return embedding
 
@@ -99,4 +103,13 @@ class EmbeddingService:
 embedding_service = EmbeddingService(
     model_name=settings.clip_model_name,
     device=settings.clip_device,
+    pretrained=settings.clip_pretrained,
+)
+
+# Second, heavier model used to re-score the primary search's shortlist.
+# Only loaded at startup (see main.py) when settings.rerank_enabled is True.
+rerank_embedding_service = EmbeddingService(
+    model_name=settings.rerank_model_name,
+    device=settings.clip_device,
+    pretrained=settings.rerank_pretrained,
 )

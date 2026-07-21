@@ -12,10 +12,12 @@ from typing import Optional
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
+from app.core.config import settings
 from app.schemas.search import SearchResponse, SearchResult
 from app.schemas.image import ImageResponse
-from app.services.embedding import embedding_service
+from app.services.embedding import embedding_service, rerank_embedding_service
 from app.services.file_store import file_store_service
+from app.services.reranking import rerank
 
 router = APIRouter()
 
@@ -40,14 +42,23 @@ async def search_by_text(body: TextSearchRequest):
 
     # Brute-force cosine search against the file store
     search_start = time.time()
+    coarse_limit = max(body.top_k, settings.rerank_candidates) if settings.rerank_enabled else body.top_k
     matches = await file_store_service.search(
         vector=embedding,
-        limit=body.top_k,
+        limit=coarse_limit,
         diagnosis=body.diagnosis,
         tissue_type=body.tissue_type,
         benign_malignant=body.benign_malignant,
     )
     search_time = (time.time() - search_start) * 1000
+
+    rerank_time = None
+    if settings.rerank_enabled and matches:
+        rerank_start = time.time()
+        rerank_query_vector = await rerank_embedding_service.get_text_embedding(body.query)
+        matches = await rerank(matches, rerank_query_vector)
+        rerank_time = (time.time() - rerank_start) * 1000
+    matches = matches[: body.top_k]
 
     results = [
         SearchResult(
@@ -62,6 +73,7 @@ async def search_by_text(body: TextSearchRequest):
     return SearchResponse(
         query_processing_time_ms=round(embed_time, 1),
         search_time_ms=round(search_time, 1),
+        rerank_time_ms=round(rerank_time, 1) if rerank_time is not None else None,
         total_time_ms=round(total_time, 1),
         results=results,
         result_count=len(results),

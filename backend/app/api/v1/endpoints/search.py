@@ -15,11 +15,13 @@ from fastapi import APIRouter, File, Query, Request, UploadFile
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
+from app.core.config import settings
 from app.core.errors import ValidationError
 from app.schemas.search import SearchResponse, SearchResult
 from app.schemas.image import ImageResponse
-from app.services.embedding import embedding_service
+from app.services.embedding import embedding_service, rerank_embedding_service
 from app.services.file_store import file_store_service
+from app.services.reranking import rerank
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -61,16 +63,28 @@ async def search_similar(
     embedding = await embedding_service.get_embedding(image_bytes)
     embed_time = (time.time() - embed_start) * 1000
 
-    # Brute-force cosine search against the file store
+    # Brute-force cosine search against the file store. When re-ranking is
+    # on, fetch a wider shortlist so the heavier model has real candidates
+    # to re-score, then trim back to `limit` after re-ranking.
     search_start = time.time()
+    coarse_limit = max(limit, settings.rerank_candidates) if settings.rerank_enabled else limit
     matches = await file_store_service.search(
         vector=embedding,
-        limit=limit,
+        limit=coarse_limit,
         diagnosis=diagnosis,
         tissue_type=tissue_type,
         benign_malignant=benign_malignant,
     )
     search_time = (time.time() - search_start) * 1000
+
+    # Re-rank the shortlist with the heavier model, if enabled
+    rerank_time = None
+    if settings.rerank_enabled and matches:
+        rerank_start = time.time()
+        rerank_query_vector = await rerank_embedding_service.get_embedding(image_bytes)
+        matches = await rerank(matches, rerank_query_vector)
+        rerank_time = (time.time() - rerank_start) * 1000
+    matches = matches[:limit]
 
     # Feedback-adjusted scores
     image_ids = [image.id for image, _ in matches]
@@ -97,6 +111,7 @@ async def search_similar(
     return SearchResponse(
         query_processing_time_ms=round(embed_time, 1),
         search_time_ms=round(search_time, 1),
+        rerank_time_ms=round(rerank_time, 1) if rerank_time is not None else None,
         total_time_ms=round(total_time, 1),
         results=results,
         result_count=len(results),

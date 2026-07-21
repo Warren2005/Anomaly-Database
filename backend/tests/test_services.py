@@ -3,7 +3,10 @@ Tests for the file-based storage services (file_store, local_storage,
 cache) and health endpoint integration.
 """
 
+import json
 import tempfile
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -15,6 +18,7 @@ from app.models.image import Image
 from app.services.cache import CacheService
 from app.services.file_store import FileStoreService
 from app.services.local_storage import LocalStorageService
+from app.services.reranking import rerank
 
 
 @pytest.mark.asyncio
@@ -79,6 +83,80 @@ async def test_file_store_search_applies_diagnosis_filter():
 
 
 @pytest.mark.asyncio
+async def test_file_store_stores_and_returns_rerank_embeddings():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        image_id = uuid4()
+        await store.upsert_image(
+            Image(id=image_id, image_path="a.jpg"), [1.0, 0.0], rerank_embedding=[0.5, 0.5]
+        )
+
+        vectors = await store.get_rerank_embeddings([image_id])
+        assert vectors[image_id] == [0.5, 0.5]
+
+
+@pytest.mark.asyncio
+async def test_file_store_rerank_embedding_defaults_to_none():
+    """Images upserted without a rerank_embedding (e.g. ingested before the
+    feature existed) shouldn't show up in get_rerank_embeddings at all."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        image_id = uuid4()
+        await store.upsert_image(Image(id=image_id, image_path="a.jpg"), [1.0, 0.0])
+
+        vectors = await store.get_rerank_embeddings([image_id])
+        assert image_id not in vectors
+
+
+@pytest.mark.asyncio
+async def test_rerank_reorders_by_rerank_vector():
+    id_a, id_b = uuid4(), uuid4()
+    image_a = Image(id=id_a, image_path="a.jpg")
+    image_b = Image(id=id_b, image_path="b.jpg")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        from app.services import reranking as reranking_module
+
+        store = FileStoreService(tmpdir)
+        store.connect()
+        await store.upsert_image(image_a, [1.0, 0.0], rerank_embedding=[0.0, 1.0])
+        await store.upsert_image(image_b, [0.9, 0.1], rerank_embedding=[1.0, 0.0])
+
+        # reranking.py did `from app.services.file_store import
+        # file_store_service`, so the name to patch lives in the
+        # reranking module's namespace, not file_store's.
+        with patch.object(reranking_module, "file_store_service", store):
+            # Primary search ranked A first (score 1.0 > 0.9)...
+            matches = [(image_a, 1.0), (image_b, 0.9)]
+            # ...but the rerank query vector aligns with B's rerank vector.
+            rescored = await rerank(matches, rerank_query_vector=[1.0, 0.0])
+
+        assert rescored[0][0].id == id_b
+        assert rescored[1][0].id == id_a
+
+
+@pytest.mark.asyncio
+async def test_rerank_falls_back_to_primary_score_when_no_rerank_vector():
+    """An image with no stored rerank_embedding keeps its primary score
+    instead of being dropped or crashing the re-scoring pass."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        from app.services import reranking as reranking_module
+
+        store = FileStoreService(tmpdir)
+        store.connect()
+        image = Image(id=uuid4(), image_path="a.jpg")
+        await store.upsert_image(image, [1.0, 0.0])  # no rerank_embedding
+        matches = [(image, 0.77)]
+
+        with patch.object(reranking_module, "file_store_service", store):
+            rescored = await rerank(matches, rerank_query_vector=[1.0, 0.0])
+
+        assert rescored == [(image, 0.77)]
+
+
+@pytest.mark.asyncio
 async def test_file_store_get_distinct_filters_none():
     with tempfile.TemporaryDirectory() as tmpdir:
         store = FileStoreService(tmpdir)
@@ -132,17 +210,61 @@ async def test_local_storage_roundtrip():
 
 @pytest.mark.asyncio
 async def test_cache_service_get_set():
-    cache = CacheService()
-    await cache.set_embedding("hash1", [0.1, 0.2])
-    result = await cache.get_embedding("hash1")
-    assert result == [0.1, 0.2]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        cache = CacheService(store=store)
+        await cache.set_embedding("hash1", [0.1, 0.2])
+        result = await cache.get_embedding("hash1")
+        assert result == [0.1, 0.2]
 
 
 @pytest.mark.asyncio
 async def test_cache_service_miss_returns_none():
-    cache = CacheService()
-    result = await cache.get_embedding("nonexistent")
-    assert result is None
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        cache = CacheService(store=store)
+        result = await cache.get_embedding("nonexistent")
+        assert result is None
+
+
+@pytest.mark.asyncio
+async def test_cache_service_shared_across_instances():
+    """Two CacheService instances backed by the same store (i.e. two
+    worker processes) see each other's writes — the whole point of moving
+    off the in-process dict."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        writer = CacheService(store=store)
+        reader = CacheService(store=store)
+
+        await writer.set_embedding("hash1", [0.9, 0.1])
+        result = await reader.get_embedding("hash1")
+        assert result == [0.9, 0.1]
+
+
+@pytest.mark.asyncio
+async def test_cache_service_prunes_expired_entries():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir, cache_ttl_days=7)
+        store.connect()
+        cache = CacheService(store=store)
+        await cache.set_embedding("fresh", [0.1])
+
+        # Manually backdate the entry past the TTL and let the next write prune it.
+        cache_file = Path(tmpdir) / "embedding_cache.json"
+        data = json.loads(cache_file.read_text())
+        data["fresh"]["cached_at"] = (
+            datetime.now(timezone.utc) - timedelta(days=30)
+        ).isoformat()
+        cache_file.write_text(json.dumps(data))
+
+        await cache.set_embedding("other", [0.2])  # triggers pruning as a side effect
+
+        assert await cache.get_embedding("fresh") is None
+        assert await cache.get_embedding("other") == [0.2]
 
 
 def test_health_endpoint_reports_all_services():

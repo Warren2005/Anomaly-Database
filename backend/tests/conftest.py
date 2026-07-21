@@ -2,12 +2,48 @@
 Shared test fixtures and mocks.
 
 Mocks external services so tests run without touching real disk paths or
-loading the CLIP model. cache_service is a plain in-process dict now, so
-it needs no mocking — its real connect()/disconnect() are harmless no-ops.
+loading a CLIP model.
+
+Re-ranking is disabled for the test session: it's exercised by its own
+dedicated tests (with rerank_embedding_service explicitly mocked there),
+not by every existing test — leaving it on by default would make every
+test that hits /search/similar or /search/text try to load the real
+(large, slow-to-download) rerank model.
 """
 
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
+from app.core.config import settings
+
+
+@pytest.fixture(autouse=True)
+def disable_rerank_by_default():
+    original = settings.rerank_enabled
+    settings.rerank_enabled = False
+    yield
+    settings.rerank_enabled = original
+
+
+@pytest.fixture(autouse=True)
+def isolate_cache_service(tmp_path):
+    """cache_service is now file-backed (embedding_cache.json, shared
+    across processes, persists across restarts) instead of an in-process
+    dict. That persistence is exactly why tests must NOT use the real
+    global store — test_embedding.py's @pytest.mark.slow tests call the
+    real (unmocked) get_embedding(), which would otherwise write into the
+    actual production ./data/library/embedding_cache.json on every test
+    run. Redirect the singleton's storage to an isolated temp dir instead.
+    """
+    from app.services.cache import cache_service
+    from app.services.file_store import FileStoreService
+
+    temp_store = FileStoreService(str(tmp_path / "test_cache"))
+    temp_store.connect()
+    original_store = cache_service._store
+    cache_service._store = temp_store
+    yield
+    cache_service._store = original_store
 
 
 @pytest.fixture(autouse=True)
@@ -21,6 +57,7 @@ def mock_services():
         patch("app.main.file_store_service") as mock_store_main,
         patch("app.main.local_storage_service") as mock_local_main,
         patch("app.main.embedding_service") as mock_embed_main,
+        patch("app.main.rerank_embedding_service") as mock_rerank_main,
         patch("app.api.v1.endpoints.health.file_store_service") as mock_store_health,
         patch("app.api.v1.endpoints.health.local_storage_service") as mock_local_health,
         patch("app.api.v1.endpoints.health.embedding_service") as mock_embed_health,
@@ -29,6 +66,7 @@ def mock_services():
         mock_store_main.connect = MagicMock()
         mock_local_main.connect = MagicMock()
         mock_embed_main.load_model = AsyncMock()
+        mock_rerank_main.load_model = AsyncMock()
 
         # Health check mocks
         mock_store_health.health_check = MagicMock(return_value=True)
@@ -39,6 +77,7 @@ def mock_services():
             "store_main": mock_store_main,
             "local_main": mock_local_main,
             "embed_main": mock_embed_main,
+            "rerank_main": mock_rerank_main,
             "store_health": mock_store_health,
             "local_health": mock_local_health,
             "embed_health": mock_embed_health,

@@ -33,7 +33,7 @@ from app.middleware.metrics import PrometheusMiddleware, metrics_endpoint
 from app.api.v1.endpoints.router import api_router
 from app.services.file_store import file_store_service
 from app.services.local_storage import local_storage_service
-from app.services.embedding import embedding_service
+from app.services.embedding import embedding_service, rerank_embedding_service
 from app.services.cache import cache_service
 
 # Rate limiter
@@ -68,6 +68,12 @@ async def lifespan(app: FastAPI):
         await embedding_service.load_model()
     except Exception as e:
         logger.error(f"Failed to load CLIP model: {e}")
+
+    if settings.rerank_enabled:
+        try:
+            await rerank_embedding_service.load_model()
+        except Exception as e:
+            logger.error(f"Failed to load rerank model: {e}")
 
     await cache_service.connect()
 

@@ -16,9 +16,10 @@ import logging
 import sqlite3
 import time
 from pathlib import Path
-from uuid import uuid4
+from uuid import NAMESPACE_URL, uuid5
 
-from app.services.embedding import embedding_service
+from app.core.config import settings
+from app.services.embedding import embedding_service, rerank_embedding_service
 from app.services.file_store import file_store_service
 from app.services.local_storage import local_storage_service
 from app.models.image import Image
@@ -67,7 +68,12 @@ async def ingest_single_image(
         return False
 
     image_bytes = image_path.read_bytes()
-    image_id = uuid4()
+    # Deterministic (not random) ID: re-running ingestion for the same
+    # dataset_label + filename must overwrite the existing record via
+    # upsert_image, not create a duplicate with a fresh random ID — this is
+    # what makes deleting the checkpoint and re-embedding (e.g. after a
+    # model change) safe to do repeatedly.
+    image_id = uuid5(NAMESPACE_URL, f"custom/{dataset_label}/{image_name}")
     suffix = image_path.suffix.lower()
     object_name = f"custom/{dataset_label}/{image_name}{image_path.suffix}"
     content_type = "image/png" if suffix == ".png" else "image/jpeg"
@@ -75,6 +81,11 @@ async def ingest_single_image(
     await local_storage_service.upload_image(object_name, image_bytes, content_type)
 
     embedding = await embedding_service.get_embedding(image_bytes)
+    rerank_embedding = (
+        await rerank_embedding_service.get_embedding(image_bytes)
+        if settings.rerank_enabled
+        else None
+    )
 
     image_record = Image(
         id=image_id,
@@ -86,7 +97,7 @@ async def ingest_single_image(
         age=None,
         sex=None,
     )
-    await file_store_service.upsert_image(image_record, embedding)
+    await file_store_service.upsert_image(image_record, embedding, rerank_embedding)
 
     checkpoint.mark_processed(image_name)
     return True
@@ -123,6 +134,8 @@ async def main():
     file_store_service.connect()
     local_storage_service.connect()
     await embedding_service.load_model()
+    if settings.rerank_enabled:
+        await rerank_embedding_service.load_model()
 
     checkpoint_path = image_dir / ".ingest_checkpoint.db"
     checkpoint = IngestionCheckpoint(checkpoint_path)

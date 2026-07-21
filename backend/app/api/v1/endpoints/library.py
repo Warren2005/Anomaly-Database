@@ -12,10 +12,11 @@ from uuid import uuid4
 
 from fastapi import APIRouter, File, Form, UploadFile
 
+from app.core.config import settings
 from app.core.errors import ValidationError
 from app.models.image import Image
 from app.schemas.image import ImageResponse, LibraryUploadResponse
-from app.services.embedding import embedding_service
+from app.services.embedding import embedding_service, rerank_embedding_service
 from app.services.file_store import file_store_service
 from app.services.local_storage import local_storage_service
 
@@ -63,6 +64,11 @@ async def upload_to_library(
     await local_storage_service.upload_image(object_name, image_bytes, file.content_type)
 
     embedding = await embedding_service.get_embedding(image_bytes)
+    rerank_embedding = (
+        await rerank_embedding_service.get_embedding(image_bytes)
+        if settings.rerank_enabled
+        else None
+    )
 
     record = Image(
         id=image_id,
@@ -77,7 +83,7 @@ async def upload_to_library(
         analysis_comment=analysis_comment,
         analyst=analyst,
     )
-    await file_store_service.upsert_image(record, embedding)
+    await file_store_service.upsert_image(record, embedding, rerank_embedding)
 
     return LibraryUploadResponse(
         image=ImageResponse.model_validate(record),

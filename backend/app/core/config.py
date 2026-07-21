@@ -36,9 +36,24 @@ class Settings(BaseSettings):
     library_data_dir: str = "./data/library"
 
     # CLIP Model Settings
-    clip_model_name: str = "ViT-B/32"
+    clip_model_name: str = "ViT-L/14"
+    clip_pretrained: str = "openai"
     clip_device: str = "cpu"  # or "cuda" if GPU available
     inference_workers: int = 4
+
+    # Re-ranking: a second, heavier model re-scores only the top
+    # `rerank_candidates` results from the primary search, rather than
+    # the whole corpus. Toggle off to A/B compare against primary-only.
+    rerank_enabled: bool = True
+    rerank_model_name: str = "ViT-H-14"
+    rerank_pretrained: str = "laion2b_s32b_b79k"
+    rerank_candidates: int = 50
+
+    # Embedding cache: file-backed (embedding_cache.json, part of
+    # file_store_service), shared across every worker process and
+    # persistent across restarts. Entries older than this are pruned on
+    # each write, since there's no Redis TTL to lean on anymore.
+    cache_ttl_days: int = 7
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"

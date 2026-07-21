@@ -27,6 +27,8 @@
   --shadow-hover:   0 16px 44px rgba(0, 0, 0, 0.6), 0 0 0 1px var(--accent), 0 0 36px var(--accent-glow),
                     inset 0 1px 0 var(--glass-highlight);
   --header-bg:      rgba(7, 7, 10, 0.55);
+  --select-bg:      #17171b;
+  --select-bg-hover: #232329;
   --skeleton-base:  rgba(255, 255, 255, 0.05);
   --skeleton-shine: rgba(255, 255, 255, 0.11);
   --page-wash:
@@ -63,6 +65,8 @@
   --shadow-hover:   0 16px 38px rgba(20, 10, 5, 0.16), 0 0 0 1px var(--accent), 0 0 26px var(--accent-glow),
                     inset 0 1px 0 var(--glass-highlight);
   --header-bg:      rgba(255, 255, 255, 0.6);
+  --select-bg:      #ffffff;
+  --select-bg-hover: #fdeee7;
   --skeleton-base:  rgba(0, 0, 0, 0.045);
   --skeleton-shine: rgba(0, 0, 0, 0.09);
   --page-wash:
@@ -515,6 +519,23 @@ body {
 .filter-bar select:hover,
 .filter-bar select:focus {
   border-color: var(--accent);
+}
+
+/* Native <option> popups don't render translucent glass backgrounds or
+   backdrop-filter — they're drawn by the OS, not the page — so they need
+   their own solid (opaque) colors or they fall back to a plain white
+   popup, which is unreadable against light text. */
+.filter-bar select option,
+.form-select option {
+  background-color: var(--select-bg);
+  color: var(--text-primary);
+}
+
+.filter-bar select option:hover,
+.filter-bar select option:checked,
+.form-select option:hover,
+.form-select option:checked {
+  background-color: var(--select-bg-hover);
 }
 
 /* ============================================================

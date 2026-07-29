@@ -17,6 +17,7 @@ from app.core.errors import ValidationError
 from app.models.image import Image
 from app.schemas.image import ImageResponse, LibraryUploadResponse
 from app.services.embedding import embedding_service, rerank_embedding_service
+from app.services.event_log import event_log_service
 from app.services.file_store import file_store_service
 from app.services.local_storage import local_storage_service
 
@@ -89,6 +90,13 @@ async def upload_to_library(
         rerank_embedding,
         embedding_model=embedding_service.model_tag,
         rerank_embedding_model=rerank_embedding_service.model_tag if rerank_embedding is not None else None,
+    )
+
+    await event_log_service.log_event(
+        "upload",
+        image_id=str(image_id),
+        analyst=analyst,
+        anomaly_type=anomaly_type,
     )
 
     return LibraryUploadResponse(

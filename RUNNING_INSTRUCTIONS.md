@@ -68,6 +68,29 @@ curl http://localhost:6333/collections/medical_images
 
 ---
 
+## Backups
+
+The current backend (see `backend/app/services/file_store.py`) stores everything — image metadata, embeddings, feedback votes, the embedding cache, and the `events.jsonl` observability log — as files under `LIBRARY_DATA_DIR` (`backend/.env`, default `./data/library`), simulating the eventual SharePoint migration. That means the backup story doesn't need any new backup service or scheduled job — it needs `LIBRARY_DATA_DIR` to actually live inside a location that already versions files:
+
+- **Once the real SharePoint migration happens**: point `LIBRARY_DATA_DIR` at a folder inside a SharePoint-synced document library. Every write already lands via an atomic replace (see `file_store.py`), so each save looks like a clean version to SharePoint's built-in version history, and accidental deletes are covered by its Recycle Bin — both with zero custom backup code.
+- **Right now, before that migration**: point `LIBRARY_DATA_DIR` at a folder that's already OneDrive/SharePoint-synced on a team machine (most Microsoft 365 accounts have this available immediately) instead of a plain local folder. If that's not set up yet on this machine, a scheduled local copy into such a synced folder achieves the same effect as an interim step.
+
+Either way: no new backup infrastructure — just making sure the data directory lives somewhere already versioned.
+
+## Observability
+
+Every search, feedback vote, library upload, and handled/unhandled error appends one JSON line to `LIBRARY_DATA_DIR/logs/events.jsonl` (see `app/services/event_log.py`) — e.g. `{"ts": "...", "event": "search", "embed_ms": 43.2, "rerank_ms": 79.1, "result_count": 30, "cache_hit": false}`. Because it lives under `LIBRARY_DATA_DIR`, it inherits the same backup story above for free.
+
+To see a summary (p50/p95 search latency, error rate, embedding cache hit rate) over a time window:
+
+```bash
+cd backend
+python -m scripts.show_stats            # last 24h
+python -m scripts.show_stats --hours 1  # last hour
+```
+
+This is deliberately dependency-free — no Prometheus/Grafana to stand up or maintain. (The existing `/metrics` Prometheus endpoint and counters still work if you want them, but `events.jsonl` + `show_stats.py` is the log actually meant to be checked day-to-day.)
+
 ## Local development (frontend hot-reload)
 
 If you're actively editing frontend code, the production Nginx build won't hot-reload. Instead, keep the backend and infra running via Docker Compose, and run the frontend dev server locally against it:

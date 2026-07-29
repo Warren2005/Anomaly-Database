@@ -20,6 +20,7 @@ from app.core.errors import ValidationError
 from app.schemas.search import SearchResponse, SearchResult
 from app.schemas.image import ImageResponse
 from app.services.embedding import embedding_service, rerank_embedding_service
+from app.services.event_log import event_log_service
 from app.services.file_store import file_store_service
 from app.services.reranking import rerank
 
@@ -60,7 +61,7 @@ async def search_similar(
 
     # Generate embedding
     embed_start = time.time()
-    embedding = await embedding_service.get_embedding(image_bytes)
+    embedding, cache_hit = await embedding_service.get_embedding_with_cache_status(image_bytes)
     embed_time = (time.time() - embed_start) * 1000
 
     # Brute-force cosine search against the file store. When re-ranking is
@@ -109,6 +110,18 @@ async def search_similar(
     results.sort(key=lambda r: r.similarity_score, reverse=True)
 
     total_time = (time.time() - total_start) * 1000
+
+    await event_log_service.log_event(
+        "search",
+        query_type="image",
+        embed_ms=round(embed_time, 1),
+        search_ms=round(search_time, 1),
+        rerank_ms=round(rerank_time, 1) if rerank_time is not None else None,
+        total_ms=round(total_time, 1),
+        result_count=len(results),
+        cache_hit=cache_hit,
+    )
+
     return SearchResponse(
         query_processing_time_ms=round(embed_time, 1),
         search_time_ms=round(search_time, 1),

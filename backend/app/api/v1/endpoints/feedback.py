@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from app.models.feedback import Feedback
+from app.services.event_log import event_log_service
 from app.services.file_store import file_store_service
 
 router = APIRouter()
@@ -46,6 +47,12 @@ async def submit_feedback(body: FeedbackRequest):
         vote=body.vote,
     )
     await file_store_service.add_feedback(fb)
+    await event_log_service.log_event(
+        "feedback",
+        result_image_id=str(fb.result_image_id),
+        query_image_id=str(fb.query_image_id) if fb.query_image_id else None,
+        vote=fb.vote,
+    )
     return FeedbackResponse(
         id=fb.id,
         query_image_id=fb.query_image_id,

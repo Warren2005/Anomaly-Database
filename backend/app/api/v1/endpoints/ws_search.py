@@ -13,6 +13,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
 from app.core.logging_config import logger
 from app.services.embedding import embedding_service
+from app.services.event_log import event_log_service
 from app.services.file_store import file_store_service
 
 router = APIRouter()
@@ -107,6 +108,14 @@ async def websocket_search(websocket: WebSocket):
                 "total_time_ms": round(total_time, 1),
                 "embedding_time_ms": round(embed_time, 1),
             })
+
+            await event_log_service.log_event(
+                "search",
+                query_type="ws_image",
+                embed_ms=round(embed_time, 1),
+                total_ms=round(total_time, 1),
+                result_count=len(matches),
+            )
 
     except WebSocketDisconnect:
         logger.info("WebSocket client disconnected")

@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from app.models.feedback import Feedback
 from app.models.image import Image
 from app.services.cache import CacheService
+from app.services.event_log import EventLogService
 from app.services.file_store import FileStoreService
 from app.services.local_storage import LocalStorageService
 from app.services.reranking import rerank
@@ -374,6 +375,36 @@ async def test_cache_service_prunes_expired_entries():
 
         assert await cache.get_embedding("fresh") is None
         assert await cache.get_embedding("other") == [0.2]
+
+
+@pytest.mark.asyncio
+async def test_event_log_writes_jsonl_line():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log = EventLogService(tmpdir)
+        log.connect()
+        await log.log_event("search", result_count=5, cache_hit=True)
+
+        lines = (Path(tmpdir) / "logs" / "events.jsonl").read_text().strip().splitlines()
+        assert len(lines) == 1
+        record = json.loads(lines[0])
+        assert record["event"] == "search"
+        assert record["result_count"] == 5
+        assert record["cache_hit"] is True
+        assert "ts" in record
+
+
+@pytest.mark.asyncio
+async def test_event_log_appends_multiple_events_in_order():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        log = EventLogService(tmpdir)
+        log.connect()
+        await log.log_event("search", result_count=1)
+        await log.log_event("feedback", vote=1)
+        await log.log_event("upload", image_id="abc")
+
+        lines = (Path(tmpdir) / "logs" / "events.jsonl").read_text().strip().splitlines()
+        events = [json.loads(l)["event"] for l in lines]
+        assert events == ["search", "feedback", "upload"]
 
 
 def test_health_endpoint_reports_all_services():

@@ -69,6 +69,17 @@ class EmbeddingService:
 
     async def get_embedding(self, image_bytes: bytes) -> list[float]:
         """Convert image bytes to an L2-normalized embedding vector."""
+        embedding, _cache_hit = await self.get_embedding_with_cache_status(image_bytes)
+        return embedding
+
+    async def get_embedding_with_cache_status(self, image_bytes: bytes) -> tuple[list[float], bool]:
+        """Same as get_embedding, but also reports whether it was a cache
+        hit — used by search endpoints for the cache_hit field in the
+        event log (app/services/event_log.py). A plain instance attribute
+        wouldn't be safe here: this EmbeddingService singleton is shared
+        across concurrent requests, so per-call state has to be returned,
+        not stored on self.
+        """
         # Cache key includes the model name: two EmbeddingService instances
         # (primary + rerank) share one cache_service, and their embeddings
         # for the same bytes are different vectors, not interchangeable.
@@ -79,7 +90,7 @@ class EmbeddingService:
             if cached is not None:
                 cache_hit_total.inc()
                 logger.debug("Cache hit for embedding", extra={"key": cache_key})
-                return cached
+                return cached, True
         except Exception:
             logger.warning("Cache read failed, computing embedding", extra={"key": cache_key})
 
@@ -91,7 +102,7 @@ class EmbeddingService:
         except Exception:
             logger.warning("Cache write failed", extra={"key": cache_key})
 
-        return embedding
+        return embedding, False
 
     def _compute_text_embedding(self, text: str) -> list[float]:
         """Synchronous CLIP text inference."""

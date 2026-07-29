@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from app.core.errors import ValidationError
 from app.core.logging_config import logger
 from app.services.embedding import embedding_service
+from app.services.event_log import event_log_service
 from app.services.file_store import file_store_service
 
 router = APIRouter()
@@ -156,6 +157,14 @@ async def _process_batch(
         ]
         job["status"] = "completed"
         job["elapsed_ms"] = round((time.time() - job["start_time"]) * 1000, 1)
+
+        await event_log_service.log_event(
+            "batch_search",
+            job_id=job_id,
+            total_images=job["total_images"],
+            processed_images=job["processed_images"],
+            elapsed_ms=job["elapsed_ms"],
+        )
 
     except Exception as e:
         logger.error(f"Batch job {job_id} failed: {e}")

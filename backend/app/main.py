@@ -35,6 +35,7 @@ from app.services.file_store import file_store_service
 from app.services.local_storage import local_storage_service
 from app.services.embedding import embedding_service, rerank_embedding_service
 from app.services.cache import cache_service
+from app.services.event_log import event_log_service
 
 # Rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -58,6 +59,11 @@ async def lifespan(app: FastAPI):
         file_store_service.connect()
     except Exception as e:
         logger.error(f"Failed to initialize file store: {e}")
+
+    try:
+        event_log_service.connect()
+    except Exception as e:
+        logger.error(f"Failed to initialize event log: {e}")
 
     try:
         local_storage_service.connect()

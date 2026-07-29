@@ -13,6 +13,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.errors import AppException
 from app.core.logging_config import logger
+from app.services.event_log import event_log_service
 
 
 async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -32,6 +33,13 @@ async def app_exception_handler(request: Request, exc: AppException) -> JSONResp
         }
     )
     
+    await event_log_service.log_event(
+        "error",
+        error_code=exc.error_code,
+        status_code=exc.status_code,
+        path=request.url.path,
+    )
+
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -61,6 +69,13 @@ async def validation_exception_handler(
         }
     )
     
+    await event_log_service.log_event(
+        "error",
+        error_code="VALIDATION_ERROR",
+        status_code=status.HTTP_400_BAD_REQUEST,
+        path=request.url.path,
+    )
+
     return JSONResponse(
         status_code=status.HTTP_400_BAD_REQUEST,
         content={
@@ -90,6 +105,13 @@ async def http_exception_handler(
         }
     )
     
+    await event_log_service.log_event(
+        "error",
+        error_code=f"HTTP_{exc.status_code}",
+        status_code=exc.status_code,
+        path=request.url.path,
+    )
+
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -120,6 +142,14 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
         }
     )
     
+    await event_log_service.log_event(
+        "error",
+        error_code="INTERNAL_SERVER_ERROR",
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        path=request.url.path,
+        exception_type=type(exc).__name__,
+    )
+
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={

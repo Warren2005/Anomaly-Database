@@ -47,6 +47,27 @@ def isolate_cache_service(tmp_path):
 
 
 @pytest.fixture(autouse=True)
+def isolate_event_log(tmp_path):
+    """event_log_service is a real file-writer (events.jsonl under
+    library_data_dir/logs) — redirect it to a temp dir per test so tests
+    never write into the actual production log."""
+    from app.services.event_log import event_log_service, EventLogService
+
+    temp_log = EventLogService(str(tmp_path / "test_events"))
+    temp_log.connect()
+    original_log_dir = event_log_service._log_dir
+    original_log_file = event_log_service._log_file
+    original_lock_file = event_log_service._lock_file
+    event_log_service._log_dir = temp_log._log_dir
+    event_log_service._log_file = temp_log._log_file
+    event_log_service._lock_file = temp_log._lock_file
+    yield
+    event_log_service._log_dir = original_log_dir
+    event_log_service._log_file = original_log_file
+    event_log_service._lock_file = original_lock_file
+
+
+@pytest.fixture(autouse=True)
 def mock_services():
     """Mock all external service singletons for every test.
 
@@ -58,6 +79,7 @@ def mock_services():
         patch("app.main.local_storage_service") as mock_local_main,
         patch("app.main.embedding_service") as mock_embed_main,
         patch("app.main.rerank_embedding_service") as mock_rerank_main,
+        patch("app.main.event_log_service") as mock_event_log_main,
         patch("app.api.v1.endpoints.health.file_store_service") as mock_store_health,
         patch("app.api.v1.endpoints.health.local_storage_service") as mock_local_health,
         patch("app.api.v1.endpoints.health.embedding_service") as mock_embed_health,
@@ -67,6 +89,7 @@ def mock_services():
         mock_local_main.connect = MagicMock()
         mock_embed_main.load_model = AsyncMock()
         mock_rerank_main.load_model = AsyncMock()
+        mock_event_log_main.connect = MagicMock()
 
         # Health check mocks
         mock_store_health.health_check = MagicMock(return_value=True)

@@ -16,6 +16,7 @@ from app.core.config import settings
 from app.schemas.search import SearchResponse, SearchResult
 from app.schemas.image import ImageResponse
 from app.services.embedding import embedding_service, rerank_embedding_service
+from app.services.event_log import event_log_service
 from app.services.file_store import file_store_service
 from app.services.reranking import rerank
 
@@ -71,6 +72,18 @@ async def search_by_text(body: TextSearchRequest):
     ]
 
     total_time = (time.time() - total_start) * 1000
+
+    await event_log_service.log_event(
+        "search",
+        query_type="text",
+        embed_ms=round(embed_time, 1),
+        search_ms=round(search_time, 1),
+        rerank_ms=round(rerank_time, 1) if rerank_time is not None else None,
+        total_ms=round(total_time, 1),
+        result_count=len(results),
+        cache_hit=None,  # text embeddings aren't cached — see embedding.py
+    )
+
     return SearchResponse(
         query_processing_time_ms=round(embed_time, 1),
         search_time_ms=round(search_time, 1),

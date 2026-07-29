@@ -49,6 +49,7 @@ async def search_by_text(body: TextSearchRequest):
         diagnosis=body.diagnosis,
         tissue_type=body.tissue_type,
         benign_malignant=body.benign_malignant,
+        embedding_model=embedding_service.model_tag,
     )
     search_time = (time.time() - search_start) * 1000
 
@@ -56,7 +57,7 @@ async def search_by_text(body: TextSearchRequest):
     if settings.rerank_enabled and matches:
         rerank_start = time.time()
         rerank_query_vector = await rerank_embedding_service.get_text_embedding(body.query)
-        matches = await rerank(matches, rerank_query_vector)
+        matches = await rerank(matches, rerank_query_vector, rerank_embedding_service.model_tag)
         rerank_time = (time.time() - rerank_start) * 1000
     matches = matches[: body.top_k]
 

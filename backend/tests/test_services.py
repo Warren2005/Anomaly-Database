@@ -157,6 +157,115 @@ async def test_rerank_falls_back_to_primary_score_when_no_rerank_vector():
 
 
 @pytest.mark.asyncio
+async def test_file_store_search_filters_out_mismatched_embedding_model():
+    """A model swap must never silently compare embeddings from two
+    different CLIP checkpoints — records from an old model version should
+    be excluded from search results for the new one."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        await store.upsert_image(
+            Image(id=uuid4(), image_path="old.jpg"), [1.0, 0.0], embedding_model="ViT-B-32/openai"
+        )
+        await store.upsert_image(
+            Image(id=uuid4(), image_path="new.jpg"), [1.0, 0.0], embedding_model="ViT-L-14/openai"
+        )
+
+        results = await store.search(vector=[1.0, 0.0], limit=10, embedding_model="ViT-L-14/openai")
+
+        assert len(results) == 1
+        assert results[0][0].image_path == "new.jpg"
+
+
+@pytest.mark.asyncio
+async def test_file_store_search_without_model_filter_ignores_tags():
+    """Passing no embedding_model (the default) keeps existing behavior —
+    e.g. the embedding cache's own lookups don't care about model tags."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        await store.upsert_image(
+            Image(id=uuid4(), image_path="old.jpg"), [1.0, 0.0], embedding_model="ViT-B-32/openai"
+        )
+        await store.upsert_image(
+            Image(id=uuid4(), image_path="new.jpg"), [1.0, 0.0], embedding_model="ViT-L-14/openai"
+        )
+
+        results = await store.search(vector=[1.0, 0.0], limit=10)
+
+        assert len(results) == 2
+
+
+@pytest.mark.asyncio
+async def test_file_store_get_rerank_embeddings_filters_by_model():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        id_old, id_new = uuid4(), uuid4()
+        await store.upsert_image(
+            Image(id=id_old, image_path="old.jpg"),
+            [1.0, 0.0],
+            rerank_embedding=[0.5, 0.5],
+            rerank_embedding_model="ViT-H-14/laion400m",
+        )
+        await store.upsert_image(
+            Image(id=id_new, image_path="new.jpg"),
+            [1.0, 0.0],
+            rerank_embedding=[0.2, 0.8],
+            rerank_embedding_model="ViT-H-14/laion2b_s32b_b79k",
+        )
+
+        vectors = await store.get_rerank_embeddings(
+            [id_old, id_new], rerank_embedding_model="ViT-H-14/laion2b_s32b_b79k"
+        )
+
+        assert id_new in vectors
+        assert id_old not in vectors
+
+
+@pytest.mark.asyncio
+async def test_file_store_get_model_tag_counts():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        await store.upsert_image(
+            Image(id=uuid4(), image_path="a.jpg"), [1.0, 0.0], embedding_model="ViT-L-14/openai"
+        )
+        await store.upsert_image(
+            Image(id=uuid4(), image_path="b.jpg"), [1.0, 0.0], embedding_model="ViT-L-14/openai"
+        )
+        await store.upsert_image(Image(id=uuid4(), image_path="c.jpg"), [1.0, 0.0])  # untagged
+
+        counts = await store.get_model_tag_counts()
+
+        assert counts["embedding_model"]["ViT-L-14/openai"] == 2
+        assert counts["embedding_model"]["(untagged)"] == 1
+
+
+@pytest.mark.asyncio
+async def test_rerank_falls_back_to_primary_score_on_model_mismatch():
+    """A rerank_embedding stored under an old model version must fall back
+    to the primary score, same as if no rerank_embedding existed at all —
+    not get compared against a new-model query vector."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        from app.services import reranking as reranking_module
+
+        store = FileStoreService(tmpdir)
+        store.connect()
+        image = Image(id=uuid4(), image_path="a.jpg")
+        await store.upsert_image(
+            image, [1.0, 0.0], rerank_embedding=[0.0, 1.0], rerank_embedding_model="old-model/v1"
+        )
+
+        with patch.object(reranking_module, "file_store_service", store):
+            rescored = await rerank(
+                [(image, 0.42)], rerank_query_vector=[1.0, 0.0], rerank_model_tag="new-model/v2"
+            )
+
+        assert rescored == [(image, 0.42)]
+
+
+@pytest.mark.asyncio
 async def test_file_store_get_distinct_filters_none():
     with tempfile.TemporaryDirectory() as tmpdir:
         store = FileStoreService(tmpdir)

@@ -97,7 +97,13 @@ async def ingest_single_image(
         age=None,
         sex=None,
     )
-    await file_store_service.upsert_image(image_record, embedding, rerank_embedding)
+    await file_store_service.upsert_image(
+        image_record,
+        embedding,
+        rerank_embedding,
+        embedding_model=embedding_service.model_tag,
+        rerank_embedding_model=rerank_embedding_service.model_tag if rerank_embedding is not None else None,
+    )
 
     checkpoint.mark_processed(image_name)
     return True

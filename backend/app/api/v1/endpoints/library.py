@@ -83,7 +83,13 @@ async def upload_to_library(
         analysis_comment=analysis_comment,
         analyst=analyst,
     )
-    await file_store_service.upsert_image(record, embedding, rerank_embedding)
+    await file_store_service.upsert_image(
+        record,
+        embedding,
+        rerank_embedding,
+        embedding_model=embedding_service.model_tag,
+        rerank_embedding_model=rerank_embedding_service.model_tag if rerank_embedding is not None else None,
+    )
 
     return LibraryUploadResponse(
         image=ImageResponse.model_validate(record),

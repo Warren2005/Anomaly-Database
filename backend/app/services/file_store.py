@@ -26,6 +26,16 @@ multiple Gunicorn workers), not just within one — an in-process
 asyncio.Lock alone would not be. Reads always re-read the file from disk
 rather than trusting an in-memory cache, so every worker always sees the
 latest committed state.
+
+pgvector upgrade trigger: brute-force search re-parses the whole
+metadata.json (JSON parsing dominates over the numpy dot-product ranking
+itself) on every call, so cost scales ~linearly with corpus size. Measured
+on this machine (scripts/benchmark_search.py, ViT-L/14-sized 768-dim
+vectors): ~19ms p95 at 100 records, ~190ms at 1,000, ~1,000ms at 5,000,
+~2,000ms at 10,000. Our real corpus is 30 records today. Treat a p95
+search latency crossing ~300ms (roughly the 1,000-2,000 record range) as
+the trigger to migrate to pgvector (a Postgres extension, not a new
+service) — well before it becomes a user-visible problem.
 """
 
 import asyncio
@@ -47,7 +57,11 @@ from app.models.image import Image
 
 
 def _image_to_record(
-    image: Image, embedding: list[float], rerank_embedding: Optional[list[float]] = None
+    image: Image,
+    embedding: list[float],
+    rerank_embedding: Optional[list[float]] = None,
+    embedding_model: Optional[str] = None,
+    rerank_embedding_model: Optional[str] = None,
 ) -> dict:
     record = asdict(image)
     record["id"] = str(image.id)
@@ -55,10 +69,22 @@ def _image_to_record(
     record["updated_at"] = image.updated_at.isoformat()
     record["embedding"] = embedding
     record["rerank_embedding"] = rerank_embedding
+    # Tags identifying exactly which model/checkpoint produced each vector
+    # (e.g. "ViT-L-14/openai") — see EmbeddingService.model_tag. Without
+    # this, swapping the configured model would silently compare old and
+    # new embeddings as if they lived in the same vector space, which they
+    # don't, even at matching dimensionality.
+    record["embedding_model"] = embedding_model
+    record["rerank_embedding_model"] = rerank_embedding_model
     return record
 
 
-_NON_IMAGE_FIELDS = {"embedding", "rerank_embedding"}
+_NON_IMAGE_FIELDS = {
+    "embedding",
+    "rerank_embedding",
+    "embedding_model",
+    "rerank_embedding_model",
+}
 
 
 def _record_to_image(record: dict) -> Image:
@@ -146,11 +172,17 @@ class FileStoreService:
         image: Image,
         embedding: list[float],
         rerank_embedding: Optional[list[float]] = None,
+        embedding_model: Optional[str] = None,
+        rerank_embedding_model: Optional[str] = None,
     ) -> Image:
         with self._locked():
             records = self._read_json(self._images_file)
             records = [r for r in records if r["id"] != str(image.id)]
-            records.append(_image_to_record(image, embedding, rerank_embedding))
+            records.append(
+                _image_to_record(
+                    image, embedding, rerank_embedding, embedding_model, rerank_embedding_model
+                )
+            )
             self._write_json(self._images_file, records)
         return image
 
@@ -159,25 +191,62 @@ class FileStoreService:
         image: Image,
         embedding: list[float],
         rerank_embedding: Optional[list[float]] = None,
+        embedding_model: Optional[str] = None,
+        rerank_embedding_model: Optional[str] = None,
     ) -> Image:
         return await asyncio.to_thread(
-            self._upsert_image_sync, image, embedding, rerank_embedding
+            self._upsert_image_sync,
+            image,
+            embedding,
+            rerank_embedding,
+            embedding_model,
+            rerank_embedding_model,
         )
 
     def _get_rerank_embeddings_sync(
-        self, image_ids: list[UUID]
+        self, image_ids: list[UUID], rerank_embedding_model: Optional[str] = None
     ) -> dict[UUID, list[float]]:
         wanted = {str(i) for i in image_ids}
         result: dict[UUID, list[float]] = {}
+        excluded = 0
         for r in self._read_json(self._images_file):
-            if r["id"] in wanted and r.get("rerank_embedding"):
-                result[UUID(r["id"])] = r["rerank_embedding"]
+            if r["id"] not in wanted or not r.get("rerank_embedding"):
+                continue
+            if rerank_embedding_model is not None and r.get("rerank_embedding_model") != rerank_embedding_model:
+                excluded += 1
+                continue
+            result[UUID(r["id"])] = r["rerank_embedding"]
+        if excluded:
+            logger.warning(
+                "Excluded rerank embeddings from a different model version",
+                extra={"excluded_count": excluded, "expected_model": rerank_embedding_model},
+            )
         return result
 
     async def get_rerank_embeddings(
-        self, image_ids: list[UUID]
+        self, image_ids: list[UUID], rerank_embedding_model: Optional[str] = None
     ) -> dict[UUID, list[float]]:
-        return await asyncio.to_thread(self._get_rerank_embeddings_sync, image_ids)
+        return await asyncio.to_thread(
+            self._get_rerank_embeddings_sync, image_ids, rerank_embedding_model
+        )
+
+    def _get_model_tag_counts_sync(self) -> dict:
+        """Count records per embedding_model / rerank_embedding_model tag —
+        a quick way to confirm a re-ingest actually backfilled every record
+        after a model swap, rather than leaving some silently excluded from
+        search."""
+        embedding_counts: dict[str, int] = {}
+        rerank_counts: dict[str, int] = {}
+        for r in self._read_json(self._images_file):
+            tag = r.get("embedding_model") or "(untagged)"
+            embedding_counts[tag] = embedding_counts.get(tag, 0) + 1
+            if r.get("rerank_embedding"):
+                rtag = r.get("rerank_embedding_model") or "(untagged)"
+                rerank_counts[rtag] = rerank_counts.get(rtag, 0) + 1
+        return {"embedding_model": embedding_counts, "rerank_embedding_model": rerank_counts}
+
+    async def get_model_tag_counts(self) -> dict:
+        return await asyncio.to_thread(self._get_model_tag_counts_sync)
 
     def _get_distinct_sync(self, field: str) -> list[str]:
         values: set[str] = set()
@@ -197,6 +266,7 @@ class FileStoreService:
         diagnosis: Optional[str],
         tissue_type: Optional[str],
         benign_malignant: Optional[str],
+        embedding_model: Optional[str] = None,
     ) -> list[tuple[Image, float]]:
         records = self._read_json(self._images_file)
         if diagnosis:
@@ -207,6 +277,21 @@ class FileStoreService:
             records = [
                 r for r in records if r.get("benign_malignant") == benign_malignant
             ]
+        if embedding_model is not None:
+            before = len(records)
+            records = [r for r in records if r.get("embedding_model") == embedding_model]
+            excluded = before - len(records)
+            if excluded:
+                # Comparing vectors from different CLIP models/checkpoints is
+                # meaningless even when dimensionality matches by coincidence
+                # (e.g. two different ViT-L/14 checkpoints) — silently
+                # excluding them is correct, but worth surfacing so a stale
+                # corpus (not yet re-ingested after a model swap) is visible
+                # rather than just quietly returning fewer/no results.
+                logger.warning(
+                    "Excluded images with a different embedding model version from search",
+                    extra={"excluded_count": excluded, "expected_model": embedding_model},
+                )
         if not records:
             return []
 
@@ -227,9 +312,16 @@ class FileStoreService:
         diagnosis: Optional[str] = None,
         tissue_type: Optional[str] = None,
         benign_malignant: Optional[str] = None,
+        embedding_model: Optional[str] = None,
     ) -> list[tuple[Image, float]]:
         return await asyncio.to_thread(
-            self._search_sync, vector, limit, diagnosis, tissue_type, benign_malignant
+            self._search_sync,
+            vector,
+            limit,
+            diagnosis,
+            tissue_type,
+            benign_malignant,
+            embedding_model,
         )
 
     # --- Feedback -----------------------------------------------------------

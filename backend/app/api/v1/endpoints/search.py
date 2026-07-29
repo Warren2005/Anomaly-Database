@@ -74,6 +74,7 @@ async def search_similar(
         diagnosis=diagnosis,
         tissue_type=tissue_type,
         benign_malignant=benign_malignant,
+        embedding_model=embedding_service.model_tag,
     )
     search_time = (time.time() - search_start) * 1000
 
@@ -82,7 +83,7 @@ async def search_similar(
     if settings.rerank_enabled and matches:
         rerank_start = time.time()
         rerank_query_vector = await rerank_embedding_service.get_embedding(image_bytes)
-        matches = await rerank(matches, rerank_query_vector)
+        matches = await rerank(matches, rerank_query_vector, rerank_embedding_service.model_tag)
         rerank_time = (time.time() - rerank_start) * 1000
     matches = matches[:limit]
 

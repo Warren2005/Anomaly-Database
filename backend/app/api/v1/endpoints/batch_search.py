@@ -121,6 +121,7 @@ async def _process_batch(
             diagnosis=diagnosis,
             tissue_type=tissue_type,
             benign_malignant=benign_malignant,
+            embedding_model=embedding_service.model_tag,
         )
 
         results = [

@@ -11,6 +11,8 @@ Images ingested before rerank_embedding existed simply fall back to their
 primary-search score rather than being dropped.
 """
 
+from typing import Optional
+
 import numpy as np
 
 from app.models.image import Image
@@ -18,14 +20,22 @@ from app.services.file_store import file_store_service
 
 
 async def rerank(
-    matches: list[tuple[Image, float]], rerank_query_vector: list[float]
+    matches: list[tuple[Image, float]],
+    rerank_query_vector: list[float],
+    rerank_model_tag: Optional[str] = None,
 ) -> list[tuple[Image, float]]:
-    """Re-score and re-sort a shortlist using the rerank embedding."""
+    """Re-score and re-sort a shortlist using the rerank embedding.
+
+    rerank_model_tag, when given, excludes stored rerank embeddings from a
+    different model/checkpoint (see file_store.get_rerank_embeddings) — those
+    images fall back to their primary-search score below, same as images
+    with no rerank embedding at all.
+    """
     if not matches:
         return matches
 
     image_ids = [image.id for image, _ in matches]
-    rerank_vectors = await file_store_service.get_rerank_embeddings(image_ids)
+    rerank_vectors = await file_store_service.get_rerank_embeddings(image_ids, rerank_model_tag)
 
     query = np.array(rerank_query_vector, dtype=np.float32)
     rescored = []

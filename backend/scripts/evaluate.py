@@ -25,9 +25,11 @@ Usage:
 
 import argparse
 import asyncio
+import json
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -35,6 +37,23 @@ import numpy as np
 import open_clip
 import torch
 from PIL import Image as PILImage
+
+REGISTRY_PATH = Path(__file__).resolve().parent.parent / "model_registry.json"
+
+
+def append_to_registry(entry: dict, registry_path: Path = REGISTRY_PATH) -> None:
+    """Append one evaluation run to the model registry log. This is what
+    makes a model swap a *measured, recorded* event instead of a silent
+    config change — anyone can check model_registry.json to see what
+    accuracy was actually verified for the model currently in production,
+    and when."""
+    try:
+        history = json.loads(registry_path.read_text())
+    except (FileNotFoundError, json.JSONDecodeError):
+        history = []
+    history.append(entry)
+    registry_path.write_text(json.dumps(history, indent=2))
+    print(f"Recorded evaluation run in {registry_path}")
 
 LABEL_PATTERN = re.compile(r"^(.*)_\d+\.(jpg|jpeg|png)$", re.IGNORECASE)
 
@@ -269,15 +288,33 @@ async def main():
         embeddings[key] = await embed_dataset(labeled_paths, config, args.device)
 
     print("\n=== Individual models (no cascade) ===\n")
+    per_model_metrics = {}
     for key, config in configs.items():
         metrics = leave_one_out_metrics(embeddings[key], labels, k_values)
         print_metrics(config.label, metrics, k_values)
+        per_model_metrics[key] = {
+            "name": config.name,
+            "pretrained": config.pretrained,
+            "label": config.label,
+            "metrics": metrics,
+        }
 
     print("=== Cascade: ViT-L/14 shortlist -> ViT-H/14 rerank (production design) ===\n")
     cascade_metrics = cascade_rescore(
         embeddings["l14"], embeddings["h14"], labels, k_values, args.shortlist_size
     )
     print_metrics(f"L/14 -> H/14 cascade (shortlist={args.shortlist_size})", cascade_metrics, k_values)
+
+    append_to_registry({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "dataset": str(dataset_dir),
+        "n_images": len(labeled_paths),
+        "n_classes": len(per_class_count),
+        "device": args.device,
+        "shortlist_size": args.shortlist_size,
+        "models": per_model_metrics,
+        "cascade": cascade_metrics,
+    })
 
 
 if __name__ == "__main__":

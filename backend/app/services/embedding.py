@@ -35,6 +35,15 @@ class EmbeddingService:
         """Convert 'ViT-B/32' to 'ViT-B-32' for open_clip."""
         return self._model_name.replace("/", "-")
 
+    @property
+    def model_tag(self) -> str:
+        """Identifies exactly which checkpoint produced an embedding, e.g.
+        'ViT-L-14/openai'. Stored alongside every embedding in file_store.py
+        so a config change (different model or different pretrained weights)
+        can never be silently compared against incompatible old vectors —
+        same dimensionality doesn't mean the same vector space."""
+        return f"{self.clip_model_name}/{self._pretrained}"
+
     async def load_model(self):
         """Load the CLIP model. Called once at startup."""
         start = time.time()

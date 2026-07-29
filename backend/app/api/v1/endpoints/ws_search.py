@@ -75,6 +75,7 @@ async def websocket_search(websocket: WebSocket):
                 diagnosis=diagnosis,
                 tissue_type=tissue_type,
                 benign_malignant=benign_malignant,
+                embedding_model=embedding_service.model_tag,
             )
 
             # Step 3: Stream results one by one

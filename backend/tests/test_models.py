@@ -17,6 +17,11 @@ def test_image_model_fields():
         "anomaly_description", "anomaly_status", "anomaly_type",
         "identification", "wall_location", "run_number",
         "analysis_comment", "analyst",
+        # ILI / Zach reference-library fields
+        "anomaly_name", "classification_status",
+        "depth", "width", "length",
+        "is_qc_flag", "qc_raised_by", "qc_reviewer", "qc_decision_rationale",
+        "signal_description", "notes", "additional_image_paths",
     }
     assert field_names == expected
 

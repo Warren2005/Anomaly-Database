@@ -58,9 +58,13 @@ class TestGetFilters:
         with patch("app.api.v1.endpoints.images.file_store_service") as mock_store:
             mock_store.get_distinct = AsyncMock(
                 side_effect=[
-                    ["melanoma", "nevus"],
-                    ["skin"],
-                    ["malignant", "benign"],
+                    ["melanoma", "nevus"],          # diagnosis
+                    ["skin"],                       # tissue_type
+                    ["malignant", "benign"],        # benign_malignant
+                    ["Metal Loss", "Crack"],        # anomaly_type
+                    ["Run 42"],                     # run_number
+                    ["Approved"],                   # anomaly_status
+                    ["Confirmed", "Edge Case"],     # classification_status
                 ]
             )
 
@@ -73,3 +77,28 @@ class TestGetFilters:
             assert "nevus" in data["diagnoses"]
             assert data["tissue_types"] == ["skin"]
             assert "malignant" in data["benign_malignant"]
+            assert "Metal Loss" in data["anomaly_types"]
+            assert data["run_numbers"] == ["Run 42"]
+            assert data["anomaly_statuses"] == ["Approved"]
+            assert "Confirmed" in data["classification_statuses"]
+
+
+class TestGetImageMedia:
+    def test_get_image_includes_media_urls(self):
+        """GET /images/{id} includes media_urls for primary (+ extras)."""
+        image_id = uuid4()
+        mock_image = _make_image(image_id)
+        mock_image.additional_image_paths = [f"library/{image_id}_1.png"]
+
+        with patch("app.api.v1.endpoints.images.file_store_service") as mock_store:
+            mock_store.get_image = AsyncMock(return_value=mock_image)
+
+            client = TestClient(app)
+            response = client.get(f"/api/v1/images/{image_id}")
+
+            assert response.status_code == 200
+            data = response.json()
+            assert data["media_urls"] == [
+                f"/api/v1/images/{image_id}/file",
+                f"/api/v1/images/{image_id}/media/1",
+            ]

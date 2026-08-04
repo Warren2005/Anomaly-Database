@@ -5,6 +5,7 @@ import ResultsGrid from "./components/ResultsGrid";
 import ImageDetail from "./components/ImageDetail";
 import StatusBar from "./components/StatusBar";
 import LibraryUpload from "./components/LibraryUpload";
+import LibraryBrowser from "./components/LibraryBrowser";
 
 function SkeletonCard({ delay }) {
   return (
@@ -68,16 +69,14 @@ export default function App() {
   const [isDark, setIsDark] = useState(
     () => (localStorage.getItem("theme") ?? "dark") === "dark"
   );
-  const [mode, setMode] = useState("search"); // "search" | "library"
+  const [mode, setMode] = useState("search"); // "search" | "browse" | "add"
 
-  // Apply theme to <html> and persist to localStorage
   useEffect(() => {
     const theme = isDark ? "dark" : "light";
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("theme", theme);
   }, [isDark]);
 
-  // Check backend health on mount
   useEffect(() => {
     checkHealth()
       .then(setHealth)
@@ -150,7 +149,7 @@ export default function App() {
             <ScanIcon />
           </div>
           <div className="brand-wordmark">
-            INSPECTION<span>VISION</span>
+            ILI<span>LIBRARY</span>
           </div>
         </div>
         <nav className="header-nav">
@@ -161,10 +160,16 @@ export default function App() {
             Search
           </button>
           <button
-            className={`nav-tab ${mode === "library" ? "nav-tab-active" : ""}`}
-            onClick={() => setMode("library")}
+            className={`nav-tab ${mode === "browse" ? "nav-tab-active" : ""}`}
+            onClick={() => setMode("browse")}
           >
-            Add to Library
+            Browse Library
+          </button>
+          <button
+            className={`nav-tab ${mode === "add" ? "nav-tab-active" : ""}`}
+            onClick={() => setMode("add")}
+          >
+            Add Entry
           </button>
         </nav>
         <div className="header-actions">
@@ -191,7 +196,9 @@ export default function App() {
           </div>
         )}
 
-        {mode === "library" && <LibraryUpload />}
+        {mode === "browse" && <LibraryBrowser />}
+
+        {mode === "add" && <LibraryUpload />}
 
         {mode === "search" && state === "idle" && (
           <>
@@ -202,7 +209,7 @@ export default function App() {
                 <input
                   type="text"
                   className="text-search-input"
-                  placeholder="e.g. melanoma with irregular border"
+                  placeholder="e.g. metal loss near girth weld"
                   value={textQuery}
                   onChange={(e) => setTextQuery(e.target.value)}
                 />
@@ -238,6 +245,7 @@ export default function App() {
               <ResultsGrid
                 results={results.results}
                 onResultClick={handleResultClick}
+                queryImageId={queryFile ? null : null}
               />
             )}
 

@@ -88,7 +88,13 @@ _NON_IMAGE_FIELDS = {
 
 
 def _record_to_image(record: dict) -> Image:
-    fields = {k: v for k, v in record.items() if k not in _NON_IMAGE_FIELDS}
+    from dataclasses import fields as dc_fields
+
+    allowed = {f.name for f in dc_fields(Image)}
+    fields = {
+        k: v for k, v in record.items()
+        if k not in _NON_IMAGE_FIELDS and k in allowed
+    }
     fields["id"] = UUID(fields["id"])
     fields["created_at"] = datetime.fromisoformat(fields["created_at"])
     fields["updated_at"] = datetime.fromisoformat(fields["updated_at"])
@@ -202,6 +208,24 @@ class FileStoreService:
             embedding_model,
             rerank_embedding_model,
         )
+
+    def _delete_image_sync(self, image_id: UUID) -> Optional[Image]:
+        with self._locked():
+            records = self._read_json(self._images_file)
+            kept = []
+            deleted = None
+            for r in records:
+                if r["id"] == str(image_id):
+                    deleted = _record_to_image(r)
+                else:
+                    kept.append(r)
+            if deleted is None:
+                return None
+            self._write_json(self._images_file, kept)
+            return deleted
+
+    async def delete_image(self, image_id: UUID) -> Optional[Image]:
+        return await asyncio.to_thread(self._delete_image_sync, image_id)
 
     def _get_rerank_embeddings_sync(
         self, image_ids: list[UUID], rerank_embedding_model: Optional[str] = None

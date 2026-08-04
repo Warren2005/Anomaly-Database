@@ -1,97 +1,129 @@
 import React, { useState, useCallback, useRef } from "react";
 import { uploadToLibrary } from "../api/client";
-
-const ANOMALY_STATUS_OPTIONS = [
-  "Not Sized - Approved",
-  "Review Detection",
-  "QC",
-  "Needs Discovery",
-  "Poor Data Quality",
-  "Size Anomaly",
-  "Approved",
-];
-
-const ANOMALY_TYPE_OPTIONS = [
-  "Crack Like",
-  "Metal Loss",
-  "Weld",
-  "Deformation",
-  "Lamination",
-  "Other",
-];
-
-const IDENTIFICATION_OPTIONS = {
-  "Crack Like":  ["Crack", "Stress Corrosion Cracking", "Hook Crack", "EDM Notch", "Crack Cluster", "Lack of Fusion", "Weld Trim"],
-  "Metal Loss":  ["Corrosion", "Corrosion Cluster", "Grinding", "Gouge", "Scratches", "Manufactured"],
-  "Weld":        ["Girth Weld Anomaly", "Longitudinal Weld Anomaly", "Spiral Weld Anomaly", "Arc Strike", "Slag Inclusion"],
-  "Deformation": ["Ovality", "Dent Plain", "Dent Kinked", "Dent Complex", "Dent Re-Rounded", "Ripple/Wrinkle", "Buckle", "Roof Topping"],
-  "Lamination":  ["Planar Lamination", "Sloped Lamination", "Bulging Lamination", "Inclusion"],
-  "Other":       ["Debris", "Artificial Anomaly", "Coating Disbondment", "Wall Thickness Increase", "Bubble", "Nominal Pipe"],
-};
-
-const WALL_LOCATION_OPTIONS = ["External", "Internal", "Mid-Wall", "N/A", "Through-Wall"];
-
-const ACCEPTED_TYPES = ["image/jpeg", "image/png", "image/tiff"];
+import {
+  ANOMALY_TYPES,
+  CLASSIFICATION_STATUS_OPTIONS,
+  DIMENSION_REQUIREMENTS,
+  ACCEPTED_IMAGE_TYPES,
+} from "../lib/iliConstants";
 
 const EMPTY_FORM = {
+  anomaly_name: "",
   anomaly_description: "",
-  anomaly_status: "",
+  signal_description: "",
+  classification_status: "",
   anomaly_type: "",
-  identification: "",
-  wall_location: "",
   run_number: "",
+  depth: "",
+  width: "",
+  length: "",
   analysis_comment: "",
+  notes: "",
   analyst: "",
+  is_qc_flag: false,
+  qc_raised_by: "",
+  qc_reviewer: "",
+  qc_decision_rationale: "",
 };
 
-export default function LibraryUpload() {
-  const [file, setFile] = useState(null);
-  const [preview, setPreview] = useState(null);
+export default function LibraryUpload({ onSuccess }) {
+  const [files, setFiles] = useState([]);
+  const [previews, setPreviews] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState(null);
+  const [fieldErrors, setFieldErrors] = useState({});
   const fileInputRef = useRef(null);
 
-  const handleFile = useCallback((f) => {
-    if (!f) return;
-    if (!ACCEPTED_TYPES.includes(f.type)) {
-      setError("Please use a JPEG, PNG, or TIFF image.");
+  const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
+
+  const addFiles = useCallback((incoming) => {
+    const list = Array.from(incoming || []).filter((f) =>
+      ACCEPTED_IMAGE_TYPES.includes(f.type) || f.type.startsWith("image/")
+    );
+    if (!list.length) {
+      setError("Please use JPEG, PNG, TIFF, GIF, or WebP images.");
       return;
     }
-    setFile(f);
     setError(null);
     setSuccess(null);
-    const reader = new FileReader();
-    reader.onload = (e) => setPreview(e.target.result);
-    reader.readAsDataURL(f);
+    setFiles((prev) => [...prev, ...list]);
+    list.forEach((f) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setPreviews((prev) => [...prev, { url: e.target.result, name: f.name }]);
+      };
+      reader.readAsDataURL(f);
+    });
   }, []);
+
+  const removeFile = (idx) => {
+    setFiles((prev) => prev.filter((_, i) => i !== idx));
+    setPreviews((prev) => prev.filter((_, i) => i !== idx));
+  };
 
   const handleDragOver = useCallback((e) => { e.preventDefault(); setIsDragging(true); }, []);
   const handleDragLeave = useCallback((e) => { e.preventDefault(); setIsDragging(false); }, []);
   const handleDrop = useCallback((e) => {
     e.preventDefault();
     setIsDragging(false);
-    handleFile(e.dataTransfer.files[0]);
-  }, [handleFile]);
+    addFiles(e.dataTransfer.files);
+  }, [addFiles]);
 
   const handleFormChange = (field, value) => {
     setForm((prev) => {
       const next = { ...prev, [field]: value };
-      if (field === "anomaly_type") next.identification = "";
+      if (field === "is_qc_flag" && !value) {
+        next.qc_raised_by = "";
+        next.qc_reviewer = "";
+        next.qc_decision_rationale = "";
+      }
       return next;
     });
+    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
+  const validate = () => {
+    const errs = {};
+    if (!form.anomaly_type) errs.anomaly_type = "Required";
+    if (!form.run_number.trim()) errs.run_number = "Required";
+    if (!form.anomaly_name.trim()) errs.anomaly_name = "Required";
+    if (!form.classification_status) errs.classification_status = "Required";
+    if (!form.analyst.trim()) errs.analyst = "Required";
+    if (!files.length) errs.file = "At least one image is required";
+    for (const dim of requiredDims) {
+      if (form[dim] === "") errs[dim] = "Required for this anomaly type";
+    }
+    return errs;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!file) return;
+    const errs = validate();
+    if (Object.keys(errs).length) {
+      setFieldErrors(errs);
+      return;
+    }
     setUploading(true);
     setError(null);
     try {
-      const result = await uploadToLibrary(file, form);
+      const payload = {
+        ...form,
+        depth: form.depth !== "" ? form.depth : undefined,
+        width: form.width !== "" ? form.width : undefined,
+        length: form.length !== "" ? form.length : undefined,
+        is_qc_flag: form.is_qc_flag ? "true" : "false",
+      };
+      if (!form.is_qc_flag) {
+        delete payload.qc_raised_by;
+        delete payload.qc_reviewer;
+        delete payload.qc_decision_rationale;
+      }
+      const result = await uploadToLibrary(files, payload);
       setSuccess(result);
+      if (onSuccess) onSuccess();
     } catch (err) {
       setError(err.message);
     } finally {
@@ -100,33 +132,22 @@ export default function LibraryUpload() {
   };
 
   const handleReset = () => {
-    setFile(null);
-    setPreview(null);
+    setFiles([]);
+    setPreviews([]);
     setForm(EMPTY_FORM);
     setSuccess(null);
     setError(null);
+    setFieldErrors({});
   };
 
   if (success) {
     return (
       <div className="library-upload">
         <div className="upload-success">
-          <div className="upload-success-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-              <polyline points="22 4 12 14.01 9 11.01" />
-            </svg>
-          </div>
           <p style={{ fontSize: "15px", fontWeight: 600 }}>Saved to Library</p>
           <p style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
-            The image is now indexed and will appear in future search results.
+            Indexed for search and visible in Browse Library.
           </p>
-          {success.image.anomaly_type && (
-            <p style={{ fontSize: "12px", color: "var(--text-muted)" }}>
-              {success.image.anomaly_type}
-              {success.image.identification ? ` — ${success.image.identification}` : ""}
-            </p>
-          )}
           <button className="btn btn-secondary" onClick={handleReset} style={{ marginTop: "8px" }}>
             Upload Another
           </button>
@@ -135,49 +156,50 @@ export default function LibraryUpload() {
     );
   }
 
-  const identificationOptions = form.anomaly_type ? IDENTIFICATION_OPTIONS[form.anomaly_type] || [] : [];
-
   return (
     <div className="library-upload">
-      {/* Image drop zone */}
+      <div className="library-browser-header">
+        <div>
+          <h2 className="library-browser-title">Add Entry</h2>
+          <p className="library-browser-subtitle">
+            Contribute a reference example with ILI metadata (under ~5 minutes)
+          </p>
+        </div>
+      </div>
+
       <div
-        className={`dropzone${isDragging ? " dropzone-active" : ""}`}
-        style={{ marginTop: 0, minHeight: 180 }}
+        className={`dropzone${isDragging ? " dropzone-active" : ""}${fieldErrors.file ? " has-error" : ""}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        onClick={() => !file && fileInputRef.current?.click()}
+        onClick={() => fileInputRef.current?.click()}
       >
-        {preview ? (
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
-            <img src={preview} alt="Preview" className="dropzone-preview" />
-            <button
-              className="btn btn-secondary"
-              style={{ fontSize: 12 }}
-              onClick={(e) => { e.stopPropagation(); handleReset(); }}
-            >
-              Change Image
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="dropzone-icon">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M17 8l-5-5-5 5M12 3v12" />
-              </svg>
-            </div>
-            <p className="dropzone-text">Drop image or click to browse</p>
-            <p className="dropzone-formats">JPEG, PNG, or TIFF</p>
-          </>
-        )}
+        <p className="dropzone-text">Drop images or click to browse</p>
+        <p className="dropzone-formats">JPEG, PNG, TIFF, GIF, WebP · multiple files supported</p>
         <input
           ref={fileInputRef}
           type="file"
-          accept=".jpg,.jpeg,.png,.tiff,.tif"
+          accept="image/jpeg,image/png,image/tiff,image/gif,image/webp"
+          multiple
           style={{ display: "none" }}
-          onChange={(e) => handleFile(e.target.files[0])}
+          onChange={(e) => {
+            addFiles(e.target.files);
+            e.target.value = "";
+          }}
         />
       </div>
+
+      {previews.length > 0 && (
+        <div className="media-preview-grid">
+          {previews.map((p, i) => (
+            <div key={`${p.name}-${i}`} className="preview-thumb">
+              <img src={p.url} alt={p.name} />
+              {i === 0 && <span className="preview-primary">Primary</span>}
+              <button type="button" className="remove-img" onClick={() => removeFile(i)}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
 
       {error && (
         <div className="error-banner">
@@ -186,109 +208,184 @@ export default function LibraryUpload() {
         </div>
       )}
 
-      {/* Metadata form */}
       <form className="upload-form" onSubmit={handleSubmit}>
-        <div className="form-field">
-          <label className="form-label">Anomaly Description</label>
-          <input
-            className="form-input"
-            type="text"
-            placeholder="Describe the anomaly in one sentence"
-            value={form.anomaly_description}
-            onChange={(e) => handleFormChange("anomaly_description", e.target.value)}
-          />
+        <div className="form-row">
+          <div className="form-field">
+            <label className="form-label">Anomaly Type <span className="req">*</span></label>
+            <select
+              className={`form-select${fieldErrors.anomaly_type ? " has-error-input" : ""}`}
+              value={form.anomaly_type}
+              onChange={(e) => handleFormChange("anomaly_type", e.target.value)}
+            >
+              <option value="">— Select Type —</option>
+              {ANOMALY_TYPES.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label className="form-label">Run ID <span className="req">*</span></label>
+            <input
+              className={`form-input${fieldErrors.run_number ? " has-error-input" : ""}`}
+              type="text"
+              placeholder="e.g. Run 42"
+              value={form.run_number}
+              onChange={(e) => handleFormChange("run_number", e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-field">
+            <label className="form-label">Anomaly Name <span className="req">*</span></label>
+            <input
+              className={`form-input${fieldErrors.anomaly_name ? " has-error-input" : ""}`}
+              type="text"
+              placeholder="Short descriptive name"
+              value={form.anomaly_name}
+              onChange={(e) => handleFormChange("anomaly_name", e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label className="form-label">Classification Status <span className="req">*</span></label>
+            <select
+              className={`form-select${fieldErrors.classification_status ? " has-error-input" : ""}`}
+              value={form.classification_status}
+              onChange={(e) => handleFormChange("classification_status", e.target.value)}
+            >
+              <option value="">— Select —</option>
+              {CLASSIFICATION_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
         </div>
 
         <div className="form-field">
-          <label className="form-label">Anomaly Status</label>
-          <select
-            className="form-select"
-            value={form.anomaly_status}
-            onChange={(e) => handleFormChange("anomaly_status", e.target.value)}
-          >
-            <option value="">— Select Status —</option>
-            {ANOMALY_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">Anomaly Type</label>
-          <select
-            className="form-select"
-            value={form.anomaly_type}
-            onChange={(e) => handleFormChange("anomaly_type", e.target.value)}
-          >
-            <option value="">— Select Type —</option>
-            {ANOMALY_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">Identification</label>
-          <select
-            className="form-select"
-            value={form.identification}
-            disabled={!form.anomaly_type}
-            onChange={(e) => handleFormChange("identification", e.target.value)}
-          >
-            <option value="">
-              {form.anomaly_type ? "— Select Identification —" : "Select an Anomaly Type first"}
-            </option>
-            {identificationOptions.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">Wall Location</label>
-          <select
-            className="form-select"
-            value={form.wall_location}
-            onChange={(e) => handleFormChange("wall_location", e.target.value)}
-          >
-            <option value="">— Select Location —</option>
-            {WALL_LOCATION_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">Run Number</label>
-          <input
-            className="form-input"
-            type="text"
-            placeholder="e.g. RUN-2024-001"
-            value={form.run_number}
-            onChange={(e) => handleFormChange("run_number", e.target.value)}
-          />
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">Analysis Comment</label>
+          <label className="form-label">Comments <span className="opt">full-text searchable</span></label>
           <textarea
             className="form-textarea"
-            placeholder="Any additional observations or notes about this image"
+            placeholder='Engineering observations — e.g. "axially intermittent", threshold notes'
             value={form.analysis_comment}
             onChange={(e) => handleFormChange("analysis_comment", e.target.value)}
           />
         </div>
 
         <div className="form-field">
-          <label className="form-label">Analyst</label>
+          <label className="form-label">Signal Description <span className="opt">optional</span></label>
+          <textarea
+            className="form-textarea"
+            placeholder="What makes this example notable — 1 to 3 sentences"
+            value={form.signal_description}
+            onChange={(e) => handleFormChange("signal_description", e.target.value)}
+          />
+        </div>
+
+        {requiredDims.length > 0 && (
+          <div className="dim-callout">
+            Mandatory dimensions for {form.anomaly_type}: {requiredDims.join(", ")}
+          </div>
+        )}
+
+        <div className="form-row form-row-3">
+          {["depth", "width", "length"].map((dim) => (
+            <div className="form-field" key={dim}>
+              <label className="form-label">
+                {dim.charAt(0).toUpperCase() + dim.slice(1)} (mm)
+                {requiredDims.includes(dim) && <span className="req"> *</span>}
+              </label>
+              <input
+                className={`form-input${fieldErrors[dim] ? " has-error-input" : ""}`}
+                type="number"
+                min="0"
+                step="0.1"
+                value={form[dim]}
+                onChange={(e) => handleFormChange(dim, e.target.value)}
+              />
+            </div>
+          ))}
+        </div>
+
+        <div className="qc-section">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={form.is_qc_flag}
+              onChange={(e) => handleFormChange("is_qc_flag", e.target.checked)}
+            />
+            This entry originated as a QC flag
+          </label>
+          {form.is_qc_flag && (
+            <div className="qc-fields">
+              <div className="form-row">
+                <div className="form-field">
+                  <label className="form-label">QC Raised By</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={form.qc_raised_by}
+                    onChange={(e) => handleFormChange("qc_raised_by", e.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label className="form-label">QC Reviewer</label>
+                  <input
+                    className="form-input"
+                    type="text"
+                    value={form.qc_reviewer}
+                    onChange={(e) => handleFormChange("qc_reviewer", e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="form-field">
+                <label className="form-label">QC Decision &amp; Rationale</label>
+                <textarea
+                  className="form-textarea"
+                  value={form.qc_decision_rationale}
+                  onChange={(e) => handleFormChange("qc_decision_rationale", e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="form-row">
+          <div className="form-field">
+            <label className="form-label">Contributed By <span className="req">*</span></label>
+            <input
+              className={`form-input${fieldErrors.analyst ? " has-error-input" : ""}`}
+              type="text"
+              placeholder="Your name"
+              value={form.analyst}
+              onChange={(e) => handleFormChange("analyst", e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label className="form-label">Notes <span className="opt">optional</span></label>
+            <input
+              className="form-input"
+              type="text"
+              placeholder="Additional context, links"
+              value={form.notes}
+              onChange={(e) => handleFormChange("notes", e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">Short description (optional)</label>
           <input
             className="form-input"
             type="text"
-            placeholder="Analyst name"
-            value={form.analyst}
-            onChange={(e) => handleFormChange("analyst", e.target.value)}
+            placeholder="One-line summary if different from name"
+            value={form.anomaly_description}
+            onChange={(e) => handleFormChange("anomaly_description", e.target.value)}
           />
         </div>
 
         <button
           type="submit"
           className="btn btn-primary"
-          disabled={!file || uploading}
+          disabled={uploading}
           style={{ alignSelf: "flex-end", minWidth: 140 }}
         >
-          {uploading ? "Saving..." : "Save to Library"}
+          {uploading ? "Saving..." : "Save Entry"}
         </button>
       </form>
     </div>

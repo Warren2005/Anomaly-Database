@@ -47,10 +47,28 @@ export default function ResultsGrid({ results, onResultClick, queryImageId }) {
             <div className="result-score">
               {(result.similarity_score * 100).toFixed(1)}% match
             </div>
-            {result.image.diagnosis && (
-              <div className="result-diagnosis">{result.image.diagnosis}</div>
-            )}
+            {result.image.anomaly_name || result.image.diagnosis ? (
+              <div className="result-diagnosis">
+                {result.image.anomaly_name || result.image.diagnosis}
+              </div>
+            ) : null}
             <div className="result-info-row">
+              {result.image.anomaly_type && (
+                <span className="badge badge-anomaly">
+                  {result.image.anomaly_type}
+                </span>
+              )}
+              {result.image.run_number && (
+                <span className="badge">{result.image.run_number}</span>
+              )}
+              {result.image.classification_status && (
+                <span className="badge badge-status">
+                  {result.image.classification_status}
+                </span>
+              )}
+              {result.image.is_qc_flag && (
+                <span className="badge badge-qc">QC</span>
+              )}
               {result.image.benign_malignant && (
                 <span
                   className={`badge ${
@@ -60,11 +78,6 @@ export default function ResultsGrid({ results, onResultClick, queryImageId }) {
                   }`}
                 >
                   {result.image.benign_malignant}
-                </span>
-              )}
-              {result.image.anomaly_type && (
-                <span className="badge badge-anomaly">
-                  {result.image.anomaly_type}
                 </span>
               )}
               <div className="feedback-buttons">

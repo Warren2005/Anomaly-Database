@@ -23,6 +23,18 @@ class ImageBase(BaseModel):
     run_number: Optional[str] = None
     analysis_comment: Optional[str] = None
     analyst: Optional[str] = None
+    anomaly_name: Optional[str] = None
+    classification_status: Optional[str] = None
+    depth: Optional[float] = None
+    width: Optional[float] = None
+    length: Optional[float] = None
+    is_qc_flag: Optional[bool] = None
+    qc_raised_by: Optional[str] = None
+    qc_reviewer: Optional[str] = None
+    qc_decision_rationale: Optional[str] = None
+    signal_description: Optional[str] = None
+    notes: Optional[str] = None
+    additional_image_paths: Optional[list[str]] = None
 
 
 class ImageCreate(ImageBase):
@@ -40,4 +52,5 @@ class ImageResponse(ImageBase):
 class LibraryUploadResponse(BaseModel):
     image: ImageResponse
     image_url: str
+    media_urls: list[str] = []
     message: str

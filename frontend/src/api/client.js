@@ -46,6 +46,49 @@ export async function getFilters() {
   return response.json();
 }
 
+export async function browseLibrary(filters = {}) {
+  const params = new URLSearchParams();
+  if (Array.isArray(filters.anomaly_types) && filters.anomaly_types.length) {
+    params.set("anomaly_types", filters.anomaly_types.join(","));
+  } else if (filters.anomaly_type) {
+    params.set("anomaly_type", filters.anomaly_type);
+  }
+  if (filters.run_number) params.set("run_number", filters.run_number);
+  if (filters.anomaly_status) params.set("anomaly_status", filters.anomaly_status);
+  if (filters.classification_status) {
+    params.set("classification_status", filters.classification_status);
+  }
+  if (filters.q) params.set("q", filters.q);
+  for (const key of [
+    "depth_min", "depth_max", "width_min", "width_max", "length_min", "length_max",
+  ]) {
+    if (filters[key] !== "" && filters[key] != null) params.set(key, filters[key]);
+  }
+
+  const qs = params.toString();
+  const response = await fetch(`${BASE_URL}/library/browse${qs ? `?${qs}` : ""}`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error?.error?.message || `Browse failed: ${response.status}`
+    );
+  }
+  return response.json();
+}
+
+export async function deleteLibraryEntry(imageId) {
+  const response = await fetch(`${BASE_URL}/library/${imageId}`, {
+    method: "DELETE",
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error?.error?.message || `Delete failed: ${response.status}`
+    );
+  }
+  return response.json();
+}
+
 export async function searchByText(query, filters = {}) {
   const body = { query, top_k: 50 };
   if (filters.diagnosis) body.diagnosis = filters.diagnosis;
@@ -111,9 +154,10 @@ export async function getExplainability(imageId) {
   return URL.createObjectURL(blob);
 }
 
-export async function uploadToLibrary(file, metadata) {
+export async function uploadToLibrary(files, metadata) {
   const form = new FormData();
-  form.append("file", file);
+  const list = Array.isArray(files) ? files : [files];
+  list.forEach((f) => form.append("files", f));
   Object.entries(metadata).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== "") form.append(k, v);
   });

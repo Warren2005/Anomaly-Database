@@ -1,19 +1,20 @@
 {
-  "name": "medical-microscopy-frontend",
+  "name": "ili-reference-library-frontend",
   "version": "1.0.0",
-  "main": "main.js",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "start": "vite build && electron ."
+    "preview": "vite preview"
   },
   "dependencies": {
     "react": "^18.2.0",
     "react-dom": "^18.2.0"
   },
   "devDependencies": {
-    "electron": "^28.0.0",
     "@vitejs/plugin-react": "^4.2.0",
     "vite": "^5.0.0"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-win32-x64-msvc": "^4.62.4"
   }
 }

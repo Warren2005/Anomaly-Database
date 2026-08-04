@@ -25,9 +25,19 @@ class SearchResponse(BaseModel):
 class ImageDetailResponse(BaseModel):
     image: ImageResponse
     image_url: str
+    media_urls: list[str] = []
 
 
 class FiltersResponse(BaseModel):
     diagnoses: list[str]
     tissue_types: list[str]
     benign_malignant: list[str]
+    anomaly_types: list[str] = []
+    run_numbers: list[str] = []
+    anomaly_statuses: list[str] = []
+    classification_statuses: list[str] = []
+
+
+class LibraryBrowseResponse(BaseModel):
+    images: list[ImageDetailResponse]
+    total: int

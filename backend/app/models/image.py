@@ -31,5 +31,19 @@ class Image:
     run_number: Optional[str] = None
     analysis_comment: Optional[str] = None
     analyst: Optional[str] = None
+    # Zach / ILI reference-library fields
+    anomaly_name: Optional[str] = None
+    classification_status: Optional[str] = None
+    depth: Optional[float] = None
+    width: Optional[float] = None
+    length: Optional[float] = None
+    is_qc_flag: Optional[bool] = None
+    qc_raised_by: Optional[str] = None
+    qc_reviewer: Optional[str] = None
+    qc_decision_rationale: Optional[str] = None
+    signal_description: Optional[str] = None
+    notes: Optional[str] = None
+    # Extra media paths beyond image_path (primary / CLIP source)
+    additional_image_paths: Optional[list] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

@@ -641,6 +641,347 @@ body {
   color: var(--accent);
 }
 
+.badge-status {
+  background: rgba(96, 165, 250, 0.16);
+  color: #60a5fa;
+}
+
+.badge-qc {
+  background: var(--danger-dim);
+  color: var(--danger);
+}
+
+/* ============================================================
+   LIBRARY BROWSER + ILI FORM EXTENSIONS
+   ============================================================ */
+.library-browser {
+  width: 100%;
+  max-width: 1100px;
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.library-browser-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.library-browser-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.library-browser-subtitle {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.library-count {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  padding: 6px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.browse-filters {
+  display: grid;
+  grid-template-columns: 1.4fr repeat(4, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.browse-search {
+  min-width: 0;
+}
+
+.browse-grid {
+  width: 100%;
+  max-width: none;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-row-3 {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+
+.req {
+  color: var(--accent);
+}
+
+.has-error-input {
+  border-color: var(--danger) !important;
+}
+
+.dim-callout {
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-dim);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.qc-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 4px;
+  border-top: 1px solid var(--border);
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.qc-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+}
+
+@media (max-width: 900px) {
+  .browse-filters {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .form-row,
+  .form-row-3 {
+    grid-template-columns: 1fr;
+  }
+}
+
+.opt {
+  font-weight: 400;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+
+.browse-search-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.browse-search-row .browse-search {
+  flex: 1;
+}
+
+.filter-chips-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.filter-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  padding-top: 6px;
+  min-width: 36px;
+}
+
+.chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.chip {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-radius: 999px;
+  padding: 5px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+  color: var(--text-primary);
+}
+
+.chip-active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.filter-collapsible {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: var(--bg-surface);
+}
+
+.collapsible-toggle {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.dims-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.dim-range {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.media-preview-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.preview-thumb {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.preview-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.preview-primary {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  font-size: 10px;
+  background: var(--accent);
+  color: var(--on-accent);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.remove-img {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.detail-toolbar {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.btn-danger {
+  background: var(--danger-dim);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+  border-radius: 9px;
+  padding: 8px 14px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.delete-confirm {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.media-nav {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  margin-top: 10px;
+  color: var(--text-secondary);
+  font-size: 13px;
+}
+
+.media-thumbs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  justify-content: center;
+}
+
+.media-thumb {
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  background: none;
+}
+
+.media-thumb.active {
+  border-color: var(--accent);
+}
+
+.media-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+@media (max-width: 900px) {
+  .dims-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+
+
 /* ============================================================
    FEEDBACK BUTTONS
    ============================================================ */
@@ -889,10 +1230,34 @@ body {
 .library-upload {
   width: 100%;
   max-width: 640px;
-  margin-top: 32px;
+  margin-top: 24px;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
   gap: 16px;
+  box-sizing: border-box;
+}
+
+.library-upload .library-browser-header {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+.library-upload .dropzone {
+  width: 100%;
+  max-width: none;
+  margin-top: 0;
+  min-height: 160px;
+  box-sizing: border-box;
+}
+
+.library-upload .media-preview-grid,
+.library-upload .upload-form,
+.library-upload .error-banner,
+.library-upload .upload-success {
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .upload-form {

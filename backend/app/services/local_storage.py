@@ -53,5 +53,13 @@ class LocalStorageService:
     async def get_image(self, object_name: str) -> bytes:
         return await asyncio.to_thread(self._get_image_sync, object_name)
 
+    def _delete_image_sync(self, object_name: str) -> None:
+        path = self._resolve(object_name)
+        if path.exists():
+            path.unlink()
+
+    async def delete_image(self, object_name: str) -> None:
+        await asyncio.to_thread(self._delete_image_sync, object_name)
+
 
 local_storage_service = LocalStorageService(data_dir=settings.library_data_dir)

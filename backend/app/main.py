@@ -9,10 +9,12 @@ This file:
 """
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
+from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.routing import Route
 
@@ -132,9 +134,10 @@ app.include_router(api_router, prefix="/api/v1")
 app.routes.append(Route("/metrics", metrics_endpoint))
 
 
-@app.get("/")
-async def root():
-    """Root endpoint - API information."""
+@app.get("/api/v1/info")
+async def info():
+    """API info endpoint (moved off "/" so that path can serve the built
+    frontend instead — see the static file mount below)."""
     return {
         "name": settings.app_name,
         "version": settings.app_version,
@@ -142,3 +145,14 @@ async def root():
         "docs_url": "/docs",
         "health_url": "/api/v1/health",
     }
+
+
+# Serve the built frontend (frontend/dist, produced by `npm run build`) at
+# "/" so anyone on the LAN can open http://<this-machine's-IP>:8001/ in a
+# browser and get the working app — no Node/npm needed on their end, and
+# only one port to reach (relative "/api/v1/..." calls from the frontend
+# resolve to this same origin). Guarded by existence so a backend-only dev
+# machine (or CI, where the frontend isn't built) still starts up fine.
+_frontend_dist = Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"
+if _frontend_dist.is_dir():
+    app.mount("/", StaticFiles(directory=str(_frontend_dist), html=True), name="frontend")

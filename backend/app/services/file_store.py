@@ -7,8 +7,9 @@ Redis (embedding cache) together. Three JSON files under `library_data_dir`
 are the entire "database":
 
 - metadata.json — one record per image, including its CLIP embedding(s) as
-  plain fields (mirrors a SharePoint List column holding the embedding as
-  JSON text).
+  plain fields (a flat JSON record per image — the kind of thing that
+  survives living in a synced cloud folder, e.g. a SharePoint List column
+  or, as currently configured, a shared Dropbox folder).
 - feedback.json — one record per up/down vote.
 - embedding_cache.json — SHA-256(image bytes) -> embedding, shared across
   every worker process and persisted across restarts (unlike an in-process

@@ -2,80 +2,86 @@
 
 ## Prerequisites
 
-- Docker Desktop (for the full stack)
-- Node.js (only needed if you want frontend hot-reload during development)
+- Python 3.11 (backend)
+- Node.js + npm (frontend build)
+- No Docker, no Postgres/Qdrant/MinIO/Redis — everything runs as plain local processes and files (see "Architecture" below).
 
 ---
 
-## Quickstart — everything in one command
+## First-time setup
 
 ```bash
-docker compose up -d --build
+# Backend
+cd backend
+python -m venv venv
+venv\Scripts\activate            # Windows; use `source venv/bin/activate` on macOS/Linux
+pip install -r requirements.txt
+copy .env.example .env           # Windows; `cp .env.example .env` elsewhere
 ```
 
-This builds and starts all six services: PostgreSQL, Qdrant, MinIO, Redis, the FastAPI backend, and the Nginx-served frontend. The backend's `entrypoint.sh` runs `alembic upgrade head` automatically before starting, so the schema is always current.
-
-Check everything is healthy:
+Edit your new `backend/.env` and set `LIBRARY_DATA_DIR` — see "Where the data lives" below before you do this; it's not just a default path.
 
 ```bash
-curl http://localhost:8000/api/v1/health
+# Frontend (one-time build — see "Local development" below for hot-reload instead)
+cd frontend
+npm install
+npm run build
 ```
 
-You should see:
-
-```json
-{
-  "status": "healthy",
-  "services": {
-    "api": "up",
-    "postgres": "up",
-    "qdrant": "up",
-    "minio": "up",
-    "clip": "up",
-    "redis": "up"
-  }
-}
-```
-
-Open the app at **http://localhost:3000**. Interactive API docs are at **http://localhost:8000/docs**.
-
-Stop everything with:
+## Running it
 
 ```bash
-docker compose down
+cd backend
+venv\Scripts\activate
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
+
+(Use whatever `API_PORT` you set in `.env` instead of 8000 if you changed it.)
+
+Open **http://localhost:8000/** — the backend serves the built frontend directly at `/` (see `app/main.py`'s static file mount), so there's only one port to run and no separate frontend server needed for normal use. Interactive API docs are at `/docs`, and a plain JSON health check is at `/api/v1/health`.
+
+Stop it with Ctrl+C (or find and kill the `python -m uvicorn ...` process).
+
+---
+
+## Where the data lives (read this before setting LIBRARY_DATA_DIR)
+
+There is no database to install. `backend/app/services/file_store.py` stores everything — image metadata, embeddings, feedback votes, the embedding cache, and the `events.jsonl` observability log — as plain files under whatever directory `LIBRARY_DATA_DIR` points at.
+
+**This project currently uses the team's shared Dropbox as that directory**, specifically so the data gets Dropbox's automatic version history and delete-recovery as a backup mechanism, with zero custom backup code (see "Backups" below). That means:
+
+- `LIBRARY_DATA_DIR` must point at **your own local machine's copy** of that same shared Dropbox folder (e.g. its path on your machine might be `C:\Users\<you>\DarkVision Dropbox\Analysis-ILI\Defect Library\ILI DA Co-op Project - Anomaly Search`, not necessarily the same drive letter as anyone else's machine). This is exactly why the path lives in the gitignored `.env` and not in code — it's genuinely different per machine.
+- Make sure Dropbox is set to keep that folder fully downloaded locally (not "online-only"/Smart Sync) — the backend reads these files directly off disk on every request.
+- **Only run one backend instance at a time against this shared folder.** The file-locking that makes concurrent requests safe (`portalocker`, atomic writes — see `file_store.py`) only protects multiple processes on the *same machine*; it does not coordinate across two different machines' Dropbox clients both syncing the same folder. If two people ran their own backend simultaneously, both pointed at the same synced folder, a genuine race is possible — one person's upload or feedback vote getting silently overwritten by the other's, or Dropbox creating a "conflicted copy" file our code never reads. Pulling this repo and starting your own backend to independently verify it works is completely fine; just don't leave two instances running live against the same Dropbox data at the same time. Whoever is "the shared server" at any given moment should be the only live instance.
+- If you'd rather test against your own throwaway data instead of the real shared corpus, just point `LIBRARY_DATA_DIR` at any local folder (e.g. the default `./data/library`) instead — it'll start empty and won't touch the shared Dropbox data at all.
 
 ---
 
 ## Ingesting images
 
-Place image folders under `backend/data/` (gitignored — not part of version control) and run the ingestion script inside the backend container:
-
 ```bash
-docker compose exec backend python -m scripts.ingest_custom --image-dir ./data/DV_Data
+cd backend
+python -m scripts.ingest_custom --image-dir ./data/DV_Data
 ```
 
 - `--label` sets the dataset label tag (defaults to the folder name)
 - `--limit N` processes only the first N images, useful for a quick test
-- The script is resumable via a per-folder `.ingest_checkpoint.db` checkpoint file — if interrupted, re-running the same command skips already-processed images. If you point it at a **different** Postgres/Qdrant instance (e.g. after resetting containers), delete the checkpoint file first so it doesn't skip images that were never actually ingested into the new instance.
+- The script is resumable via a per-folder `.ingest_checkpoint.db` checkpoint file — if interrupted, re-running the same command skips already-processed images. Delete that checkpoint file if you need to force full re-processing (e.g. after a CLIP model change — see `app/services/embedding.py`'s `model_tag`).
 
-Verify the data landed:
-
-```bash
-docker compose exec postgres psql -U postgres -d medical_microscopy -c "SELECT dataset_source, COUNT(*) FROM images GROUP BY dataset_source;"
-curl http://localhost:6333/collections/medical_images
-```
+Verify the data landed by hitting the running backend's search endpoint, or check `backend/scripts/show_stats.py` / read `LIBRARY_DATA_DIR/metadata.json` directly.
 
 ---
 
 ## Backups
 
-The current backend (see `backend/app/services/file_store.py`) stores everything — image metadata, embeddings, feedback votes, the embedding cache, and the `events.jsonl` observability log — as files under `LIBRARY_DATA_DIR` (`backend/.env`, default `./data/library`), simulating the eventual SharePoint migration. That means the backup story doesn't need any new backup service or scheduled job — it needs `LIBRARY_DATA_DIR` to actually live inside a location that already versions files:
+The backup story doesn't need any new backup service or scheduled job — it just needs `LIBRARY_DATA_DIR` to live inside a location that already versions files on its own, via a desktop sync client.
 
-- **Once the real SharePoint migration happens**: point `LIBRARY_DATA_DIR` at a folder inside a SharePoint-synced document library. Every write already lands via an atomic replace (see `file_store.py`), so each save looks like a clean version to SharePoint's built-in version history, and accidental deletes are covered by its Recycle Bin — both with zero custom backup code.
-- **Right now, before that migration**: point `LIBRARY_DATA_DIR` at a folder that's already OneDrive/SharePoint-synced on a team machine (most Microsoft 365 accounts have this available immediately) instead of a plain local folder. If that's not set up yet on this machine, a scheduled local copy into such a synced folder achieves the same effect as an interim step.
+**Currently configured**: `LIBRARY_DATA_DIR` points at a folder inside the team's shared Dropbox. Every write already lands via an atomic replace (see `file_store.py`), so each save looks like a clean version to Dropbox's version history, and accidental deletes are covered by Dropbox's "Deleted files" recovery — both with zero custom backup code. Two things worth checking periodically:
 
-Either way: no new backup infrastructure — just making sure the data directory lives somewhere already versioned.
+- **The Dropbox client on the shared machine must keep this folder fully downloaded** (not "online-only"/Smart Sync).
+- **Version history retention depends on the team's Dropbox plan** (commonly 30 days on Basic/Plus, longer on Business plans) — worth confirming how far back that actually reaches.
+
+This same approach — pointing `LIBRARY_DATA_DIR` at any always-synced cloud folder — works identically with SharePoint/OneDrive if that ever becomes the company's preferred tool instead: no code changes needed, only a different folder path.
 
 ## Observability
 
@@ -93,7 +99,7 @@ This is deliberately dependency-free — no Prometheus/Grafana to stand up or ma
 
 ## Local development (frontend hot-reload)
 
-If you're actively editing frontend code, the production Nginx build won't hot-reload. Instead, keep the backend and infra running via Docker Compose, and run the frontend dev server locally against it:
+`npm run build` (used above) produces a static snapshot — fine for normal use, but you won't see edits live. For active frontend development, run the backend as above, then in a separate terminal:
 
 ```bash
 cd frontend
@@ -101,18 +107,22 @@ npm install
 npm run dev
 ```
 
-This starts Vite on **http://localhost:5173**, proxying `/api` requests to the backend on port 8000 (see `vite.config.js`'s `server.proxy`). Backend port 8000 stays exposed to the host either way, so this works alongside the containerized stack without any extra configuration.
+This starts Vite on **http://localhost:5173**, proxying `/api` requests to your backend. By default it assumes the backend is on port 8000; if yours runs on a different port, `copy .env.local.example .env.local` in `frontend/` and set `BACKEND_PORT` to match (see `vite.config.js`).
 
-After editing frontend code for real, rebuild the production image with:
+After editing frontend code for real, rebuild the static snapshot the backend serves with `npm run build`, then restart the backend.
 
-```bash
-docker compose up -d --build frontend
-```
+---
+
+## Letting others on your network use it
+
+The backend binds to `0.0.0.0`, so once it's running, anyone on the same local network can reach it at `http://<your-machine's-LAN-IP>:<API_PORT>/` in a browser (find your IP with `ipconfig`/`ifconfig`) — no frontend dev server needed, since the backend already serves the built frontend at `/`. Windows Firewall may need to allow inbound connections on that port for machines other than your own to reach it; test with a colleague opening `/api/v1/health` in their browser first.
 
 ---
 
 ## Troubleshooting
 
-- **`docker compose up` can't build (network errors during `apt-get`/`npm install` inside the build)**: this is a Docker Desktop networking issue, not the project. Check Docker Desktop → Settings → Resources → Proxies, and check whether a VPN client is intercepting the Docker VM's traffic. A full restart of the Mac often clears stuck VPN-related network state; if that doesn't help, try Docker Desktop's Troubleshoot → "Clean / Purge data" (this wipes all local images/containers/volumes).
-- **Frontend shows "backend offline" in `npm run dev` mode**: confirm `vite.config.js` has a `server.proxy` entry for `/api` pointing at `http://localhost:8000`. Without it, relative `/api/v1/...` calls fall through to Vite's SPA catch-all and return HTML instead of JSON.
-- **Ports already in use**: if you previously ran Postgres/Redis/Qdrant/MinIO locally (via Homebrew or a standalone binary) instead of through Docker Compose, stop those first — Compose needs to bind the same host ports (5432, 6379, 6333/6334, 9000/9001, 8000, 3000).
+- **CUDA / GPU errors on startup**: `CLIP_DEVICE=cuda` requires a CUDA build of `torch`/`torchvision` matching your driver, not the default CPU wheels `open-clip-torch` pulls in — see the comment block in `requirements.txt`. When in doubt, set `CLIP_DEVICE=cpu`; it works everywhere, just slower.
+- **`ModuleNotFoundError` on startup**: make sure the virtual environment is activated (`venv\Scripts\activate`) before running `pip install` or `uvicorn`.
+- **Frontend shows "backend offline" in `npm run dev` mode**: confirm `frontend/.env.local`'s `BACKEND_PORT` (if you created one) matches the port your backend actually runs on — see "Local development" above.
+- **Port already in use**: pick a different `API_PORT` in `backend/.env` (common cause on Windows: corporate software already bound to 8000).
+- **`/` returns a 404 instead of the app**: the backend only mounts the frontend if `frontend/dist/` exists — run `npm run build` in `frontend/` first.

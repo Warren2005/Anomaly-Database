@@ -10,9 +10,10 @@ from app.main import app
 client = TestClient(app)
 
 
-def test_root_endpoint():
-    """Root endpoint returns app info."""
-    response = client.get("/")
+def test_info_endpoint():
+    """Info endpoint (moved off "/" so that path can serve the built
+    frontend instead) returns app info."""
+    response = client.get("/api/v1/info")
 
     assert response.status_code == 200
     data = response.json()

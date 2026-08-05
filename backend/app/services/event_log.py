@@ -4,9 +4,10 @@ Lightweight, dependency-free observability.
 Appends one JSON line per meaningful action (search, feedback, upload,
 error) to <library_data_dir>/logs/events.jsonl. Deliberately not a new
 service to run: the log lives under the same directory as metadata.json,
-so once that directory is a SharePoint/OneDrive-synced folder (see
-file_store.py's module docstring), the log history is versioned right
-along with the data, for free.
+so because that directory is a synced cloud folder — currently the team's
+shared Dropbox, see file_store.py's module docstring and
+RUNNING_INSTRUCTIONS.md's "Backups" section — the log history is versioned
+right along with the data, for free.
 
 Read by scripts/show_stats.py, which prints p50/p95 latency, error rate,
 and cache hit rate over a chosen window — a dependency-free alternative to

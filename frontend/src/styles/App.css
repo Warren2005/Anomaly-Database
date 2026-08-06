@@ -1096,6 +1096,14 @@ body {
   color: var(--text-secondary);
 }
 
+.delete-passkey-input {
+  width: 120px;
+}
+
+.delete-error {
+  flex-basis: 100%;
+}
+
 .media-nav {
   display: flex;
   gap: 10px;

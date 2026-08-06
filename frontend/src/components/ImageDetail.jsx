@@ -22,6 +22,8 @@ export default function ImageDetail({
   const [error, setError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [deletePasskey, setDeletePasskey] = useState("");
+  const [deleteError, setDeleteError] = useState(null);
 
   const canNavigate = typeof currentIndex === "number" && totalCount > 0 && (onPrev || onNext);
   const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
@@ -34,6 +36,8 @@ export default function ImageDetail({
     setShowHeatmap(false);
     setError(null);
     setConfirmDelete(false);
+    setDeletePasskey("");
+    setDeleteError(null);
   }, [image.id]);
 
   useEffect(() => {
@@ -86,14 +90,14 @@ export default function ImageDetail({
 
   const handleDelete = async () => {
     setDeleting(true);
-    setError(null);
+    setDeleteError(null);
     try {
-      await deleteLibraryEntry(image.id);
+      await deleteLibraryEntry(image.id, deletePasskey);
       if (onDeleted) onDeleted();
       else onBack();
     } catch (err) {
-      setError(err.message);
-      setConfirmDelete(false);
+      setDeleteError(err.message);
+      setDeletePasskey("");
     } finally {
       setDeleting(false);
     }
@@ -140,20 +144,51 @@ export default function ImageDetail({
         )}
 
         {allowDelete && !confirmDelete && (
-          <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
+          <button
+            className="btn btn-danger"
+            onClick={() => { setConfirmDelete(true); setDeleteError(null); }}
+          >
             Delete Entry
           </button>
         )}
         {allowDelete && confirmDelete && (
-          <div className="delete-confirm">
+          <form
+            className="delete-confirm"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (!deleting && deletePasskey) handleDelete();
+            }}
+          >
             <span>Delete this entry permanently?</span>
-            <button className="btn btn-danger" disabled={deleting} onClick={handleDelete}>
+            <input
+              type="password"
+              className="form-input delete-passkey-input"
+              placeholder="Passkey"
+              value={deletePasskey}
+              onChange={(e) => setDeletePasskey(e.target.value)}
+              autoFocus
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              className="btn btn-danger"
+              disabled={deleting || !deletePasskey}
+            >
               {deleting ? "Deleting…" : "Confirm"}
             </button>
-            <button className="btn btn-secondary" onClick={() => setConfirmDelete(false)}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setConfirmDelete(false);
+                setDeletePasskey("");
+                setDeleteError(null);
+              }}
+            >
               Cancel
             </button>
-          </div>
+            {deleteError && <span className="heatmap-error delete-error">{deleteError}</span>}
+          </form>
         )}
       </div>
 

@@ -57,6 +57,12 @@ class Settings(BaseSettings):
 
     # Logging
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+
+    # Passkey required to delete a library entry — a lightweight speed bump
+    # against accidental deletes, not a real auth system (this app has none
+    # by design; see RUNNING_INSTRUCTIONS.md). Change via .env if the
+    # default ever needs to differ from the team-wide default.
+    library_delete_passkey: str = "admin123"
     
     class Config:
         """Pydantic configuration."""

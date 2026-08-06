@@ -65,6 +65,22 @@ class NotFoundError(AppException):
         )
 
 
+class ForbiddenError(AppException):
+    """
+    Raised when a request is well-formed but not permitted.
+
+    Example: missing or incorrect delete passkey.
+    """
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            error_code="FORBIDDEN",
+            status_code=403,
+            details=details
+        )
+
+
 class ServiceUnavailableError(AppException):
     """
     Raised when an external service is unavailable.

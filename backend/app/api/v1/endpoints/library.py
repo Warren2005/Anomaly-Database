@@ -9,10 +9,10 @@ DELETE /api/v1/library/{image_id}
 from typing import Optional
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, File, Form, UploadFile
+from fastapi import APIRouter, File, Form, Header, UploadFile
 
 from app.core.config import settings
-from app.core.errors import NotFoundError, ValidationError
+from app.core.errors import ForbiddenError, NotFoundError, ValidationError
 from app.models.image import Image
 from app.schemas.image import ImageResponse, LibraryUploadResponse
 from app.schemas.search import ImageDetailResponse, LibraryBrowseResponse
@@ -257,8 +257,16 @@ async def browse_library(
 
 
 @router.delete("/{image_id}")
-async def delete_library_entry(image_id: UUID):
-    """Remove a library entry and its stored media files."""
+async def delete_library_entry(image_id: UUID, x_delete_passkey: Optional[str] = Header(default=None)):
+    """Remove a library entry and its stored media files.
+
+    Requires the X-Delete-Passkey header to match Settings.library_delete_passkey
+    — a lightweight speed bump against accidental/casual deletes, not a real
+    auth system (this app deliberately has none — see RUNNING_INSTRUCTIONS.md).
+    """
+    if x_delete_passkey != settings.library_delete_passkey:
+        raise ForbiddenError("Incorrect passkey.")
+
     deleted = await file_store_service.delete_image(image_id)
     if not deleted:
         raise NotFoundError(

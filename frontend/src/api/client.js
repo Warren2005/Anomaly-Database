@@ -76,9 +76,10 @@ export async function browseLibrary(filters = {}) {
   return response.json();
 }
 
-export async function deleteLibraryEntry(imageId) {
+export async function deleteLibraryEntry(imageId, passkey) {
   const response = await fetch(`${BASE_URL}/library/${imageId}`, {
     method: "DELETE",
+    headers: { "X-Delete-Passkey": passkey ?? "" },
   });
   if (!response.ok) {
     const error = await response.json().catch(() => ({}));

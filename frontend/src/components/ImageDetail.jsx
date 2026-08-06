@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { deleteLibraryEntry, getExplainability, resolveImageUrl } from "../api/client";
 import { STATUS_COLORS } from "../lib/iliConstants";
 
@@ -8,6 +8,10 @@ export default function ImageDetail({
   onDeleted,
   backLabel = "Back to Results",
   allowDelete = false,
+  currentIndex = null,
+  totalCount = null,
+  onPrev = null,
+  onNext = null,
 }) {
   const { image, similarity_score, image_url, media_urls } = result;
   const media = (media_urls && media_urls.length ? media_urls : [image_url]).filter(Boolean);
@@ -18,6 +22,37 @@ export default function ImageDetail({
   const [error, setError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
+
+  const canNavigate = typeof currentIndex === "number" && totalCount > 0 && (onPrev || onNext);
+  const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
+  const hasNext = canNavigate && currentIndex < totalCount - 1 && typeof onNext === "function";
+
+  // Reset per-image UI state when navigating to another similar result
+  useEffect(() => {
+    setMediaIdx(0);
+    setHeatmapUrl(null);
+    setShowHeatmap(false);
+    setError(null);
+    setConfirmDelete(false);
+  }, [image.id]);
+
+  useEffect(() => {
+    if (!canNavigate) return undefined;
+
+    const onKeyDown = (e) => {
+      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+      if (e.key === "ArrowLeft" && hasPrev) {
+        e.preventDefault();
+        onPrev();
+      } else if (e.key === "ArrowRight" && hasNext) {
+        e.preventDefault();
+        onNext();
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [canNavigate, hasPrev, hasNext, onPrev, onNext]);
 
   const title =
     image.anomaly_name ||
@@ -75,6 +110,35 @@ export default function ImageDetail({
         <button className="btn btn-secondary" onClick={onBack}>
           {backLabel}
         </button>
+
+        {canNavigate && (
+          <div className="result-nav" role="navigation" aria-label="Similar results">
+            <button
+              type="button"
+              className="btn btn-secondary result-nav-btn"
+              onClick={onPrev}
+              disabled={!hasPrev}
+              aria-label="Previous similar result"
+              title="Previous (←)"
+            >
+              ‹
+            </button>
+            <span className="result-nav-label" aria-live="polite">
+              {currentIndex + 1} of {totalCount}
+            </span>
+            <button
+              type="button"
+              className="btn btn-secondary result-nav-btn"
+              onClick={onNext}
+              disabled={!hasNext}
+              aria-label="Next similar result"
+              title="Next (→)"
+            >
+              ›
+            </button>
+          </div>
+        )}
+
         {allowDelete && !confirmDelete && (
           <button className="btn btn-danger" onClick={() => setConfirmDelete(true)}>
             Delete Entry

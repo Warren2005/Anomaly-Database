@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { searchSimilar, searchByText, checkHealth } from "./api/client";
 import DropZone from "./components/DropZone";
 import ResultsGrid from "./components/ResultsGrid";
@@ -6,6 +6,7 @@ import ImageDetail from "./components/ImageDetail";
 import StatusBar from "./components/StatusBar";
 import LibraryUpload from "./components/LibraryUpload";
 import LibraryBrowser from "./components/LibraryBrowser";
+import SimilarityFilter from "./components/SimilarityFilter";
 
 function SkeletonCard({ delay }) {
   return (
@@ -70,6 +71,8 @@ export default function App() {
     () => (localStorage.getItem("theme") ?? "dark") === "dark"
   );
   const [mode, setMode] = useState("search"); // "search" | "browse" | "add"
+  const [minSimilarity, setMinSimilarity] = useState(0);
+  const [maxSimilarity, setMaxSimilarity] = useState(100);
 
   useEffect(() => {
     const theme = isDark ? "dark" : "light";
@@ -83,12 +86,32 @@ export default function App() {
       .catch(() => setHealth({ status: "unreachable" }));
   }, []);
 
+  const allResults = results?.results || [];
+
+  const filteredResults = useMemo(() => {
+    const min = minSimilarity / 100;
+    const max = maxSimilarity / 100;
+    return allResults.filter((r) => {
+      const score = r.similarity_score ?? 0;
+      return score >= min && score <= max;
+    });
+  }, [allResults, minSimilarity, maxSimilarity]);
+
+  const selectedIndex = useMemo(() => {
+    if (!selectedResult) return -1;
+    return filteredResults.findIndex(
+      (r) => r.image.id === selectedResult.image.id
+    );
+  }, [filteredResults, selectedResult]);
+
   const handleSearch = useCallback(
     async (file) => {
       setQueryFile(file);
       setState("searching");
       setError(null);
       setResults(null);
+      setMinSimilarity(0);
+      setMaxSimilarity(100);
 
       try {
         const data = await searchSimilar(file, filters);
@@ -110,6 +133,8 @@ export default function App() {
       setError(null);
       setResults(null);
       setQueryFile(null);
+      setMinSimilarity(0);
+      setMaxSimilarity(100);
 
       try {
         const data = await searchByText(textQuery.trim(), filters);
@@ -133,12 +158,49 @@ export default function App() {
     setState("results");
   }, []);
 
+  const handlePrevResult = useCallback(() => {
+    setSelectedResult((current) => {
+      if (!current) return current;
+      const idx = filteredResults.findIndex((r) => r.image.id === current.image.id);
+      if (idx <= 0) return current;
+      return filteredResults[idx - 1];
+    });
+  }, [filteredResults]);
+
+  const handleNextResult = useCallback(() => {
+    setSelectedResult((current) => {
+      if (!current) return current;
+      const idx = filteredResults.findIndex((r) => r.image.id === current.image.id);
+      if (idx < 0 || idx >= filteredResults.length - 1) return current;
+      return filteredResults[idx + 1];
+    });
+  }, [filteredResults]);
+
+  const handleSimilarityChange = useCallback((min, max) => {
+    setMinSimilarity(min);
+    setMaxSimilarity(max);
+  }, []);
+
+  // If the open detail falls outside the new filter range, return to the grid
+  useEffect(() => {
+    if (state !== "detail" || !selectedResult) return;
+    const stillVisible = filteredResults.some(
+      (r) => r.image.id === selectedResult.image.id
+    );
+    if (!stillVisible) {
+      setSelectedResult(null);
+      setState("results");
+    }
+  }, [filteredResults, selectedResult, state]);
+
   const handleNewSearch = useCallback(() => {
     setState("idle");
     setResults(null);
     setSelectedResult(null);
     setQueryFile(null);
     setTextQuery("");
+    setMinSimilarity(0);
+    setMaxSimilarity(100);
   }, []);
 
   return (
@@ -149,7 +211,7 @@ export default function App() {
             <ScanIcon />
           </div>
           <div className="brand-wordmark">
-            ILI<span>LIBRARY</span>
+            ILI<span>-BRARY</span>
           </div>
         </div>
         <nav className="header-nav">
@@ -242,15 +304,32 @@ export default function App() {
         {mode === "search" && (state === "results" || state === "detail") && results && (
           <>
             {state === "results" && (
-              <ResultsGrid
-                results={results.results}
-                onResultClick={handleResultClick}
-                queryImageId={queryFile ? null : null}
-              />
+              <>
+                <SimilarityFilter
+                  minPercent={minSimilarity}
+                  maxPercent={maxSimilarity}
+                  onChange={handleSimilarityChange}
+                  totalCount={allResults.length}
+                  visibleCount={filteredResults.length}
+                />
+                <ResultsGrid
+                  results={filteredResults}
+                  onResultClick={handleResultClick}
+                  queryImageId={queryFile ? null : null}
+                />
+              </>
             )}
 
             {state === "detail" && selectedResult && (
-              <ImageDetail result={selectedResult} onBack={handleBack} />
+              <ImageDetail
+                key={selectedResult.image.id}
+                result={selectedResult}
+                onBack={handleBack}
+                currentIndex={selectedIndex >= 0 ? selectedIndex : 0}
+                totalCount={filteredResults.length}
+                onPrev={handlePrevResult}
+                onNext={handleNextResult}
+              />
             )}
           </>
         )}

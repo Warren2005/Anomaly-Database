@@ -7,7 +7,7 @@ export default function ResultsGrid({ results, onResultClick, queryImageId }) {
   if (!results || results.length === 0) {
     return (
       <div className="no-results">
-        <p>No similar images found. Try a different image or adjust filters.</p>
+        <p>No similar images in this confidence range. Try widening the similarity filter.</p>
       </div>
     );
   }

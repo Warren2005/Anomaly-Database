@@ -41,12 +41,13 @@ export default function ImageLightbox({ src, alt = "Full image", onClose }) {
       >
         ✕
       </button>
-      <img
-        src={src}
-        alt={alt}
-        className="image-lightbox-image"
-        onClick={(e) => e.stopPropagation()}
-      />
+      <div className="image-lightbox-stage" onClick={(e) => e.stopPropagation()}>
+        <img
+          src={src}
+          alt={alt}
+          className="image-lightbox-image"
+        />
+      </div>
     </div>
   );
 }

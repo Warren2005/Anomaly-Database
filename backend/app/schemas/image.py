@@ -35,6 +35,8 @@ class ImageBase(BaseModel):
     signal_description: Optional[str] = None
     notes: Optional[str] = None
     panel_tags: Optional[list[str]] = None
+    zero_angle_frame_index: Optional[int] = None
+    track: Optional[int] = None
     additional_image_paths: Optional[list[str]] = None
 
 

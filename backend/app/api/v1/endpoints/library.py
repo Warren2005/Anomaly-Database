@@ -97,10 +97,15 @@ async def upload_to_library(
     signal_description: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     panel_tags: Optional[str] = Form(None),
+    zero_angle_frame_index: Optional[int] = Form(None),
+    track: Optional[int] = Form(None),
 ):
     """Upload one or more images with ILI metadata; first file is CLIP-indexed."""
     if not files:
         raise ValidationError("At least one image is required.")
+
+    if track is not None and (track < 0 or track > 21):
+        raise ValidationError("Track must be an integer between 0 and 21.")
 
     parsed_tags: list[str] = []
     if panel_tags:
@@ -154,6 +159,8 @@ async def upload_to_library(
         signal_description=signal_description,
         notes=notes,
         panel_tags=parsed_tags,
+        zero_angle_frame_index=zero_angle_frame_index,
+        track=track,
         additional_image_paths=additional_paths,
     )
     await file_store_service.upsert_image(

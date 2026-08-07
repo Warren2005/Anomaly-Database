@@ -45,8 +45,18 @@ export const ACCEPTED_IMAGE_TYPES = [
   "image/webp",
 ];
 
-/** Panel / view tags — multi-select on Add Entry */
+/** Panel / view tags — multi-select on Add Entry (matches ILI Open Panel types) */
 export const PANEL_TAG_OPTIONS = [
-  "Image Panel",
   "Beamforming Panel",
+  "Raw Panel",
+  "Plot Panel",
+  "Image Panel",
+  "Heatmap Panel",
+  "Multi Section Panel",
+  "Cross-Section Panel",
+  "Dent Sizing Panel",
+  "Tool Pose Panel",
 ];
+
+/** Track feature options (0–21) for Add Entry */
+export const TRACK_OPTIONS = Array.from({ length: 22 }, (_, i) => i);

@@ -45,6 +45,9 @@ class Image:
     notes: Optional[str] = None
     # Panel view tags (e.g. Image Panel, Beamforming Panel) — multi-select
     panel_tags: Optional[list] = field(default_factory=list)
+    # Optional ILI viewer metadata
+    zero_angle_frame_index: Optional[int] = None
+    track: Optional[int] = None
     # Extra media paths beyond image_path (primary / CLIP source)
     additional_image_paths: Optional[list] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

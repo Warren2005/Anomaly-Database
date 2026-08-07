@@ -6,6 +6,7 @@ import {
   DIMENSION_REQUIREMENTS,
   ACCEPTED_IMAGE_TYPES,
   PANEL_TAG_OPTIONS,
+  TRACK_OPTIONS,
 } from "../lib/iliConstants";
 
 const EMPTY_FORM = {
@@ -22,6 +23,8 @@ const EMPTY_FORM = {
   notes: "",
   analyst: "",
   panel_tags: [],
+  zero_angle_frame_index: "",
+  track: "",
   is_qc_flag: false,
   qc_raised_by: "",
   qc_reviewer: "",
@@ -126,6 +129,9 @@ export default function LibraryUpload({ onSuccess }) {
         depth: form.depth !== "" ? form.depth : undefined,
         width: form.width !== "" ? form.width : undefined,
         length: form.length !== "" ? form.length : undefined,
+        zero_angle_frame_index:
+          form.zero_angle_frame_index !== "" ? form.zero_angle_frame_index : undefined,
+        track: form.track !== "" ? form.track : undefined,
         is_qc_flag: form.is_qc_flag ? "true" : "false",
         panel_tags: (form.panel_tags || []).join(","),
       };
@@ -293,7 +299,39 @@ export default function LibraryUpload({ onSuccess }) {
               );
             })}
           </div>
-          <p className="form-hint">Select one or both: Image Panel and/or Beamforming Panel</p>
+          <p className="form-hint">Select one or more panel types from the ILI viewer (Image, Beamforming, Heatmap, etc.)</p>
+        </div>
+
+        <div className="form-row">
+          <div className="form-field">
+            <label className="form-label">
+              ZeroAngle Frame Index <span className="opt">optional</span>
+            </label>
+            <input
+              className="form-input"
+              type="number"
+              min="0"
+              step="1"
+              placeholder="e.g. 1240"
+              value={form.zero_angle_frame_index}
+              onChange={(e) => handleFormChange("zero_angle_frame_index", e.target.value)}
+            />
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              Track <span className="opt">optional</span>
+            </label>
+            <select
+              className="form-select"
+              value={form.track}
+              onChange={(e) => handleFormChange("track", e.target.value)}
+            >
+              <option value="">— Select track —</option>
+              {TRACK_OPTIONS.map((n) => (
+                <option key={n} value={n}>{n}</option>
+              ))}
+            </select>
+          </div>
         </div>
 
         <div className="form-field">

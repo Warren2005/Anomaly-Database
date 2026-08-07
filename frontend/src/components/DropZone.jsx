@@ -75,7 +75,7 @@ export default function DropZone({ onFileDrop }) {
             </svg>
           </div>
           <p className="dropzone-text">
-            Drag and drop a microscopy image here
+            Drag and drop an anomaly image here
           </p>
           <p className="dropzone-subtext">or</p>
           <button className="btn btn-primary" onClick={handleBrowse}>

@@ -7,6 +7,7 @@ import StatusBar from "./components/StatusBar";
 import LibraryUpload from "./components/LibraryUpload";
 import LibraryBrowser from "./components/LibraryBrowser";
 import SimilarityFilter from "./components/SimilarityFilter";
+import logoMark from "./assets/ili-brary-logo.png";
 
 function SkeletonCard({ delay }) {
   return (
@@ -200,7 +201,7 @@ export default function App() {
         <div className="brand">
           <img
             className="brand-mark"
-            src="/ili-brary-logo.png"
+            src={logoMark}
             alt="ILI-brary"
             width={44}
             height={44}

@@ -152,6 +152,8 @@ body {
   border: none;
   background: transparent;
   padding: 0;
+  /* Keep mark readable if PNG has leftover dark fringe */
+  image-rendering: auto;
 }
 
 .brand-wordmark {

@@ -1275,6 +1275,14 @@ body {
   color: var(--text-secondary);
 }
 
+.delete-warning {
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
 .delete-passkey-input {
   width: 120px;
 }

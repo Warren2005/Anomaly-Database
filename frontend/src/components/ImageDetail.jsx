@@ -162,6 +162,7 @@ export default function ImageDetail({
             }}
           >
             <span>Delete this entry permanently?</span>
+            <strong className="delete-warning">DELETION CANNOT BE UNDONE</strong>
             <input
               type="password"
               className="form-input delete-passkey-input"

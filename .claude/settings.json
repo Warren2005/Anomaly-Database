@@ -23,7 +23,38 @@
       "Bash(python -c ' *)",
       "Bash(curl -s -X POST http://localhost:8001/api/v1/library/upload -F \"files=@passkey_test_upload.jpg;type=image/jpeg\" -F \"analyst=passkey-test\")",
       "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" -X DELETE http://localhost:8001/api/v1/library/4eb0a32b-03ab-42ee-be18-4d56ab7e51dc -H \"X-Delete-Passkey: nope\")",
-      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" -X DELETE http://localhost:8001/api/v1/library/4eb0a32b-03ab-42ee-be18-4d56ab7e51dc -H \"X-Delete-Passkey: admin123\")"
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" -X DELETE http://localhost:8001/api/v1/library/4eb0a32b-03ab-42ee-be18-4d56ab7e51dc -H \"X-Delete-Passkey: admin123\")",
+      "Bash(taskkill //PID 21996 //F)",
+      "Bash(taskkill //PID 15024 //F)",
+      "Bash(curl -s -o /dev/null -w \"port 8001 after kill: %{http_code}\\\\n\" http://localhost:8001/api/v1/health --max-time 2)",
+      "Bash(taskkill //PID 20712 //F)",
+      "Bash(taskkill //PID 21964 //F)",
+      "Bash(where ngrok *)",
+      "Bash(where cloudflared *)",
+      "PowerShell(Get-Command winget -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command choco -ErrorAction SilentlyContinue)",
+      "PowerShell(Get-Command scoop -ErrorAction SilentlyContinue)",
+      "PowerShell(winget install --id Ngrok.Ngrok --silent --accept-package-agreements --accept-source-agreements)",
+      "Read(//c/Users/warred2/AppData/Local/Microsoft/WinGet/Packages/**)",
+      "Bash(/c/Users/warred2/AppData/Local/Microsoft/WinGet/Packages/Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe/ngrok.exe config *)",
+      "Bash(mkdir -p \"/c/Users/warred2/AppData/Local/Temp/claude/c--Users-warred2-Coop-Project-medical-microscopy/b9099f6f-3917-4724-8095-3b135e2e29f4/scratchpad\")",
+      "Bash(nohup /c/Users/warred2/AppData/Local/Microsoft/WinGet/Packages/Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe/ngrok.exe http 8001 --basic-auth coop:anomalylibrary --log=stdout)",
+      "Bash(tasklist //FI \"IMAGENAME eq ngrok.exe\" //FO CSV)",
+      "Bash(/c/Users/warred2/AppData/Local/Microsoft/WinGet/Packages/Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe/ngrok.exe http *)",
+      "Bash(curl -s http://localhost:8001/api/v1/health --max-time 3)",
+      "Bash(/c/Users/warred2/AppData/Local/Microsoft/WinGet/Packages/Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe/ngrok.exe update *)",
+      "Bash(/c/Users/warred2/AppData/Local/Microsoft/WinGet/Packages/Ngrok.Ngrok_Microsoft.Winget.Source_8wekyb3d8bbwe/ngrok.exe version *)",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" https://thinness-dividers-decal.ngrok-free.dev/api/v1/health)",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" -u \"coop:anomalylibrary\" https://thinness-dividers-decal.ngrok-free.dev/api/v1/health)",
+      "Bash(ls -la \"/c/Users/warred2/Desktop\" 2>&1 | head -3)",
+      "Read(//c/Users/warred2/**)",
+      "PowerShell([Environment]::GetFolderPath\\('Desktop'\\))",
+      "Bash(curl -s http://127.0.0.1:4040/api/tunnels --max-time 3)",
+      "Bash(curl -s http://localhost:8001/)",
+      "Bash(curl -s -o /dev/null -w \"backend: %{http_code}\\\\n\" http://localhost:8001/api/v1/health --max-time 3)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"
     ]
   }
 }

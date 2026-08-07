@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { deleteLibraryEntry, getExplainability, resolveImageUrl } from "../api/client";
 import { STATUS_COLORS } from "../lib/iliConstants";
-import ImageLightbox from "./ImageLightbox";
+import ZoomableImage from "./ZoomableImage";
 
 export default function ImageDetail({
   result,
@@ -25,7 +25,6 @@ export default function ImageDetail({
   const [deleting, setDeleting] = useState(false);
   const [deletePasskey, setDeletePasskey] = useState("");
   const [deleteError, setDeleteError] = useState(null);
-  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const canNavigate = typeof currentIndex === "number" && totalCount > 0 && (onPrev || onNext);
   const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
@@ -41,14 +40,12 @@ export default function ImageDetail({
     setConfirmDelete(false);
     setDeletePasskey("");
     setDeleteError(null);
-    setLightboxOpen(false);
   }, [image.id]);
 
   useEffect(() => {
     if (!canNavigate) return undefined;
 
     const onKeyDown = (e) => {
-      if (lightboxOpen) return;
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
       if (e.key === "ArrowLeft" && hasPrev) {
         e.preventDefault();
@@ -61,7 +58,7 @@ export default function ImageDetail({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canNavigate, hasPrev, hasNext, onPrev, onNext, lightboxOpen]);
+  }, [canNavigate, hasPrev, hasNext, onPrev, onNext]);
 
   const title =
     image.anomaly_name ||
@@ -199,22 +196,7 @@ export default function ImageDetail({
 
       <div className="detail-content">
         <div className="detail-image-container">
-          <div className="detail-image-wrap">
-            <img src={currentSrc} alt={title} className="detail-image" />
-            <button
-              type="button"
-              className="zoom-btn"
-              onClick={() => setLightboxOpen(true)}
-              aria-label="View full image"
-              title="View full image"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <circle cx="11" cy="11" r="7" />
-                <path d="M21 21l-4.3-4.3" />
-                <path d="M11 8v6M8 11h6" />
-              </svg>
-            </button>
-          </div>
+          <ZoomableImage src={currentSrc} alt={title} />
           {media.length > 1 && !showHeatmap && (
             <div className="media-nav">
               <button
@@ -324,14 +306,6 @@ export default function ImageDetail({
           </table>
         </div>
       </div>
-
-      {lightboxOpen && (
-        <ImageLightbox
-          src={currentSrc}
-          alt={title}
-          onClose={() => setLightboxOpen(false)}
-        />
-      )}
     </div>
   );
 }

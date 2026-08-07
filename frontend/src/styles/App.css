@@ -144,14 +144,14 @@ body {
 .brand-mark {
   width: 44px;
   height: 44px;
-  border-radius: 11px;
+  border-radius: 0;
   object-fit: contain;
   object-position: center;
   display: block;
   flex-shrink: 0;
-  border: 1px solid var(--border);
-  background: #000;
-  padding: 2px;
+  border: none;
+  background: transparent;
+  padding: 0;
 }
 
 .brand-wordmark {
@@ -760,50 +760,48 @@ body {
   position: relative;
 }
 
+.zoomable-image-wrap {
+  position: relative;
+  overflow: hidden;
+  background: #000;
+  user-select: none;
+  touch-action: none;
+}
+
+.zoomable-image {
+  width: 100%;
+  max-height: min(70vh, 720px);
+  height: auto;
+  object-fit: contain;
+  object-position: center center;
+  display: block;
+  margin: 0 auto;
+  transform-origin: center center;
+  transition: transform 0.05s linear;
+  -webkit-user-drag: none;
+}
+
+.zoomable-hint {
+  position: absolute;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  padding: 4px 10px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
 .result-image-wrap .result-image {
   height: 175px;
 }
 
 .zoom-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 32px;
-  height: 32px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px;
-  background: rgba(7, 7, 10, 0.65);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-  transition: background 0.15s ease, border-color 0.15s ease;
-  z-index: 2;
-}
-
-.zoom-btn:hover,
-.zoom-btn:focus-visible {
-  background: rgba(244, 102, 49, 0.9);
-  border-color: var(--accent);
-  outline: none;
-}
-
-.zoom-btn-card {
-  opacity: 0;
-}
-
-.result-card:hover .zoom-btn-card,
-.result-card:focus-within .zoom-btn-card {
-  opacity: 1;
-}
-
-@media (hover: none) {
-  .zoom-btn-card {
-    opacity: 1;
-  }
+  display: none;
 }
 
 .panel-tag-row {
@@ -853,38 +851,57 @@ body {
   color: var(--text-muted);
 }
 
-/* Full-image lightbox — always center the full image, never crop top */
+/* Full-image lightbox — centered, scroll to zoom */
 .image-lightbox {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.9);
-  display: grid;
-  place-items: center;
-  padding: 56px 24px 24px;
-  overflow: auto;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  overflow: hidden;
   animation: pageFadeIn 0.18s ease both;
 }
 
 .image-lightbox-stage {
+  position: absolute;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: min(96vw, 1400px);
-  max-height: calc(100vh - 80px);
-  margin: auto;
+  overflow: hidden;
+  cursor: zoom-in;
 }
 
 .image-lightbox-image {
-  max-width: 100%;
-  max-height: calc(100vh - 80px);
+  max-width: min(92vw, 1400px);
+  max-height: 88vh;
   width: auto;
   height: auto;
   object-fit: contain;
   object-position: center center;
-  border-radius: 8px;
+  border-radius: 6px;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
   display: block;
+  margin: auto;
+  transform-origin: center center;
+  transition: transform 0.08s ease-out;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.image-lightbox-hint {
+  position: fixed;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1001;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.65);
+  pointer-events: none;
+  letter-spacing: 0.02em;
 }
 
 .image-lightbox-close {

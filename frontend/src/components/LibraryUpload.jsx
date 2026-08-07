@@ -5,6 +5,7 @@ import {
   CLASSIFICATION_STATUS_OPTIONS,
   DIMENSION_REQUIREMENTS,
   ACCEPTED_IMAGE_TYPES,
+  PANEL_TAG_OPTIONS,
 } from "../lib/iliConstants";
 
 const EMPTY_FORM = {
@@ -20,6 +21,7 @@ const EMPTY_FORM = {
   analysis_comment: "",
   notes: "",
   analyst: "",
+  panel_tags: [],
   is_qc_flag: false,
   qc_raised_by: "",
   qc_reviewer: "",
@@ -85,6 +87,16 @@ export default function LibraryUpload({ onSuccess }) {
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
   };
 
+  const togglePanelTag = (tag) => {
+    setForm((prev) => {
+      const current = prev.panel_tags || [];
+      const next = current.includes(tag)
+        ? current.filter((t) => t !== tag)
+        : [...current, tag];
+      return { ...prev, panel_tags: next };
+    });
+  };
+
   const validate = () => {
     const errs = {};
     if (!form.anomaly_type) errs.anomaly_type = "Required";
@@ -115,7 +127,11 @@ export default function LibraryUpload({ onSuccess }) {
         width: form.width !== "" ? form.width : undefined,
         length: form.length !== "" ? form.length : undefined,
         is_qc_flag: form.is_qc_flag ? "true" : "false",
+        panel_tags: (form.panel_tags || []).join(","),
       };
+      if (!form.panel_tags?.length) {
+        delete payload.panel_tags;
+      }
       if (!form.is_qc_flag) {
         delete payload.qc_raised_by;
         delete payload.qc_reviewer;
@@ -255,6 +271,29 @@ export default function LibraryUpload({ onSuccess }) {
               {CLASSIFICATION_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">
+            Panel Tags <span className="opt">multi-select</span>
+          </label>
+          <div className="tag-multi" role="group" aria-label="Panel tags">
+            {PANEL_TAG_OPTIONS.map((tag) => {
+              const selected = (form.panel_tags || []).includes(tag);
+              return (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`tag-chip${selected ? " tag-chip-active" : ""}`}
+                  aria-pressed={selected}
+                  onClick={() => togglePanelTag(tag)}
+                >
+                  {tag}
+                </button>
+              );
+            })}
+          </div>
+          <p className="form-hint">Select one or both: Image Panel and/or Beamforming Panel</p>
         </div>
 
         <div className="form-field">

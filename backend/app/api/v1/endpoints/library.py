@@ -96,10 +96,19 @@ async def upload_to_library(
     qc_decision_rationale: Optional[str] = Form(None),
     signal_description: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
+    panel_tags: Optional[str] = Form(None),
 ):
     """Upload one or more images with ILI metadata; first file is CLIP-indexed."""
     if not files:
         raise ValidationError("At least one image is required.")
+
+    parsed_tags: list[str] = []
+    if panel_tags:
+        parsed_tags = [
+            t.strip()
+            for t in panel_tags.replace(";", ",").split(",")
+            if t.strip()
+        ]
 
     image_id = uuid4()
     primary = files[0]
@@ -144,6 +153,7 @@ async def upload_to_library(
         qc_decision_rationale=qc_decision_rationale,
         signal_description=signal_description,
         notes=notes,
+        panel_tags=parsed_tags,
         additional_image_paths=additional_paths,
     )
     await file_store_service.upsert_image(

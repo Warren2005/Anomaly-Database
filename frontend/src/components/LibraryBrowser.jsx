@@ -233,6 +233,9 @@ export default function LibraryBrowser() {
                     {img.anomaly_type && (
                       <span className="badge badge-anomaly">{img.anomaly_type}</span>
                     )}
+                    {(img.panel_tags || []).map((tag) => (
+                      <span key={tag} className="badge badge-panel">{tag}</span>
+                    ))}
                     {img.run_number && <span className="badge">{img.run_number}</span>}
                     {img.classification_status && (
                       <span className="badge" style={{ color: statusColor, borderColor: statusColor }}>

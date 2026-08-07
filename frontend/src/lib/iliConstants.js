@@ -44,3 +44,9 @@ export const ACCEPTED_IMAGE_TYPES = [
   "image/gif",
   "image/webp",
 ];
+
+/** Panel / view tags — multi-select on Add Entry */
+export const PANEL_TAG_OPTIONS = [
+  "Image Panel",
+  "Beamforming Panel",
+];

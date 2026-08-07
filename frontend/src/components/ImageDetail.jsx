@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { deleteLibraryEntry, getExplainability, resolveImageUrl } from "../api/client";
 import { STATUS_COLORS } from "../lib/iliConstants";
+import ImageLightbox from "./ImageLightbox";
 
 export default function ImageDetail({
   result,
@@ -24,10 +25,12 @@ export default function ImageDetail({
   const [deleting, setDeleting] = useState(false);
   const [deletePasskey, setDeletePasskey] = useState("");
   const [deleteError, setDeleteError] = useState(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const canNavigate = typeof currentIndex === "number" && totalCount > 0 && (onPrev || onNext);
   const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
   const hasNext = canNavigate && currentIndex < totalCount - 1 && typeof onNext === "function";
+  const panelTags = Array.isArray(image.panel_tags) ? image.panel_tags : [];
 
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
@@ -38,12 +41,14 @@ export default function ImageDetail({
     setConfirmDelete(false);
     setDeletePasskey("");
     setDeleteError(null);
+    setLightboxOpen(false);
   }, [image.id]);
 
   useEffect(() => {
     if (!canNavigate) return undefined;
 
     const onKeyDown = (e) => {
+      if (lightboxOpen) return;
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
       if (e.key === "ArrowLeft" && hasPrev) {
         e.preventDefault();
@@ -56,7 +61,7 @@ export default function ImageDetail({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canNavigate, hasPrev, hasNext, onPrev, onNext]);
+  }, [canNavigate, hasPrev, hasNext, onPrev, onNext, lightboxOpen]);
 
   const title =
     image.anomaly_name ||
@@ -194,7 +199,22 @@ export default function ImageDetail({
 
       <div className="detail-content">
         <div className="detail-image-container">
-          <img src={currentSrc} alt={title} className="detail-image" />
+          <div className="detail-image-wrap">
+            <img src={currentSrc} alt={title} className="detail-image" />
+            <button
+              type="button"
+              className="zoom-btn"
+              onClick={() => setLightboxOpen(true)}
+              aria-label="View full image"
+              title="View full image"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3" />
+                <path d="M11 8v6M8 11h6" />
+              </svg>
+            </button>
+          </div>
           {media.length > 1 && !showHeatmap && (
             <div className="media-nav">
               <button
@@ -256,6 +276,14 @@ export default function ImageDetail({
             </span>
           )}
 
+          {panelTags.length > 0 && (
+            <div className="panel-tag-row">
+              {panelTags.map((tag) => (
+                <span key={tag} className="badge badge-panel">{tag}</span>
+              ))}
+            </div>
+          )}
+
           {similarity_score != null && (
             <div className="detail-score">
               <span className="detail-label">Similarity</span>
@@ -267,6 +295,10 @@ export default function ImageDetail({
             <tbody>
               <DetailRow label="Anomaly Type" value={image.anomaly_type} />
               <DetailRow label="Run ID" value={image.run_number} />
+              <DetailRow
+                label="Panel Tags"
+                value={panelTags.length ? panelTags.join(", ") : null}
+              />
               <DetailRow label="Description" value={image.anomaly_description} />
               <DetailRow label="Signal Description" value={image.signal_description} />
               <DetailRow label="Comments" value={image.analysis_comment} />
@@ -290,6 +322,14 @@ export default function ImageDetail({
           </table>
         </div>
       </div>
+
+      {lightboxOpen && (
+        <ImageLightbox
+          src={currentSrc}
+          alt={title}
+          onClose={() => setLightboxOpen(false)}
+        />
+      )}
     </div>
   );
 }

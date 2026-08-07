@@ -43,6 +43,8 @@ class Image:
     qc_decision_rationale: Optional[str] = None
     signal_description: Optional[str] = None
     notes: Optional[str] = None
+    # Panel view tags (e.g. Image Panel, Beamforming Panel) — multi-select
+    panel_tags: Optional[list] = field(default_factory=list)
     # Extra media paths beyond image_path (primary / CLIP source)
     additional_image_paths: Optional[list] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

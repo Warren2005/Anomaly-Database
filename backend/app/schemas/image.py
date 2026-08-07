@@ -34,6 +34,7 @@ class ImageBase(BaseModel):
     qc_decision_rationale: Optional[str] = None
     signal_description: Optional[str] = None
     notes: Optional[str] = None
+    panel_tags: Optional[list[str]] = None
     additional_image_paths: Optional[list[str]] = None
 
 

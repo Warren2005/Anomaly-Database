@@ -58,6 +58,9 @@ export async function browseLibrary(filters = {}) {
   if (filters.classification_status) {
     params.set("classification_status", filters.classification_status);
   }
+  if (Array.isArray(filters.panel_tags) && filters.panel_tags.length) {
+    params.set("panel_tags", filters.panel_tags.join(","));
+  }
   if (filters.q) params.set("q", filters.q);
   for (const key of [
     "depth_min", "depth_max", "width_min", "width_max", "length_min", "length_max",

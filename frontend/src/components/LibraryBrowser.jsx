@@ -4,20 +4,16 @@ import ImageDetail from "./ImageDetail";
 import {
   ANOMALY_TYPES,
   CLASSIFICATION_STATUS_OPTIONS,
+  PANEL_TAG_OPTIONS,
   STATUS_COLORS,
 } from "../lib/iliConstants";
 
 const EMPTY_FILTERS = {
   q: "",
   anomaly_types: [],
+  panel_tags: [],
   run_number: "",
   classification_status: "",
-  depth_min: "",
-  depth_max: "",
-  width_min: "",
-  width_max: "",
-  length_min: "",
-  length_max: "",
 };
 
 function toggleType(arr, type) {
@@ -32,7 +28,6 @@ export default function LibraryBrowser() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
-  const [dimsOpen, setDimsOpen] = useState(false);
 
   useEffect(() => {
     getFilters()
@@ -90,7 +85,7 @@ export default function LibraryBrowser() {
         <div>
           <h2 className="library-browser-title">Reference Library</h2>
           <p className="library-browser-subtitle">
-            Browse curated ILI examples by type, run, status, and dimensions
+            Browse curated ILI examples by type, panel, run, and status
           </p>
         </div>
         <span className="library-count">{total} entr{total === 1 ? "y" : "ies"}</span>
@@ -129,6 +124,22 @@ export default function LibraryBrowser() {
         </div>
       </div>
 
+      <div className="filter-chips-row">
+        <span className="filter-label">Panel</span>
+        <div className="chips-wrap">
+          {PANEL_TAG_OPTIONS.map((tag) => (
+            <button
+              key={tag}
+              type="button"
+              className={`chip ${filters.panel_tags.includes(tag) ? "chip-active" : ""}`}
+              onClick={() => setFilter("panel_tags", toggleType(filters.panel_tags, tag))}
+            >
+              {tag}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="browse-filters">
         <select
           className="form-select"
@@ -150,40 +161,6 @@ export default function LibraryBrowser() {
             <option key={s} value={s}>{s}</option>
           ))}
         </select>
-      </div>
-
-      <div className="filter-collapsible">
-        <button type="button" className="collapsible-toggle" onClick={() => setDimsOpen((o) => !o)}>
-          <span>Dimensions (mm)</span>
-          <span>{dimsOpen ? "▾" : "▸"}</span>
-        </button>
-        {dimsOpen && (
-          <div className="dims-grid">
-            {[
-              ["depth_min", "depth_max", "Depth"],
-              ["width_min", "width_max", "Width"],
-              ["length_min", "length_max", "Length"],
-            ].map(([minKey, maxKey, label]) => (
-              <div className="dim-range" key={label}>
-                <span className="filter-label">{label}</span>
-                <input
-                  className="form-input"
-                  type="number"
-                  placeholder="Min"
-                  value={filters[minKey]}
-                  onChange={(e) => setFilter(minKey, e.target.value)}
-                />
-                <input
-                  className="form-input"
-                  type="number"
-                  placeholder="Max"
-                  value={filters[maxKey]}
-                  onChange={(e) => setFilter(maxKey, e.target.value)}
-                />
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
       {error && (

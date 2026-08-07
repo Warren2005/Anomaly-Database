@@ -197,6 +197,7 @@ async def browse_library(
     run_number: Optional[str] = None,
     anomaly_status: Optional[str] = None,
     classification_status: Optional[str] = None,
+    panel_tags: Optional[str] = None,
     q: Optional[str] = None,
     depth_min: Optional[float] = None,
     depth_max: Optional[float] = None,
@@ -205,7 +206,7 @@ async def browse_library(
     length_min: Optional[float] = None,
     length_max: Optional[float] = None,
 ):
-    """List library images with Zach-style filters (types, dims, status, search)."""
+    """List library images with Zach-style filters (types, panels, status, search)."""
     images = await file_store_service.get_all_images()
 
     type_set = set()
@@ -213,6 +214,10 @@ async def browse_library(
         type_set.update(t.strip() for t in anomaly_types.split(",") if t.strip())
     if anomaly_type:
         type_set.add(anomaly_type)
+
+    panel_set = set()
+    if panel_tags:
+        panel_set.update(t.strip() for t in panel_tags.split(",") if t.strip())
 
     def in_range(value: Optional[float], lo: Optional[float], hi: Optional[float]) -> bool:
         if value is None:
@@ -226,6 +231,10 @@ async def browse_library(
     def matches(img: Image) -> bool:
         if type_set and img.anomaly_type not in type_set:
             return False
+        if panel_set:
+            tags = set(img.panel_tags or [])
+            if not panel_set.intersection(tags):
+                return False
         if run_number and img.run_number != run_number:
             return False
         if anomaly_status and img.anomaly_status != anomaly_status:
@@ -257,6 +266,7 @@ async def browse_library(
                         img.run_number,
                         img.anomaly_type,
                         img.qc_decision_rationale,
+                        " ".join(img.panel_tags or []),
                     ],
                 )
             ).lower()

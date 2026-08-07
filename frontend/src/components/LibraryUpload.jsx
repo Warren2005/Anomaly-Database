@@ -344,16 +344,6 @@ export default function LibraryUpload({ onSuccess }) {
           />
         </div>
 
-        <div className="form-field">
-          <label className="form-label">Signal Description <span className="opt">optional</span></label>
-          <textarea
-            className="form-textarea"
-            placeholder="What makes this example notable — 1 to 3 sentences"
-            value={form.signal_description}
-            onChange={(e) => handleFormChange("signal_description", e.target.value)}
-          />
-        </div>
-
         {requiredDims.length > 0 && (
           <div className="dim-callout">
             Mandatory dimensions for {form.anomaly_type}: {requiredDims.join(", ")}
@@ -422,27 +412,15 @@ export default function LibraryUpload({ onSuccess }) {
           )}
         </div>
 
-        <div className="form-row">
-          <div className="form-field">
-            <label className="form-label">Contributed By <span className="req">*</span></label>
-            <input
-              className={`form-input${fieldErrors.analyst ? " has-error-input" : ""}`}
-              type="text"
-              placeholder="Your name"
-              value={form.analyst}
-              onChange={(e) => handleFormChange("analyst", e.target.value)}
-            />
-          </div>
-          <div className="form-field">
-            <label className="form-label">Notes <span className="opt">optional</span></label>
-            <input
-              className="form-input"
-              type="text"
-              placeholder="Additional context, links"
-              value={form.notes}
-              onChange={(e) => handleFormChange("notes", e.target.value)}
-            />
-          </div>
+        <div className="form-field">
+          <label className="form-label">Contributed By <span className="req">*</span></label>
+          <input
+            className={`form-input${fieldErrors.analyst ? " has-error-input" : ""}`}
+            type="text"
+            placeholder="Your name"
+            value={form.analyst}
+            onChange={(e) => handleFormChange("analyst", e.target.value)}
+          />
         </div>
 
         <div className="form-field">

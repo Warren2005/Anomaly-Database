@@ -93,6 +93,35 @@ export async function deleteLibraryEntry(imageId, passkey) {
   return response.json();
 }
 
+export async function getRuns() {
+  const response = await fetch(`${BASE_URL}/library/runs`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error?.error?.message || `Failed to load runs: ${response.status}`
+    );
+  }
+  return response.json();
+}
+
+export async function addRun({ run, run_id }, passkey) {
+  const response = await fetch(`${BASE_URL}/library/runs`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Delete-Passkey": passkey ?? "",
+    },
+    body: JSON.stringify({ run, run_id }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error?.error?.message || `Failed to add run: ${response.status}`
+    );
+  }
+  return response.json();
+}
+
 export async function searchByText(query, filters = {}) {
   const body = { query, top_k: 50 };
   if (filters.diagnosis) body.diagnosis = filters.diagnosis;

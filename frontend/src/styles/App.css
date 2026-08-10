@@ -1293,6 +1293,41 @@ body {
   flex-basis: 100%;
 }
 
+.add-run-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 16px;
+  margin-bottom: 4px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface) 88%, var(--accent) 12%);
+}
+
+.add-run-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.add-run-actions {
+  align-items: flex-end;
+}
+
+.add-run-buttons {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding-bottom: 2px;
+}
+
+.add-run-error {
+  margin: 0;
+  font-size: 13px;
+  color: var(--danger);
+}
+
 .media-nav {
   display: flex;
   gap: 10px;

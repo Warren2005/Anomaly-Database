@@ -277,13 +277,13 @@ export default function ImageDetail({
           <table className="detail-table">
             <tbody>
               <DetailRow label="Anomaly Type" value={image.anomaly_type} />
-              <DetailRow label="Run ID" value={image.run_number} />
+              <DetailRow label="Run" value={image.run_number} />
               <DetailRow
                 label="Panel Tags"
                 value={panelTags.length ? panelTags.join(", ") : null}
               />
               <DetailRow label="ZeroAngle Frame Index" value={image.zero_angle_frame_index} />
-              <DetailRow label="Description" value={image.anomaly_description} />
+              <DetailRow label="Run ID" value={image.anomaly_description} />
               <DetailRow label="Signal Description" value={image.signal_description} />
               <DetailRow label="Comments" value={image.analysis_comment} />
               <DetailRow label="Notes" value={image.notes} />

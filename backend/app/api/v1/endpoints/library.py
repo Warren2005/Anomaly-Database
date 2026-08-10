@@ -3,6 +3,8 @@ Library upload / browse / delete endpoints.
 
 POST /api/v1/library/upload
 GET  /api/v1/library/browse
+GET  /api/v1/library/runs
+POST /api/v1/library/runs
 DELETE /api/v1/library/{image_id}
 """
 
@@ -10,6 +12,7 @@ from typing import Optional
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, File, Form, Header, UploadFile
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 from app.core.errors import ForbiddenError, NotFoundError, ValidationError
@@ -20,6 +23,7 @@ from app.services.embedding import embedding_service, rerank_embedding_service
 from app.services.event_log import event_log_service
 from app.services.file_store import file_store_service
 from app.services.local_storage import local_storage_service
+from app.services.run_catalog import run_catalog_service
 
 router = APIRouter()
 
@@ -281,6 +285,36 @@ async def browse_library(
         images=[_detail(img) for img in filtered],
         total=len(filtered),
     )
+
+
+class RunEntry(BaseModel):
+    run: str = Field(..., min_length=1, max_length=64)
+    run_id: str = Field(..., min_length=1, max_length=128)
+
+
+class RunsResponse(BaseModel):
+    runs: list[RunEntry]
+
+
+@router.get("/runs", response_model=RunsResponse)
+async def list_runs():
+    """Return the ILI run catalog (defaults + admin-added runs)."""
+    return RunsResponse(runs=await run_catalog_service.list_runs())
+
+
+@router.post("/runs", response_model=RunEntry)
+async def add_run(
+    body: RunEntry,
+    x_delete_passkey: Optional[str] = Header(default=None),
+):
+    """Add a run + Run ID. Requires the same admin passkey as delete."""
+    if x_delete_passkey != settings.library_delete_passkey:
+        raise ForbiddenError("Incorrect passkey.")
+    try:
+        entry = await run_catalog_service.add_run(body.run, body.run_id)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+    return RunEntry(**entry)
 
 
 @router.delete("/{image_id}")

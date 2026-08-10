@@ -1,12 +1,21 @@
-import React, { useState, useCallback, useRef } from "react";
-import { uploadToLibrary } from "../api/client";
+import React, { useState, useCallback, useRef, useEffect } from "react";
+import { uploadToLibrary, getRuns, addRun } from "../api/client";
 import {
   ANOMALY_TYPES,
   CLASSIFICATION_STATUS_OPTIONS,
   DIMENSION_REQUIREMENTS,
   ACCEPTED_IMAGE_TYPES,
   PANEL_TAG_OPTIONS,
+  RUN_OPTIONS,
+  RUN_DESCRIPTIONS,
 } from "../lib/iliConstants";
+
+const ADD_NEW_RUN = "__add_new__";
+
+const FALLBACK_RUNS = RUN_OPTIONS.map((run) => ({
+  run,
+  run_id: RUN_DESCRIPTIONS[run] || "",
+}));
 
 const EMPTY_FORM = {
   anomaly_name: "",
@@ -38,9 +47,40 @@ export default function LibraryUpload({ onSuccess }) {
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [runs, setRuns] = useState(FALLBACK_RUNS);
+  const [showAddRun, setShowAddRun] = useState(false);
+  const [newRunName, setNewRunName] = useState("");
+  const [newRunId, setNewRunId] = useState("");
+  const [addRunPasskey, setAddRunPasskey] = useState("");
+  const [addingRun, setAddingRun] = useState(false);
+  const [addRunError, setAddRunError] = useState(null);
   const fileInputRef = useRef(null);
 
   const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
+
+  const refreshRuns = useCallback(async () => {
+    try {
+      const data = await getRuns();
+      if (Array.isArray(data.runs) && data.runs.length) {
+        setRuns(data.runs);
+      }
+    } catch {
+      // Keep fallback catalog if API is unavailable
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshRuns();
+  }, [refreshRuns]);
+
+  const runIdFor = useCallback(
+    (run) => {
+      if (!run) return "";
+      const hit = runs.find((r) => r.run === run);
+      return hit?.run_id || RUN_DESCRIPTIONS[run] || "";
+    },
+    [runs]
+  );
 
   const addFiles = useCallback((incoming) => {
     const list = Array.from(incoming || []).filter((f) =>
@@ -83,9 +123,60 @@ export default function LibraryUpload({ onSuccess }) {
         next.qc_reviewer = "";
         next.qc_decision_rationale = "";
       }
+      if (field === "run_number") {
+        next.anomaly_description = value ? runIdFor(value) : "";
+      }
       return next;
     });
     setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+  };
+
+  const handleRunSelect = (value) => {
+    if (value === ADD_NEW_RUN) {
+      setShowAddRun(true);
+      setAddRunError(null);
+      return;
+    }
+    setShowAddRun(false);
+    handleFormChange("run_number", value);
+  };
+
+  const resetAddRunForm = () => {
+    setShowAddRun(false);
+    setNewRunName("");
+    setNewRunId("");
+    setAddRunPasskey("");
+    setAddRunError(null);
+  };
+
+  const handleAddRun = async (e) => {
+    e.preventDefault();
+    const run = newRunName.trim();
+    const run_id = newRunId.trim();
+    if (!run || !run_id) {
+      setAddRunError("Run and Run ID are required.");
+      return;
+    }
+    if (!addRunPasskey) {
+      setAddRunError("Admin passkey required.");
+      return;
+    }
+    setAddingRun(true);
+    setAddRunError(null);
+    try {
+      const entry = await addRun({ run, run_id }, addRunPasskey);
+      await refreshRuns();
+      setForm((prev) => ({
+        ...prev,
+        run_number: entry.run,
+        anomaly_description: entry.run_id,
+      }));
+      resetAddRunForm();
+    } catch (err) {
+      setAddRunError(err.message || "Failed to add run.");
+    } finally {
+      setAddingRun(false);
+    }
   };
 
   const togglePanelTag = (tag) => {
@@ -256,15 +347,91 @@ export default function LibraryUpload({ onSuccess }) {
             </select>
           </div>
           <div className="form-field">
-            <label className="form-label">Run ID <span className="req">*</span></label>
-            <input
-              className={`form-input${fieldErrors.run_number ? " has-error-input" : ""}`}
-              type="text"
-              placeholder="e.g. Run 42"
+            <label className="form-label">Run <span className="req">*</span></label>
+            <select
+              className={`form-select${fieldErrors.run_number ? " has-error-input" : ""}`}
               value={form.run_number}
-              onChange={(e) => handleFormChange("run_number", e.target.value)}
-            />
+              onChange={(e) => handleRunSelect(e.target.value)}
+            >
+              <option value="">— Select Run —</option>
+              {runs.map((r) => (
+                <option key={r.run} value={r.run}>{r.run}</option>
+              ))}
+              <option value={ADD_NEW_RUN}>+ Add new run…</option>
+            </select>
           </div>
+        </div>
+
+        {showAddRun && (
+          <div className="add-run-panel">
+            <p className="add-run-title">Add a new run (admin passkey required)</p>
+            <div className="form-row">
+              <div className="form-field">
+                <label className="form-label">Run</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="e.g. ILIT0017"
+                  value={newRunName}
+                  onChange={(e) => setNewRunName(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              <div className="form-field">
+                <label className="form-label">Run ID</label>
+                <input
+                  className="form-input"
+                  type="text"
+                  placeholder="e.g. 0AXXXXXXX"
+                  value={newRunId}
+                  onChange={(e) => setNewRunId(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="form-row add-run-actions">
+              <div className="form-field">
+                <label className="form-label">Passkey</label>
+                <input
+                  className="form-input"
+                  type="password"
+                  placeholder="Admin passkey"
+                  value={addRunPasskey}
+                  onChange={(e) => setAddRunPasskey(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="add-run-buttons">
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  disabled={addingRun}
+                  onClick={handleAddRun}
+                >
+                  {addingRun ? "Saving…" : "Save run"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={resetAddRunForm}
+                  disabled={addingRun}
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+            {addRunError && <p className="add-run-error">{addRunError}</p>}
+          </div>
+        )}
+
+        <div className="form-field">
+          <label className="form-label">Run ID</label>
+          <input
+            className="form-input"
+            type="text"
+            readOnly
+            placeholder={form.run_number ? "Unique ID pending for this run" : "Select a Run first"}
+            value={form.anomaly_description}
+          />
         </div>
 
         <div className="form-row">
@@ -414,17 +581,6 @@ export default function LibraryUpload({ onSuccess }) {
             placeholder="Your name"
             value={form.analyst}
             onChange={(e) => handleFormChange("analyst", e.target.value)}
-          />
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">Short description (optional)</label>
-          <input
-            className="form-input"
-            type="text"
-            placeholder="One-line summary if different from name"
-            value={form.anomaly_description}
-            onChange={(e) => handleFormChange("anomaly_description", e.target.value)}
           />
         </div>
 

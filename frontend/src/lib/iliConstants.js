@@ -57,3 +57,36 @@ export const PANEL_TAG_OPTIONS = [
   "Dent Sizing Panel",
   "Tool Pose Panel",
 ];
+
+/** Past ILI runs available in Add Entry (newest first, including sub-runs) */
+export const RUN_OPTIONS = [
+  "ILIT0016",
+  "ILIT0015",
+  "ILIT0014",
+  "ILIT0013-02",
+  "ILIT0013",
+  "ILIT0012-01",
+  "ILIT0011-02",
+  "ILIT0011",
+  "ILIT0010",
+  "ILIT0009",
+  "ILIT0008",
+];
+
+/**
+ * Unique Run ID for each run selection.
+ * Empty string = pending.
+ */
+export const RUN_DESCRIPTIONS = {
+  ILIT0008: "0A49KLT3B7Y",
+  ILIT0009: "0AA6Y6FBA1X",
+  ILIT0010: "0A49KLT3B7Y",
+  ILIT0011: "0AEKH5L7BXZ",
+  "ILIT0011-02": "0AGBXB4WEGN",
+  "ILIT0012-01": "0AK338BFJPQ",
+  ILIT0013: "0AP3OOMEPID",
+  "ILIT0013-02": "0AQQZFV2ALD",
+  ILIT0014: "0AS0KUQOE45",
+  ILIT0015: "0B76825MIN3",
+  ILIT0016: "0AXVHCA77S1",
+};

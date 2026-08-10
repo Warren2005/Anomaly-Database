@@ -6,7 +6,6 @@ import {
   DIMENSION_REQUIREMENTS,
   ACCEPTED_IMAGE_TYPES,
   PANEL_TAG_OPTIONS,
-  TRACK_OPTIONS,
 } from "../lib/iliConstants";
 
 const EMPTY_FORM = {
@@ -24,7 +23,6 @@ const EMPTY_FORM = {
   analyst: "",
   panel_tags: [],
   zero_angle_frame_index: "",
-  track: "",
   is_qc_flag: false,
   qc_raised_by: "",
   qc_reviewer: "",
@@ -108,8 +106,20 @@ export default function LibraryUpload({ onSuccess }) {
     if (!form.classification_status) errs.classification_status = "Required";
     if (!form.analyst.trim()) errs.analyst = "Required";
     if (!files.length) errs.file = "At least one image is required";
-    for (const dim of requiredDims) {
-      if (form[dim] === "") errs[dim] = "Required for this anomaly type";
+    for (const dim of ["depth", "width", "length"]) {
+      const raw = String(form[dim] ?? "").trim();
+      if (raw === "") {
+        if (requiredDims.includes(dim)) errs[dim] = "Required for this anomaly type";
+        continue;
+      }
+      // Numbers only — any decimal precision (e.g. 1.234567)
+      if (!/^\d+(\.\d+)?$/.test(raw)) {
+        errs[dim] = "Numbers only (any decimals)";
+      }
+    }
+    const frameRaw = String(form.zero_angle_frame_index ?? "").trim();
+    if (frameRaw !== "" && !/^\d+$/.test(frameRaw)) {
+      errs.zero_angle_frame_index = "Whole number only";
     }
     return errs;
   };
@@ -126,15 +136,17 @@ export default function LibraryUpload({ onSuccess }) {
     try {
       const payload = {
         ...form,
-        depth: form.depth !== "" ? form.depth : undefined,
-        width: form.width !== "" ? form.width : undefined,
-        length: form.length !== "" ? form.length : undefined,
+        depth: form.depth !== "" ? String(form.depth).trim() : undefined,
+        width: form.width !== "" ? String(form.width).trim() : undefined,
+        length: form.length !== "" ? String(form.length).trim() : undefined,
         zero_angle_frame_index:
-          form.zero_angle_frame_index !== "" ? form.zero_angle_frame_index : undefined,
-        track: form.track !== "" ? form.track : undefined,
+          form.zero_angle_frame_index !== ""
+            ? String(form.zero_angle_frame_index).trim()
+            : undefined,
         is_qc_flag: form.is_qc_flag ? "true" : "false",
         panel_tags: (form.panel_tags || []).join(","),
       };
+      delete payload.track;
       if (!form.panel_tags?.length) {
         delete payload.panel_tags;
       }
@@ -302,36 +314,18 @@ export default function LibraryUpload({ onSuccess }) {
           <p className="form-hint">Select one or more panel types from the ILI viewer (Image, Beamforming, Heatmap, etc.)</p>
         </div>
 
-        <div className="form-row">
-          <div className="form-field">
-            <label className="form-label">
-              ZeroAngle Frame Index <span className="opt">optional</span>
-            </label>
-            <input
-              className="form-input"
-              type="number"
-              min="0"
-              step="1"
-              placeholder="e.g. 1240"
-              value={form.zero_angle_frame_index}
-              onChange={(e) => handleFormChange("zero_angle_frame_index", e.target.value)}
-            />
-          </div>
-          <div className="form-field">
-            <label className="form-label">
-              Track <span className="opt">optional</span>
-            </label>
-            <select
-              className="form-select"
-              value={form.track}
-              onChange={(e) => handleFormChange("track", e.target.value)}
-            >
-              <option value="">— Select track —</option>
-              {TRACK_OPTIONS.map((n) => (
-                <option key={n} value={n}>{n}</option>
-              ))}
-            </select>
-          </div>
+        <div className="form-field">
+          <label className="form-label">
+            ZeroAngle Frame Index <span className="opt">optional</span>
+          </label>
+          <input
+            className={`form-input${fieldErrors.zero_angle_frame_index ? " has-error-input" : ""}`}
+            type="text"
+            inputMode="numeric"
+            placeholder="e.g. 1240"
+            value={form.zero_angle_frame_index}
+            onChange={(e) => handleFormChange("zero_angle_frame_index", e.target.value)}
+          />
         </div>
 
         <div className="form-field">
@@ -359,9 +353,9 @@ export default function LibraryUpload({ onSuccess }) {
               </label>
               <input
                 className={`form-input${fieldErrors[dim] ? " has-error-input" : ""}`}
-                type="number"
-                min="0"
-                step="0.1"
+                type="text"
+                inputMode="decimal"
+                placeholder="e.g. 12.345"
                 value={form[dim]}
                 onChange={(e) => handleFormChange(dim, e.target.value)}
               />

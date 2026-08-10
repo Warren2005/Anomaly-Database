@@ -283,7 +283,6 @@ export default function ImageDetail({
                 value={panelTags.length ? panelTags.join(", ") : null}
               />
               <DetailRow label="ZeroAngle Frame Index" value={image.zero_angle_frame_index} />
-              <DetailRow label="Track" value={image.track} />
               <DetailRow label="Description" value={image.anomaly_description} />
               <DetailRow label="Signal Description" value={image.signal_description} />
               <DetailRow label="Comments" value={image.analysis_comment} />

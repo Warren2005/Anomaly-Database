@@ -57,6 +57,3 @@ export const PANEL_TAG_OPTIONS = [
   "Dent Sizing Panel",
   "Tool Pose Panel",
 ];
-
-/** Track feature options (0–21) for Add Entry */
-export const TRACK_OPTIONS = Array.from({ length: 22 }, (_, i) => i);

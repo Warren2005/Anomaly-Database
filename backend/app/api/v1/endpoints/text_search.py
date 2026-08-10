@@ -43,7 +43,11 @@ async def search_by_text(body: TextSearchRequest):
 
     # Brute-force cosine search against the file store
     search_start = time.time()
-    coarse_limit = max(body.top_k, settings.rerank_candidates) if settings.rerank_enabled else body.top_k
+    coarse_limit = (
+        max(body.top_k, settings.rerank_candidates)
+        if settings.rerank_enabled and rerank_embedding_service.health_check()
+        else body.top_k
+    )
     matches = await file_store_service.search(
         vector=embedding,
         limit=coarse_limit,
@@ -55,7 +59,7 @@ async def search_by_text(body: TextSearchRequest):
     search_time = (time.time() - search_start) * 1000
 
     rerank_time = None
-    if settings.rerank_enabled and matches:
+    if settings.rerank_enabled and rerank_embedding_service.health_check() and matches:
         rerank_start = time.time()
         rerank_query_vector = await rerank_embedding_service.get_text_embedding(body.query)
         matches = await rerank(matches, rerank_query_vector, rerank_embedding_service.model_tag)

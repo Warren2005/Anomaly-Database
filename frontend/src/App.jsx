@@ -65,6 +65,40 @@ export default function App() {
   const [mode, setMode] = useState("search"); // "search" | "browse" | "add"
   const [minSimilarity, setMinSimilarity] = useState(0);
   const [maxSimilarity, setMaxSimilarity] = useState(100);
+  const [addEntryDirty, setAddEntryDirty] = useState(false);
+  const [leaveAddConfirm, setLeaveAddConfirm] = useState(null);
+
+  const handleAddDirtyChange = useCallback((dirty) => {
+    setAddEntryDirty(Boolean(dirty));
+  }, []);
+
+  const requestModeChange = useCallback((nextMode, after) => {
+    if (mode === "add" && addEntryDirty && nextMode !== "add") {
+      setLeaveAddConfirm({ nextMode, after });
+      return;
+    }
+    setMode(nextMode);
+    after?.();
+  }, [mode, addEntryDirty]);
+
+  const confirmLeaveAdd = useCallback(() => {
+    if (!leaveAddConfirm) return;
+    const { nextMode, after } = leaveAddConfirm;
+    setLeaveAddConfirm(null);
+    setAddEntryDirty(false);
+    setMode(nextMode);
+    after?.();
+  }, [leaveAddConfirm]);
+
+  useEffect(() => {
+    if (!addEntryDirty) return undefined;
+    const onBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [addEntryDirty]);
 
   useEffect(() => {
     const theme = isDark ? "dark" : "light";
@@ -213,19 +247,19 @@ export default function App() {
         <nav className="header-nav">
           <button
             className={`nav-tab ${mode === "search" ? "nav-tab-active" : ""}`}
-            onClick={() => { setMode("search"); handleNewSearch(); }}
+            onClick={() => requestModeChange("search", handleNewSearch)}
           >
             Search
           </button>
           <button
             className={`nav-tab ${mode === "browse" ? "nav-tab-active" : ""}`}
-            onClick={() => setMode("browse")}
+            onClick={() => requestModeChange("browse")}
           >
             Browse Library
           </button>
           <button
             className={`nav-tab ${mode === "add" ? "nav-tab-active" : ""}`}
-            onClick={() => setMode("add")}
+            onClick={() => requestModeChange("add")}
           >
             Add Entry
           </button>
@@ -256,7 +290,9 @@ export default function App() {
 
         {mode === "browse" && <LibraryBrowser />}
 
-        {mode === "add" && <LibraryUpload />}
+        {mode === "add" && (
+          <LibraryUpload onDirtyChange={handleAddDirtyChange} />
+        )}
 
         {mode === "search" && state === "idle" && (
           <>
@@ -332,6 +368,39 @@ export default function App() {
       </main>
 
       <StatusBar health={health} results={results} />
+
+      {leaveAddConfirm && (
+        <div
+          className="leave-confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="leave-confirm-title"
+        >
+          <div className="leave-confirm-modal">
+            <h3 id="leave-confirm-title">Discard unsaved entry?</h3>
+            <p>
+              You have started an Add Entry form. Leaving this page will discard
+              your images and field values.
+            </p>
+            <div className="leave-confirm-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setLeaveAddConfirm(null)}
+              >
+                Stay on Add Entry
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={confirmLeaveAdd}
+              >
+                Discard and leave
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

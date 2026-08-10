@@ -207,7 +207,10 @@ export default function ImageDetail({
               >
                 ‹
               </button>
-              <span>{mediaIdx + 1} / {media.length}</span>
+              <span>
+                {mediaIdx + 1} / {media.length}
+                {panelTags[mediaIdx] ? ` · ${panelTags[mediaIdx]}` : ""}
+              </span>
               <button
                 className="btn btn-secondary"
                 disabled={mediaIdx === media.length - 1}
@@ -215,6 +218,11 @@ export default function ImageDetail({
               >
                 ›
               </button>
+            </div>
+          )}
+          {panelTags[mediaIdx] && (
+            <div className="panel-tag-row current-panel-tag">
+              <span className="badge badge-panel">{panelTags[mediaIdx]}</span>
             </div>
           )}
           {media.length > 1 && !showHeatmap && (
@@ -225,8 +233,12 @@ export default function ImageDetail({
                   type="button"
                   className={`media-thumb${i === mediaIdx ? " active" : ""}`}
                   onClick={() => setMediaIdx(i)}
+                  title={panelTags[i] || `Image ${i + 1}`}
                 >
                   <img src={resolveImageUrl(url)} alt="" />
+                  {panelTags[i] && (
+                    <span className="media-thumb-tag">{panelTags[i].replace(/ Panel$/, "")}</span>
+                  )}
                 </button>
               ))}
             </div>
@@ -259,10 +271,12 @@ export default function ImageDetail({
             </span>
           )}
 
-          {panelTags.length > 0 && (
+          {panelTags.length > 1 && (
             <div className="panel-tag-row">
-              {panelTags.map((tag) => (
-                <span key={tag} className="badge badge-panel">{tag}</span>
+              {panelTags.map((tag, i) => (
+                <span key={`${tag}-${i}`} className="badge badge-panel">
+                  {i + 1}. {tag}
+                </span>
               ))}
             </div>
           )}
@@ -278,10 +292,6 @@ export default function ImageDetail({
             <tbody>
               <DetailRow label="Anomaly Type" value={image.anomaly_type} />
               <DetailRow label="Run" value={image.run_number} />
-              <DetailRow
-                label="Panel Tags"
-                value={panelTags.length ? panelTags.join(", ") : null}
-              />
               <DetailRow label="ZeroAngle Frame Index" value={image.zero_angle_frame_index} />
               <DetailRow label="Run ID" value={image.anomaly_description} />
               <DetailRow label="Signal Description" value={image.signal_description} />

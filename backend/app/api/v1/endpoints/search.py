@@ -68,7 +68,11 @@ async def search_similar(
     # on, fetch a wider shortlist so the heavier model has real candidates
     # to re-score, then trim back to `limit` after re-ranking.
     search_start = time.time()
-    coarse_limit = max(limit, settings.rerank_candidates) if settings.rerank_enabled else limit
+    coarse_limit = (
+        max(limit, settings.rerank_candidates)
+        if settings.rerank_enabled and rerank_embedding_service.health_check()
+        else limit
+    )
     matches = await file_store_service.search(
         vector=embedding,
         limit=coarse_limit,
@@ -79,9 +83,9 @@ async def search_similar(
     )
     search_time = (time.time() - search_start) * 1000
 
-    # Re-rank the shortlist with the heavier model, if enabled
+    # Re-rank the shortlist with the heavier model, if enabled and loaded
     rerank_time = None
-    if settings.rerank_enabled and matches:
+    if settings.rerank_enabled and rerank_embedding_service.health_check() and matches:
         rerank_start = time.time()
         rerank_query_vector = await rerank_embedding_service.get_embedding(image_bytes)
         matches = await rerank(matches, rerank_query_vector, rerank_embedding_service.model_tag)

@@ -118,6 +118,7 @@ async def upload_to_library(
             for t in panel_tags.replace(";", ",").split(",")
             if t.strip()
         ]
+    # Ordered 1:1 with media files when provided that way (primary, then extras).
 
     image_id = uuid4()
     primary = files[0]
@@ -133,11 +134,13 @@ async def upload_to_library(
         additional_paths.append(path)
 
     embedding = await embedding_service.get_embedding(primary_bytes)
-    rerank_embedding = (
-        await rerank_embedding_service.get_embedding(primary_bytes)
-        if settings.rerank_enabled
-        else None
-    )
+    rerank_embedding = None
+    if settings.rerank_enabled and rerank_embedding_service.health_check():
+        rerank_embedding = await rerank_embedding_service.get_embedding(primary_bytes)
+    elif settings.rerank_enabled:
+        # Rerank model failed to load at startup (common on SSL-blocked networks).
+        # Still save the entry with primary CLIP only.
+        pass
 
     record = Image(
         id=image_id,

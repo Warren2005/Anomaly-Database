@@ -30,7 +30,6 @@ const EMPTY_FORM = {
   analysis_comment: "",
   notes: "",
   analyst: "",
-  panel_tags: [],
   zero_angle_frame_index: "",
   is_qc_flag: false,
   qc_raised_by: "",
@@ -38,8 +37,9 @@ const EMPTY_FORM = {
   qc_decision_rationale: "",
 };
 
-export default function LibraryUpload({ onSuccess }) {
+export default function LibraryUpload({ onSuccess, onDirtyChange }) {
   const [files, setFiles] = useState([]);
+  const [filePanelTags, setFilePanelTags] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -57,6 +57,19 @@ export default function LibraryUpload({ onSuccess }) {
   const fileInputRef = useRef(null);
 
   const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
+
+  const isDirty = !success && (
+    files.length > 0
+    || filePanelTags.some(Boolean)
+    || showAddRun
+    || Object.keys(EMPTY_FORM).some((key) => form[key] !== EMPTY_FORM[key])
+  );
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const refreshRuns = useCallback(async () => {
     try {
@@ -93,6 +106,7 @@ export default function LibraryUpload({ onSuccess }) {
     setError(null);
     setSuccess(null);
     setFiles((prev) => [...prev, ...list]);
+    setFilePanelTags((prev) => [...prev, ...list.map(() => "")]);
     list.forEach((f) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -104,7 +118,18 @@ export default function LibraryUpload({ onSuccess }) {
 
   const removeFile = (idx) => {
     setFiles((prev) => prev.filter((_, i) => i !== idx));
+    setFilePanelTags((prev) => prev.filter((_, i) => i !== idx));
     setPreviews((prev) => prev.filter((_, i) => i !== idx));
+    setFieldErrors((prev) => {
+      const next = { ...prev };
+      delete next[`panel_${idx}`];
+      return next;
+    });
+  };
+
+  const setFilePanelTag = (idx, tag) => {
+    setFilePanelTags((prev) => prev.map((t, i) => (i === idx ? tag : t)));
+    setFieldErrors((prev) => ({ ...prev, [`panel_${idx}`]: undefined, file: undefined }));
   };
 
   const handleDragOver = useCallback((e) => { e.preventDefault(); setIsDragging(true); }, []);
@@ -179,16 +204,6 @@ export default function LibraryUpload({ onSuccess }) {
     }
   };
 
-  const togglePanelTag = (tag) => {
-    setForm((prev) => {
-      const current = prev.panel_tags || [];
-      const next = current.includes(tag)
-        ? current.filter((t) => t !== tag)
-        : [...current, tag];
-      return { ...prev, panel_tags: next };
-    });
-  };
-
   const validate = () => {
     const errs = {};
     if (!form.anomaly_type) errs.anomaly_type = "Required";
@@ -196,7 +211,16 @@ export default function LibraryUpload({ onSuccess }) {
     if (!form.anomaly_name.trim()) errs.anomaly_name = "Required";
     if (!form.classification_status) errs.classification_status = "Required";
     if (!form.analyst.trim()) errs.analyst = "Required";
-    if (!files.length) errs.file = "At least one image is required";
+    if (!files.length) {
+      errs.file = "Add at least one image, and tag each with its panel type";
+    } else {
+      filePanelTags.forEach((tag, i) => {
+        if (!tag) errs[`panel_${i}`] = "Select a panel for this image";
+      });
+      if (filePanelTags.some((tag) => !tag)) {
+        errs.file = "Each image needs a panel tag";
+      }
+    }
     for (const dim of ["depth", "width", "length"]) {
       const raw = String(form[dim] ?? "").trim();
       if (raw === "") {
@@ -235,12 +259,10 @@ export default function LibraryUpload({ onSuccess }) {
             ? String(form.zero_angle_frame_index).trim()
             : undefined,
         is_qc_flag: form.is_qc_flag ? "true" : "false",
-        panel_tags: (form.panel_tags || []).join(","),
+        // Ordered 1:1 with uploaded files (primary first, then extras)
+        panel_tags: filePanelTags.join(","),
       };
       delete payload.track;
-      if (!form.panel_tags?.length) {
-        delete payload.panel_tags;
-      }
       if (!form.is_qc_flag) {
         delete payload.qc_raised_by;
         delete payload.qc_reviewer;
@@ -258,11 +280,13 @@ export default function LibraryUpload({ onSuccess }) {
 
   const handleReset = () => {
     setFiles([]);
+    setFilePanelTags([]);
     setPreviews([]);
     setForm(EMPTY_FORM);
     setSuccess(null);
     setError(null);
     setFieldErrors({});
+    resetAddRunForm();
   };
 
   if (success) {
@@ -287,7 +311,7 @@ export default function LibraryUpload({ onSuccess }) {
         <div>
           <h2 className="library-browser-title">Add Entry</h2>
           <p className="library-browser-subtitle">
-            Contribute a reference example with ILI metadata (under ~5 minutes)
+            Add one or more panel screenshots for the same anomaly — each image needs its own panel tag
           </p>
         </div>
       </div>
@@ -299,8 +323,10 @@ export default function LibraryUpload({ onSuccess }) {
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
       >
-        <p className="dropzone-text">Drop images or click to browse</p>
-        <p className="dropzone-formats">JPEG, PNG, TIFF, GIF, WebP · multiple files supported</p>
+        <p className="dropzone-text">Drop multiple panel images or click to browse</p>
+        <p className="dropzone-formats">
+          JPEG, PNG, TIFF, GIF, WebP · tag each image with its panel type below
+        </p>
         <input
           ref={fileInputRef}
           type="file"
@@ -315,14 +341,41 @@ export default function LibraryUpload({ onSuccess }) {
       </div>
 
       {previews.length > 0 && (
-        <div className="media-preview-grid">
-          {previews.map((p, i) => (
-            <div key={`${p.name}-${i}`} className="preview-thumb">
-              <img src={p.url} alt={p.name} />
-              {i === 0 && <span className="preview-primary">Primary</span>}
-              <button type="button" className="remove-img" onClick={() => removeFile(i)}>✕</button>
-            </div>
-          ))}
+        <div className="media-preview-section">
+          <p className="form-hint media-preview-hint">
+            {previews.length === 1
+              ? "1 image — choose which panel it is"
+              : `${previews.length} images — choose a panel tag for each`}
+            . First image is used for CLIP search (Primary).
+          </p>
+          <div className="media-preview-grid">
+            {previews.map((p, i) => (
+              <div
+                key={`${p.name}-${i}`}
+                className={`preview-card${fieldErrors[`panel_${i}`] ? " preview-card-error" : ""}`}
+              >
+                <div className="preview-thumb">
+                  <img src={p.url} alt={p.name} />
+                  {i === 0 && <span className="preview-primary">Primary</span>}
+                  <button type="button" className="remove-img" onClick={() => removeFile(i)}>✕</button>
+                </div>
+                <label className="form-label preview-panel-label">
+                  Panel <span className="req">*</span>
+                </label>
+                <select
+                  className={`form-select${fieldErrors[`panel_${i}`] ? " has-error-input" : ""}`}
+                  value={filePanelTags[i] || ""}
+                  onChange={(e) => setFilePanelTag(i, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <option value="">— Select panel —</option>
+                  {PANEL_TAG_OPTIONS.map((tag) => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -456,29 +509,6 @@ export default function LibraryUpload({ onSuccess }) {
               {CLASSIFICATION_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </div>
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">
-            Panel Tags <span className="opt">multi-select</span>
-          </label>
-          <div className="tag-multi" role="group" aria-label="Panel tags">
-            {PANEL_TAG_OPTIONS.map((tag) => {
-              const selected = (form.panel_tags || []).includes(tag);
-              return (
-                <button
-                  key={tag}
-                  type="button"
-                  className={`tag-chip${selected ? " tag-chip-active" : ""}`}
-                  aria-pressed={selected}
-                  onClick={() => togglePanelTag(tag)}
-                >
-                  {tag}
-                </button>
-              );
-            })}
-          </div>
-          <p className="form-hint">Select one or more panel types from the ILI viewer (Image, Beamforming, Heatmap, etc.)</p>
         </div>
 
         <div className="form-field">

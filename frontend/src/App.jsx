@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { searchSimilar, searchByText, checkHealth } from "./api/client";
-import DropZone from "./components/DropZone";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { searchSimilar, checkHealth } from "./api/client";
 import ResultsGrid from "./components/ResultsGrid";
 import ImageDetail from "./components/ImageDetail";
 import StatusBar from "./components/StatusBar";
@@ -50,6 +49,16 @@ function MoonIcon() {
   );
 }
 
+function ImageSearchIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" />
+      <circle cx="8.5" cy="8.5" r="1.5" />
+      <path d="M21 15l-5-5L5 21" />
+    </svg>
+  );
+}
+
 export default function App() {
   const [state, setState] = useState("idle"); // idle | searching | results | detail
   const [results, setResults] = useState(null);
@@ -58,15 +67,15 @@ export default function App() {
   const [health, setHealth] = useState(null);
   const [error, setError] = useState(null);
   const [queryFile, setQueryFile] = useState(null);
-  const [textQuery, setTextQuery] = useState("");
   const [isDark, setIsDark] = useState(
     () => (localStorage.getItem("theme") ?? "dark") === "dark"
   );
-  const [mode, setMode] = useState("search"); // "search" | "browse" | "add"
+  const [mode, setMode] = useState("browse"); // "browse" | "add" | "search"
   const [minSimilarity, setMinSimilarity] = useState(0);
   const [maxSimilarity, setMaxSimilarity] = useState(100);
   const [addEntryDirty, setAddEntryDirty] = useState(false);
   const [leaveAddConfirm, setLeaveAddConfirm] = useState(null);
+  const imageSearchRef = useRef(null);
 
   const handleAddDirtyChange = useCallback((dirty) => {
     setAddEntryDirty(Boolean(dirty));
@@ -89,6 +98,14 @@ export default function App() {
     setMode(nextMode);
     after?.();
   }, [leaveAddConfirm]);
+
+  const runWithLeaveGuard = useCallback((nextMode, action) => {
+    if (mode === "add" && addEntryDirty) {
+      setLeaveAddConfirm({ nextMode, after: action });
+      return;
+    }
+    action?.();
+  }, [mode, addEntryDirty]);
 
   useEffect(() => {
     if (!addEntryDirty) return undefined;
@@ -133,6 +150,7 @@ export default function App() {
   const handleSearch = useCallback(
     async (file) => {
       setQueryFile(file);
+      setMode("search");
       setState("searching");
       setError(null);
       setResults(null);
@@ -146,33 +164,20 @@ export default function App() {
       } catch (err) {
         setError(err.message);
         setState("idle");
+        setMode("browse");
       }
     },
     [filters]
   );
 
-  const handleTextSearch = useCallback(
-    async (e) => {
-      e.preventDefault();
-      if (!textQuery.trim()) return;
-      setState("searching");
-      setError(null);
-      setResults(null);
-      setQueryFile(null);
-      setMinSimilarity(0);
-      setMaxSimilarity(100);
-
-      try {
-        const data = await searchByText(textQuery.trim(), filters);
-        setResults(data);
-        setState("results");
-      } catch (err) {
-        setError(err.message);
-        setState("idle");
-      }
-    },
-    [textQuery, filters]
-  );
+  const handleImageSearchPick = useCallback((e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    runWithLeaveGuard("search", () => {
+      void handleSearch(file);
+    });
+  }, [runWithLeaveGuard, handleSearch]);
 
   const handleResultClick = useCallback((result) => {
     setSelectedResult(result);
@@ -224,15 +229,22 @@ export default function App() {
     setResults(null);
     setSelectedResult(null);
     setQueryFile(null);
-    setTextQuery("");
     setMinSimilarity(0);
     setMaxSimilarity(100);
+    setMode("browse");
   }, []);
+
+  const goHome = useCallback(() => {
+    requestModeChange("browse", () => {
+      setState("idle");
+      setSelectedResult(null);
+    });
+  }, [requestModeChange]);
 
   return (
     <div className="app">
       <header className="app-header">
-        <div className="brand">
+        <button type="button" className="brand brand-button" onClick={goHome}>
           <img
             className="brand-mark"
             src={logoMark}
@@ -243,19 +255,13 @@ export default function App() {
           <div className="brand-wordmark">
             ILI<span>-BRARY</span>
           </div>
-        </div>
+        </button>
         <nav className="header-nav">
-          <button
-            className={`nav-tab ${mode === "search" ? "nav-tab-active" : ""}`}
-            onClick={() => requestModeChange("search", handleNewSearch)}
-          >
-            Search
-          </button>
           <button
             className={`nav-tab ${mode === "browse" ? "nav-tab-active" : ""}`}
             onClick={() => requestModeChange("browse")}
           >
-            Browse Library
+            Library
           </button>
           <button
             className={`nav-tab ${mode === "add" ? "nav-tab-active" : ""}`}
@@ -265,9 +271,26 @@ export default function App() {
           </button>
         </nav>
         <div className="header-actions">
+          <button
+            type="button"
+            className="btn btn-primary header-image-search"
+            onClick={() => imageSearchRef.current?.click()}
+            aria-label="Search by image"
+            title="Upload an image to find similar library entries"
+          >
+            <ImageSearchIcon />
+            <span>Search by image</span>
+          </button>
+          <input
+            ref={imageSearchRef}
+            type="file"
+            accept=".jpg,.jpeg,.png,.tiff,.tif,image/jpeg,image/png,image/tiff"
+            className="header-file-input"
+            onChange={handleImageSearchPick}
+          />
           {mode === "search" && state !== "idle" && (
             <button className="btn btn-secondary" onClick={handleNewSearch}>
-              New Search
+              Clear
             </button>
           )}
           <button
@@ -294,31 +317,6 @@ export default function App() {
           <LibraryUpload onDirtyChange={handleAddDirtyChange} />
         )}
 
-        {mode === "search" && state === "idle" && (
-          <>
-            <DropZone onFileDrop={handleSearch} />
-            <div className="text-search">
-              <div className="text-search-divider">or search by description</div>
-              <form className="text-search-form" onSubmit={handleTextSearch}>
-                <input
-                  type="text"
-                  className="text-search-input"
-                  placeholder="e.g. metal loss near girth weld"
-                  value={textQuery}
-                  onChange={(e) => setTextQuery(e.target.value)}
-                />
-                <button
-                  type="submit"
-                  className="btn btn-primary"
-                  disabled={!textQuery.trim()}
-                >
-                  Search
-                </button>
-              </form>
-            </div>
-          </>
-        )}
-
         {mode === "search" && state === "searching" && (
           <div className="loading">
             <div className="loading-header">
@@ -337,6 +335,12 @@ export default function App() {
           <>
             {state === "results" && (
               <>
+                <div className="search-results-header">
+                  <h2 className="library-browser-title">Search results</h2>
+                  <button type="button" className="btn btn-secondary" onClick={goHome}>
+                    Back to Library
+                  </button>
+                </div>
                 <SimilarityFilter
                   minPercent={minSimilarity}
                   maxPercent={maxSimilarity}
@@ -367,7 +371,7 @@ export default function App() {
         )}
       </main>
 
-      <StatusBar health={health} results={results} />
+      <StatusBar health={health} results={mode === "search" ? results : null} />
 
       {leaveAddConfirm && (
         <div

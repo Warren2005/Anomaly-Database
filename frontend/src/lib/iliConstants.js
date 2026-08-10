@@ -2,14 +2,10 @@
 
 export const ANOMALY_TYPES = [
   "Metal Loss",
+  "Weld",
+  "Crack-like",
   "Deformation",
-  "Crack",
-  "Inclusion",
   "Lamination",
-  "Girth Weld Anomaly",
-  "Seam Weld Anomaly",
-  "Dent",
-  "Corrosion",
   "Other",
 ];
 
@@ -22,12 +18,10 @@ export const CLASSIFICATION_STATUS_OPTIONS = [
 
 export const DIMENSION_REQUIREMENTS = {
   "Metal Loss": ["depth", "width", "length"],
-  Corrosion: ["depth", "width"],
-  Crack: ["depth", "length"],
+  Weld: ["depth", "width", "length"],
+  "Crack-like": ["depth", "length"],
   Deformation: ["depth", "width"],
-  Dent: ["depth"],
   Lamination: ["depth"],
-  Inclusion: ["depth"],
 };
 
 export const STATUS_COLORS = {

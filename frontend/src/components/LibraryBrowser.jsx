@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { browseLibrary, getFilters, resolveImageUrl } from "../api/client";
 import ImageDetail from "./ImageDetail";
 import {
@@ -20,6 +20,34 @@ function toggleType(arr, type) {
   return arr.includes(type) ? arr.filter((t) => t !== type) : [...arr, type];
 }
 
+function FilterIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3" />
+    </svg>
+  );
+}
+
+function FilterSection({ id, label, open, onToggle, count, children }) {
+  return (
+    <div className={`browse-filter-section${open ? " is-open" : ""}`}>
+      <button
+        type="button"
+        className="browse-filter-section-toggle"
+        onClick={() => onToggle(id)}
+        aria-expanded={open}
+      >
+        <span className="browse-filter-section-label">
+          {label}
+          {count > 0 && <span className="browse-filter-section-count">{count}</span>}
+        </span>
+        <span className="browse-filter-plus" aria-hidden="true">{open ? "−" : "+"}</span>
+      </button>
+      {open && <div className="browse-filter-section-body">{children}</div>}
+    </div>
+  );
+}
+
 export default function LibraryBrowser() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [runOptions, setRunOptions] = useState([]);
@@ -28,6 +56,8 @@ export default function LibraryBrowser() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [openSections, setOpenSections] = useState({});
 
   useEffect(() => {
     getFilters()
@@ -59,6 +89,20 @@ export default function LibraryBrowser() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
+  const toggleSection = (id) => {
+    setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const activeFilterCount = useMemo(() => {
+    let n = 0;
+    if (filters.q.trim()) n += 1;
+    n += filters.anomaly_types.length;
+    n += filters.panel_tags.length;
+    if (filters.run_number) n += 1;
+    if (filters.classification_status) n += 1;
+    return n;
+  }, [filters]);
+
   if (selected) {
     return (
       <ImageDetail
@@ -88,80 +132,152 @@ export default function LibraryBrowser() {
             Browse curated ILI examples by type, panel, run, and status
           </p>
         </div>
-        <span className="library-count">{total} entr{total === 1 ? "y" : "ies"}</span>
-      </div>
-
-      <div className="browse-search-row">
-        <input
-          className="form-input browse-search"
-          type="search"
-          placeholder="Search comments, notes, anomaly name…"
-          value={filters.q}
-          onChange={(e) => setFilter("q", e.target.value)}
-        />
-        <button
-          type="button"
-          className="btn btn-secondary"
-          onClick={() => setFilters(EMPTY_FILTERS)}
-        >
-          Clear
-        </button>
-      </div>
-
-      <div className="filter-chips-row">
-        <span className="filter-label">Type</span>
-        <div className="chips-wrap">
-          {ANOMALY_TYPES.map((type) => (
-            <button
-              key={type}
-              type="button"
-              className={`chip ${filters.anomaly_types.includes(type) ? "chip-active" : ""}`}
-              onClick={() => setFilter("anomaly_types", toggleType(filters.anomaly_types, type))}
-            >
-              {type}
-            </button>
-          ))}
+        <div className="library-browser-tools">
+          <span className="library-count">{total} entr{total === 1 ? "y" : "ies"}</span>
+          <button
+            type="button"
+            className={`btn browse-filter-trigger${filtersOpen || activeFilterCount ? " is-active" : ""}`}
+            onClick={() => setFiltersOpen(true)}
+            aria-expanded={filtersOpen}
+            aria-haspopup="dialog"
+          >
+            <FilterIcon />
+            <span>Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="browse-filter-badge">{activeFilterCount}</span>
+            )}
+          </button>
         </div>
       </div>
 
-      <div className="filter-chips-row">
-        <span className="filter-label">Panel</span>
-        <div className="chips-wrap">
-          {PANEL_TAG_OPTIONS.map((tag) => (
-            <button
-              key={tag}
-              type="button"
-              className={`chip ${filters.panel_tags.includes(tag) ? "chip-active" : ""}`}
-              onClick={() => setFilter("panel_tags", toggleType(filters.panel_tags, tag))}
-            >
-              {tag}
-            </button>
-          ))}
-        </div>
-      </div>
+      {filtersOpen && (
+        <div
+          className="browse-filter-overlay"
+          role="presentation"
+          onClick={() => setFiltersOpen(false)}
+        >
+          <div
+            className="browse-filter-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Library filters"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="browse-filter-panel-head">
+              <h3>Filters</h3>
+              <div className="browse-filter-panel-actions">
+                <button
+                  type="button"
+                  className="btn btn-secondary browse-filter-clear"
+                  onClick={() => setFilters(EMPTY_FILTERS)}
+                  disabled={activeFilterCount === 0}
+                >
+                  Clear all
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={() => setFiltersOpen(false)}
+                >
+                  Done
+                </button>
+              </div>
+            </div>
 
-      <div className="browse-filters">
-        <select
-          className="form-select"
-          value={filters.run_number}
-          onChange={(e) => setFilter("run_number", e.target.value)}
-        >
-          <option value="">All runs</option>
-          {runOptions.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
-        </select>
-        <select
-          className="form-select"
-          value={filters.classification_status}
-          onChange={(e) => setFilter("classification_status", e.target.value)}
-        >
-          <option value="">All classification statuses</option>
-          {CLASSIFICATION_STATUS_OPTIONS.map((s) => (
-            <option key={s} value={s}>{s}</option>
-          ))}
-        </select>
-      </div>
+            <div className="browse-filter-search">
+              <label className="form-label" htmlFor="browse-filter-q">Search</label>
+              <input
+                id="browse-filter-q"
+                className="form-input"
+                type="search"
+                placeholder="Comments, notes, anomaly name…"
+                value={filters.q}
+                onChange={(e) => setFilter("q", e.target.value)}
+              />
+            </div>
+
+            <FilterSection
+              id="type"
+              label="Type"
+              open={!!openSections.type}
+              onToggle={toggleSection}
+              count={filters.anomaly_types.length}
+            >
+              <div className="chips-wrap">
+                {ANOMALY_TYPES.map((type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    className={`chip ${filters.anomaly_types.includes(type) ? "chip-active" : ""}`}
+                    onClick={() => setFilter("anomaly_types", toggleType(filters.anomaly_types, type))}
+                  >
+                    {type}
+                  </button>
+                ))}
+              </div>
+            </FilterSection>
+
+            <FilterSection
+              id="panel"
+              label="Panel"
+              open={!!openSections.panel}
+              onToggle={toggleSection}
+              count={filters.panel_tags.length}
+            >
+              <div className="chips-wrap">
+                {PANEL_TAG_OPTIONS.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={`chip ${filters.panel_tags.includes(tag) ? "chip-active" : ""}`}
+                    onClick={() => setFilter("panel_tags", toggleType(filters.panel_tags, tag))}
+                  >
+                    {tag}
+                  </button>
+                ))}
+              </div>
+            </FilterSection>
+
+            <FilterSection
+              id="run"
+              label="Run"
+              open={!!openSections.run}
+              onToggle={toggleSection}
+              count={filters.run_number ? 1 : 0}
+            >
+              <select
+                className="form-select"
+                value={filters.run_number}
+                onChange={(e) => setFilter("run_number", e.target.value)}
+              >
+                <option value="">All runs</option>
+                {runOptions.map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+            </FilterSection>
+
+            <FilterSection
+              id="status"
+              label="Classification"
+              open={!!openSections.status}
+              onToggle={toggleSection}
+              count={filters.classification_status ? 1 : 0}
+            >
+              <select
+                className="form-select"
+                value={filters.classification_status}
+                onChange={(e) => setFilter("classification_status", e.target.value)}
+              >
+                <option value="">All classification statuses</option>
+                {CLASSIFICATION_STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </FilterSection>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="error-banner">

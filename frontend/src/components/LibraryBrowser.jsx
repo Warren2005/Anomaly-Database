@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { browseLibrary, getFilters, resolveImageUrl } from "../api/client";
 import ImageDetail from "./ImageDetail";
+import LibraryUpload from "./LibraryUpload";
 import {
   ANOMALY_TYPES,
   CLASSIFICATION_STATUS_OPTIONS,
@@ -56,6 +57,7 @@ export default function LibraryBrowser() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
+  const [editingItem, setEditingItem] = useState(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [openSections, setOpenSections] = useState({});
 
@@ -103,6 +105,30 @@ export default function LibraryBrowser() {
     return n;
   }, [filters]);
 
+  if (editingItem) {
+    return (
+      <LibraryUpload
+        editingImage={editingItem}
+        onCancel={() => {
+          setSelected(editingItem);
+          setEditingItem(null);
+        }}
+        onSuccess={(result) => {
+          setEditingItem(null);
+          if (result) {
+            setSelected({
+              image: result.image,
+              image_url: result.image_url,
+              media_urls: result.media_urls,
+              similarity_score: null,
+            });
+          }
+          load();
+        }}
+      />
+    );
+  }
+
   if (selected) {
     return (
       <ImageDetail
@@ -117,8 +143,13 @@ export default function LibraryBrowser() {
           setSelected(null);
           load();
         }}
+        onEdit={(result) => {
+          setEditingItem(result);
+          setSelected(null);
+        }}
         backLabel="Back to Library"
         allowDelete
+        allowEdit
       />
     );
   }

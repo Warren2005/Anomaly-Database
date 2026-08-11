@@ -174,6 +174,20 @@ class FileStoreService:
     async def get_image(self, image_id: UUID) -> Optional[Image]:
         return await asyncio.to_thread(self._get_image_sync, image_id)
 
+    def _get_raw_record_sync(self, image_id: UUID) -> Optional[dict]:
+        for r in self._read_json(self._images_file):
+            if r["id"] == str(image_id):
+                return r
+        return None
+
+    async def get_raw_record(self, image_id: UUID) -> Optional[dict]:
+        """The full stored JSON record, including embedding/rerank_embedding
+        and their model tags — unlike get_image(), which strips those via
+        _record_to_image(). Used when editing a record without changing its
+        primary image, so the existing embedding can be carried forward
+        instead of needing a recompute."""
+        return await asyncio.to_thread(self._get_raw_record_sync, image_id)
+
     def _upsert_image_sync(
         self,
         image: Image,

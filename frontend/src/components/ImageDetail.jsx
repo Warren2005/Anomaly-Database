@@ -9,6 +9,8 @@ export default function ImageDetail({
   onDeleted,
   backLabel = "Back to Results",
   allowDelete = false,
+  allowEdit = false,
+  onEdit = null,
   currentIndex = null,
   totalCount = null,
   onPrev = null,
@@ -145,6 +147,11 @@ export default function ImageDetail({
           </div>
         )}
 
+        {allowEdit && !confirmDelete && (
+          <button className="btn btn-secondary" onClick={() => onEdit?.(result)}>
+            Edit Entry
+          </button>
+        )}
         {allowDelete && !confirmDelete && (
           <button
             className="btn btn-danger"

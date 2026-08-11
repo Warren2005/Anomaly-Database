@@ -204,3 +204,30 @@ export async function uploadToLibrary(files, metadata) {
   }
   return response.json();
 }
+
+export async function updateLibraryEntry(
+  imageId,
+  { newFiles = [], panelTags = [], removeIndices = [] } = {},
+  metadata
+) {
+  const form = new FormData();
+  newFiles.forEach((f) => form.append("new_files", f));
+  if (panelTags.length) form.append("panel_tags", panelTags.join(","));
+  if (removeIndices.length) form.append("remove_media", removeIndices.join(","));
+  // Unlike upload, every field is sent even when blank — an edit form
+  // always resends the current value, and a genuinely blank value means
+  // "clear this field," not "wasn't provided" (see library.py's _resolved).
+  Object.entries(metadata).forEach(([k, v]) => {
+    if (v === undefined) return;
+    form.append(k, v === null ? "" : String(v));
+  });
+  const response = await fetch(`${BASE_URL}/library/${imageId}`, {
+    method: "PUT",
+    body: form,
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Update failed: ${response.status}`);
+  }
+  return response.json();
+}

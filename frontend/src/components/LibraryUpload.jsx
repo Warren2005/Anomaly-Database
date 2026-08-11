@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { uploadToLibrary, getRuns, addRun } from "../api/client";
+import { uploadToLibrary, updateLibraryEntry, getRuns, addRun, resolveImageUrl } from "../api/client";
 import {
   ANOMALY_TYPES,
   CLASSIFICATION_STATUS_OPTIONS,
@@ -37,12 +37,50 @@ const EMPTY_FORM = {
   qc_decision_rationale: "",
 };
 
-export default function LibraryUpload({ onSuccess, onDirtyChange }) {
+function formFromImage(image) {
+  if (!image) return EMPTY_FORM;
+  return {
+    anomaly_name: image.anomaly_name || "",
+    anomaly_description: image.anomaly_description || "",
+    signal_description: image.signal_description || "",
+    classification_status: image.classification_status || "",
+    anomaly_type: image.anomaly_type || "",
+    run_number: image.run_number || "",
+    depth: image.depth ?? "",
+    width: image.width ?? "",
+    length: image.length ?? "",
+    analysis_comment: image.analysis_comment || "",
+    notes: image.notes || "",
+    analyst: image.analyst || "",
+    zero_angle_frame_index: image.zero_angle_frame_index ?? "",
+    is_qc_flag: Boolean(image.is_qc_flag),
+    qc_raised_by: image.qc_raised_by || "",
+    qc_reviewer: image.qc_reviewer || "",
+    qc_decision_rationale: image.qc_decision_rationale || "",
+  };
+}
+
+function existingMediaFromDetail(detail) {
+  if (!detail) return [];
+  const urls = detail.media_urls?.length ? detail.media_urls : [detail.image_url];
+  const tags = detail.image.panel_tags || [];
+  return urls.map((url, i) => ({
+    originalIndex: i,
+    url,
+    panelTag: tags[i] || "",
+    removed: false,
+  }));
+}
+
+export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage = null, onCancel }) {
+  const isEditMode = Boolean(editingImage);
+  const [initialForm] = useState(() => formFromImage(editingImage?.image));
   const [files, setFiles] = useState([]);
   const [filePanelTags, setFilePanelTags] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
-  const [form, setForm] = useState(EMPTY_FORM);
+  const [form, setForm] = useState(initialForm);
+  const [existingMedia, setExistingMedia] = useState(() => existingMediaFromDetail(editingImage));
   const [uploading, setUploading] = useState(false);
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState(null);
@@ -62,7 +100,8 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
     files.length > 0
     || filePanelTags.some(Boolean)
     || showAddRun
-    || Object.keys(EMPTY_FORM).some((key) => form[key] !== EMPTY_FORM[key])
+    || existingMedia.some((m) => m.removed)
+    || Object.keys(EMPTY_FORM).some((key) => form[key] !== initialForm[key])
   );
 
   useEffect(() => {
@@ -131,6 +170,25 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
     setFilePanelTags((prev) => prev.map((t, i) => (i === idx ? tag : t)));
     setFieldErrors((prev) => ({ ...prev, [`panel_${idx}`]: undefined, file: undefined }));
   };
+
+  const removeExistingMedia = (originalIndex) => {
+    setExistingMedia((prev) =>
+      prev.map((m) => (m.originalIndex === originalIndex ? { ...m, removed: true } : m))
+    );
+    setFieldErrors((prev) => ({ ...prev, file: undefined }));
+  };
+
+  const setExistingPanelTag = (originalIndex, tag) => {
+    setExistingMedia((prev) =>
+      prev.map((m) => (m.originalIndex === originalIndex ? { ...m, panelTag: tag } : m))
+    );
+    setFieldErrors((prev) => ({ ...prev, [`existing_${originalIndex}`]: undefined, file: undefined }));
+  };
+
+  const survivingExisting = existingMedia.filter((m) => !m.removed);
+  const isExistingPrimary = (m) =>
+    survivingExisting.length > 0 && survivingExisting[0].originalIndex === m.originalIndex;
+  const isNewFilePrimary = (i) => survivingExisting.length === 0 && i === 0;
 
   const handleDragOver = useCallback((e) => { e.preventDefault(); setIsDragging(true); }, []);
   const handleDragLeave = useCallback((e) => { e.preventDefault(); setIsDragging(false); }, []);
@@ -211,13 +269,16 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
     if (!form.anomaly_name.trim()) errs.anomaly_name = "Required";
     if (!form.classification_status) errs.classification_status = "Required";
     if (!form.analyst.trim()) errs.analyst = "Required";
-    if (!files.length) {
-      errs.file = "Add at least one image, and tag each with its panel type";
+    if (survivingExisting.length + files.length === 0) {
+      errs.file = "An anomaly must have at least one image, each tagged with its panel type";
     } else {
       filePanelTags.forEach((tag, i) => {
         if (!tag) errs[`panel_${i}`] = "Select a panel for this image";
       });
-      if (filePanelTags.some((tag) => !tag)) {
+      survivingExisting.forEach((m) => {
+        if (!m.panelTag) errs[`existing_${m.originalIndex}`] = "Select a panel for this image";
+      });
+      if (filePanelTags.some((tag) => !tag) || survivingExisting.some((m) => !m.panelTag)) {
         errs.file = "Each image needs a panel tag";
       }
     }
@@ -259,8 +320,6 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
             ? String(form.zero_angle_frame_index).trim()
             : undefined,
         is_qc_flag: form.is_qc_flag ? "true" : "false",
-        // Ordered 1:1 with uploaded files (primary first, then extras)
-        panel_tags: filePanelTags.join(","),
       };
       delete payload.track;
       if (!form.is_qc_flag) {
@@ -268,9 +327,27 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
         delete payload.qc_reviewer;
         delete payload.qc_decision_rationale;
       }
-      const result = await uploadToLibrary(files, payload);
-      setSuccess(result);
-      if (onSuccess) onSuccess();
+
+      if (isEditMode) {
+        const removeIndices = existingMedia.filter((m) => m.removed).map((m) => m.originalIndex);
+        // Final image order matches the backend: surviving existing first, then new uploads.
+        const panelTags = [...survivingExisting.map((m) => m.panelTag), ...filePanelTags];
+        const result = await updateLibraryEntry(
+          editingImage.image.id,
+          { newFiles: files, panelTags, removeIndices },
+          payload
+        );
+        // No local "success" screen here — the parent (LibraryBrowser)
+        // navigates straight back to the updated detail view, which is
+        // itself the confirmation that the save worked.
+        if (onSuccess) onSuccess(result);
+      } else {
+        // Ordered 1:1 with uploaded files (primary first, then extras)
+        payload.panel_tags = filePanelTags.join(",");
+        const result = await uploadToLibrary(files, payload);
+        setSuccess(result);
+        if (onSuccess) onSuccess();
+      }
     } catch (err) {
       setError(err.message);
     } finally {
@@ -309,11 +386,18 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
     <div className="library-upload">
       <div className="library-browser-header">
         <div>
-          <h2 className="library-browser-title">Add Entry</h2>
+          <h2 className="library-browser-title">{isEditMode ? "Edit Entry" : "Add Entry"}</h2>
           <p className="library-browser-subtitle">
-            Add one or more panel screenshots for the same anomaly — each image needs its own panel tag
+            {isEditMode
+              ? "Update fields or manage this anomaly's images — at least one image must remain"
+              : "Add one or more panel screenshots for the same anomaly — each image needs its own panel tag"}
           </p>
         </div>
+        {isEditMode && (
+          <button type="button" className="btn btn-secondary" onClick={onCancel}>
+            Cancel
+          </button>
+        )}
       </div>
 
       <div
@@ -323,7 +407,9 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
       >
-        <p className="dropzone-text">Drop multiple panel images or click to browse</p>
+        <p className="dropzone-text">
+          {isEditMode ? "Drop more panel images or click to browse" : "Drop multiple panel images or click to browse"}
+        </p>
         <p className="dropzone-formats">
           JPEG, PNG, TIFF, GIF, WebP · tag each image with its panel type below
         </p>
@@ -340,13 +426,56 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
         />
       </div>
 
+      {isEditMode && survivingExisting.length > 0 && (
+        <div className="media-preview-section">
+          <p className="form-hint media-preview-hint">
+            Existing images — remove any, or change a panel tag. At least one image must remain.
+          </p>
+          <div className="media-preview-grid">
+            {survivingExisting.map((m) => (
+              <div
+                key={m.originalIndex}
+                className={`preview-card${fieldErrors[`existing_${m.originalIndex}`] ? " preview-card-error" : ""}`}
+              >
+                <div className="preview-thumb">
+                  <img src={resolveImageUrl(m.url)} alt="" />
+                  {isExistingPrimary(m) && <span className="preview-primary">Primary</span>}
+                  <button
+                    type="button"
+                    className="remove-img"
+                    onClick={() => removeExistingMedia(m.originalIndex)}
+                    aria-label="Remove this image"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <label className="form-label preview-panel-label">
+                  Panel <span className="req">*</span>
+                </label>
+                <select
+                  className={`form-select${fieldErrors[`existing_${m.originalIndex}`] ? " has-error-input" : ""}`}
+                  value={m.panelTag || ""}
+                  onChange={(e) => setExistingPanelTag(m.originalIndex, e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <option value="">— Select panel —</option>
+                  {PANEL_TAG_OPTIONS.map((tag) => (
+                    <option key={tag} value={tag}>{tag}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {previews.length > 0 && (
         <div className="media-preview-section">
           <p className="form-hint media-preview-hint">
             {previews.length === 1
-              ? "1 image — choose which panel it is"
-              : `${previews.length} images — choose a panel tag for each`}
-            . First image is used for CLIP search (Primary).
+              ? "1 new image — choose which panel it is"
+              : `${previews.length} new images — choose a panel tag for each`}
+            {survivingExisting.length === 0 && ". First image is used for CLIP search (Primary)."}
           </p>
           <div className="media-preview-grid">
             {previews.map((p, i) => (
@@ -356,7 +485,7 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
               >
                 <div className="preview-thumb">
                   <img src={p.url} alt={p.name} />
-                  {i === 0 && <span className="preview-primary">Primary</span>}
+                  {isNewFilePrimary(i) && <span className="preview-primary">Primary</span>}
                   <button type="button" className="remove-img" onClick={() => removeFile(i)}>✕</button>
                 </div>
                 <label className="form-label preview-panel-label">
@@ -377,6 +506,10 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
             ))}
           </div>
         </div>
+      )}
+
+      {fieldErrors.file && (
+        <p className="add-run-error" style={{ marginTop: "-8px" }}>{fieldErrors.file}</p>
       )}
 
       {error && (
@@ -620,7 +753,7 @@ export default function LibraryUpload({ onSuccess, onDirtyChange }) {
           disabled={uploading}
           style={{ alignSelf: "flex-end", minWidth: 140 }}
         >
-          {uploading ? "Saving..." : "Save Entry"}
+          {uploading ? "Saving..." : isEditMode ? "Save Changes" : "Save Entry"}
         </button>
       </form>
     </div>

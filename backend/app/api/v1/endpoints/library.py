@@ -1,10 +1,11 @@
 """
-Library upload / browse / delete endpoints.
+Library upload / browse / edit / delete endpoints.
 
-POST /api/v1/library/upload
-GET  /api/v1/library/browse
-GET  /api/v1/library/runs
-POST /api/v1/library/runs
+POST   /api/v1/library/upload
+GET    /api/v1/library/browse
+GET    /api/v1/library/runs
+POST   /api/v1/library/runs
+PUT    /api/v1/library/{image_id}
 DELETE /api/v1/library/{image_id}
 """
 
@@ -318,6 +319,206 @@ async def add_run(
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
     return RunEntry(**entry)
+
+
+def _resolved(raw: Optional[str], existing):
+    """Resolve a raw form value against the existing field value:
+    - field absent from the form (raw is None)  -> keep existing
+    - field present but blank ("")               -> clear to None
+    - field present with a value                  -> use it
+    Lets an edit form always resend every field (so blanking one out is a
+    real "clear this" instead of accidentally reverting to autofill-once
+    upload semantics, where an absent field just means "wasn't set yet").
+    """
+    if raw is None:
+        return existing
+    return raw if raw != "" else None
+
+
+def _resolved_num(raw: Optional[str], existing, cast):
+    if raw is None:
+        return existing
+    if raw == "":
+        return None
+    try:
+        return cast(raw)
+    except ValueError as exc:
+        raise ValidationError(f"Invalid number: {raw!r}") from exc
+
+
+@router.put("/{image_id}", response_model=LibraryUploadResponse)
+async def update_library_entry(
+    image_id: UUID,
+    new_files: list[UploadFile] = File(default=[]),
+    panel_tags: Optional[str] = Form(None),
+    remove_media: Optional[str] = Form(None),
+    anomaly_description: Optional[str] = Form(None),
+    anomaly_status: Optional[str] = Form(None),
+    anomaly_type: Optional[str] = Form(None),
+    identification: Optional[str] = Form(None),
+    wall_location: Optional[str] = Form(None),
+    run_number: Optional[str] = Form(None),
+    analysis_comment: Optional[str] = Form(None),
+    analyst: Optional[str] = Form(None),
+    anomaly_name: Optional[str] = Form(None),
+    classification_status: Optional[str] = Form(None),
+    depth: Optional[str] = Form(None),
+    width: Optional[str] = Form(None),
+    length: Optional[str] = Form(None),
+    is_qc_flag: Optional[bool] = Form(None),
+    qc_raised_by: Optional[str] = Form(None),
+    qc_reviewer: Optional[str] = Form(None),
+    qc_decision_rationale: Optional[str] = Form(None),
+    signal_description: Optional[str] = Form(None),
+    notes: Optional[str] = Form(None),
+    zero_angle_frame_index: Optional[str] = Form(None),
+    track: Optional[str] = Form(None),
+):
+    """Edit an existing library entry's fields and/or its images.
+
+    Media handling: `remove_media` is a comma-separated list of indices
+    into the entry's current [primary, *additional] media list (0 =
+    primary). Those images are removed; `new_files` are appended after
+    the survivors, with `panel_tags` (comma-separated, aligned to the
+    final [survivors..., new...] order) giving every resulting image's
+    panel tag. The resulting entry must end up with at least one image —
+    if it wouldn't, the whole edit is rejected before anything is
+    written or uploaded.
+    """
+    existing = await file_store_service.get_image(image_id)
+    if not existing:
+        raise NotFoundError(
+            f"Image {image_id} not found", details={"image_id": str(image_id)}
+        )
+
+    track_val = _resolved_num(track, existing.track, int)
+    if track_val is not None and (track_val < 0 or track_val > 21):
+        raise ValidationError("Track must be an integer between 0 and 21.")
+
+    current_paths = [existing.image_path, *(existing.additional_image_paths or [])]
+
+    remove_indices: set[int] = set()
+    if remove_media:
+        for tok in remove_media.split(","):
+            tok = tok.strip()
+            if tok.isdigit():
+                remove_indices.add(int(tok))
+
+    surviving = [
+        p for i, p in enumerate(current_paths) if i not in remove_indices
+    ]
+
+    if not surviving and not new_files:
+        raise ValidationError(
+            "An anomaly must have at least one image — add a replacement "
+            "before removing the last one."
+        )
+
+    new_paths: list[str] = []
+    for f in new_files:
+        ext = CONTENT_TYPE_EXT.get(f.content_type or "", ".jpg")
+        path = f"library/{image_id}_{uuid4().hex[:8]}{ext}"
+        await _store_upload(f, path)
+        new_paths.append(path)
+
+    final_paths = surviving + new_paths
+    final_tags: list[Optional[str]] = (
+        [t.strip() or None for t in panel_tags.split(",")] if panel_tags else []
+    )
+    if len(final_tags) < len(final_paths):
+        final_tags += [None] * (len(final_paths) - len(final_tags))
+    final_tags = final_tags[: len(final_paths)]
+
+    # Now that we know the edit is going through, remove the files that
+    # dropped out (do this after storing new uploads, so a mid-request
+    # failure never leaves an entry with zero retrievable images).
+    removed_paths = [p for i, p in enumerate(current_paths) if i in remove_indices]
+    for p in removed_paths:
+        try:
+            await local_storage_service.delete_image(p)
+        except Exception:
+            pass
+
+    new_primary_path = final_paths[0]
+    new_additional_paths = final_paths[1:]
+
+    if new_primary_path != existing.image_path:
+        primary_bytes = await local_storage_service.get_image(new_primary_path)
+        embedding = await embedding_service.get_embedding(primary_bytes)
+        rerank_embedding = None
+        if settings.rerank_enabled and rerank_embedding_service.health_check():
+            rerank_embedding = await rerank_embedding_service.get_embedding(primary_bytes)
+        embedding_model = embedding_service.model_tag
+        rerank_embedding_model = (
+            rerank_embedding_service.model_tag if rerank_embedding is not None else None
+        )
+    else:
+        # Primary image unchanged — carry the existing embedding forward
+        # rather than recomputing it (same bytes, same vector).
+        raw = await file_store_service.get_raw_record(image_id)
+        embedding = raw.get("embedding") if raw else None
+        rerank_embedding = raw.get("rerank_embedding") if raw else None
+        embedding_model = raw.get("embedding_model") if raw else None
+        rerank_embedding_model = raw.get("rerank_embedding_model") if raw else None
+        if embedding is None:
+            primary_bytes = await local_storage_service.get_image(new_primary_path)
+            embedding = await embedding_service.get_embedding(primary_bytes)
+            embedding_model = embedding_service.model_tag
+
+    updated = Image(
+        id=existing.id,
+        dataset_source=existing.dataset_source,
+        image_path=new_primary_path,
+        anomaly_description=_resolved(anomaly_description, existing.anomaly_description),
+        anomaly_status=_resolved(anomaly_status, existing.anomaly_status),
+        anomaly_type=_resolved(anomaly_type, existing.anomaly_type),
+        identification=_resolved(identification, existing.identification),
+        wall_location=_resolved(wall_location, existing.wall_location),
+        run_number=_resolved(run_number, existing.run_number),
+        analysis_comment=_resolved(analysis_comment, existing.analysis_comment),
+        analyst=_resolved(analyst, existing.analyst),
+        anomaly_name=_resolved(anomaly_name, existing.anomaly_name),
+        classification_status=_resolved(classification_status, existing.classification_status),
+        depth=_resolved_num(depth, existing.depth, float),
+        width=_resolved_num(width, existing.width, float),
+        length=_resolved_num(length, existing.length, float),
+        is_qc_flag=is_qc_flag if is_qc_flag is not None else existing.is_qc_flag,
+        qc_raised_by=_resolved(qc_raised_by, existing.qc_raised_by),
+        qc_reviewer=_resolved(qc_reviewer, existing.qc_reviewer),
+        qc_decision_rationale=_resolved(qc_decision_rationale, existing.qc_decision_rationale),
+        signal_description=_resolved(signal_description, existing.signal_description),
+        notes=_resolved(notes, existing.notes),
+        panel_tags=final_tags,
+        zero_angle_frame_index=_resolved_num(
+            zero_angle_frame_index, existing.zero_angle_frame_index, int
+        ),
+        track=track_val,
+        additional_image_paths=new_additional_paths,
+        created_at=existing.created_at,
+    )
+
+    await file_store_service.upsert_image(
+        updated,
+        embedding,
+        rerank_embedding,
+        embedding_model=embedding_model,
+        rerank_embedding_model=rerank_embedding_model,
+    )
+
+    await event_log_service.log_event(
+        "update",
+        image_id=str(image_id),
+        media_count=len(final_paths),
+        primary_changed=new_primary_path != existing.image_path,
+    )
+
+    media = _media_urls(image_id, updated)
+    return LibraryUploadResponse(
+        image=ImageResponse.model_validate(updated),
+        image_url=media[0],
+        media_urls=media,
+        message="Entry updated",
+    )
 
 
 @router.delete("/{image_id}")

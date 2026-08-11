@@ -51,7 +51,21 @@
       "PowerShell([Environment]::GetFolderPath\\('Desktop'\\))",
       "Bash(curl -s http://127.0.0.1:4040/api/tunnels --max-time 3)",
       "Bash(curl -s http://localhost:8001/)",
-      "Bash(curl -s -o /dev/null -w \"backend: %{http_code}\\\\n\" http://localhost:8001/api/v1/health --max-time 3)"
+      "Bash(curl -s -o /dev/null -w \"backend: %{http_code}\\\\n\" http://localhost:8001/api/v1/health --max-time 3)",
+      "Bash(taskkill //PID 13792 //F)",
+      "Bash(taskkill //PID 24580 //F)",
+      "Bash(curl -s -w \"\\\\nHTTP:%{http_code}\\\\n\" -u \"coop:anomalylibrary\" https://thinness-dividers-decal.ngrok-free.dev/api/v1/health --max-time 10)",
+      "Bash(node -e ' *)",
+      "Bash(npx vite *)",
+      "Bash(taskkill //PID 33012 //F)",
+      "Bash(taskkill //PID 27432 //F)",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/library/upload -F 'files=@edit_test_a.jpg;type=image/jpeg' -F 'files=@edit_test_b.jpg;type=image/jpeg' -F 'anomaly_name=Edit Test Entry' -F analyst=edit-test -F 'panel_tags=Image Panel,Beamforming Panel')",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/b5ecb1d2-92ec-478a-86b2-5ef4c8e7296c -F 'anomaly_name=Edited Name' -F analyst=edit-test -F 'notes=Added a note' -F 'panel_tags=Image Panel,Beamforming Panel')",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/b5ecb1d2-92ec-478a-86b2-5ef4c8e7296c -F remove_media=0,1)",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/b5ecb1d2-92ec-478a-86b2-5ef4c8e7296c -F remove_media=0 -F 'panel_tags=Beamforming Panel,Image Panel' -F 'new_files=@edit_test_c.jpg;type=image/jpeg')",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/search/similar -F \"file=@edit_test_b.jpg;type=image/jpeg\")",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X DELETE http://localhost:8001/api/v1/library/b5ecb1d2-92ec-478a-86b2-5ef4c8e7296c -H 'X-Delete-Passkey: admin123')",
+      "Bash(rm -f edit_test_a.jpg edit_test_b.jpg edit_test_c.jpg)"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

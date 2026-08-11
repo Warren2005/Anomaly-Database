@@ -26,13 +26,21 @@ class Image:
     anomaly_description: Optional[str] = None
     anomaly_status: Optional[str] = None
     anomaly_type: Optional[str] = None
+    # A reusable, catalog-style category label — not free-form per entry.
+    # New values are simply whatever hasn't been typed before (see
+    # /api/v1/images/filters' `identifications`, sourced from
+    # FileStoreService.get_distinct("identification")); no separate admin
+    # step needed to "add" one, unlike the Run catalog.
     identification: Optional[str] = None
+    # Unique human-entered identifier for this specific anomaly (distinct
+    # from `id`, the internal UUID) — enforced unique at the API layer via
+    # FileStoreService.find_by_anomaly_id().
+    anomaly_id: Optional[str] = None
     wall_location: Optional[str] = None
     run_number: Optional[str] = None
     analysis_comment: Optional[str] = None
     analyst: Optional[str] = None
     # Zach / ILI reference-library fields
-    anomaly_name: Optional[str] = None
     classification_status: Optional[str] = None
     depth: Optional[float] = None
     width: Optional[float] = None

@@ -36,6 +36,7 @@ class FiltersResponse(BaseModel):
     run_numbers: list[str] = []
     anomaly_statuses: list[str] = []
     classification_statuses: list[str] = []
+    identifications: list[str] = []
 
 
 class LibraryBrowseResponse(BaseModel):

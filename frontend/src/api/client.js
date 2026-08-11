@@ -200,7 +200,9 @@ export async function uploadToLibrary(files, metadata) {
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Upload failed: ${response.status}`);
+    const error = new Error(err?.error?.message || `Upload failed: ${response.status}`);
+    error.details = err?.error?.details;
+    throw error;
   }
   return response.json();
 }
@@ -229,7 +231,9 @@ export async function updateLibraryEntry(
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Update failed: ${response.status}`);
+    const error = new Error(err?.error?.message || `Update failed: ${response.status}`);
+    error.details = err?.error?.details;
+    throw error;
   }
   return response.json();
 }

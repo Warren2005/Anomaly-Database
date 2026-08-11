@@ -86,11 +86,11 @@ async def upload_to_library(
     anomaly_status: Optional[str] = Form(None),
     anomaly_type: Optional[str] = Form(None),
     identification: Optional[str] = Form(None),
+    anomaly_id: Optional[str] = Form(None),
     wall_location: Optional[str] = Form(None),
     run_number: Optional[str] = Form(None),
     analysis_comment: Optional[str] = Form(None),
     analyst: Optional[str] = Form(None),
-    anomaly_name: Optional[str] = Form(None),
     classification_status: Optional[str] = Form(None),
     depth: Optional[float] = Form(None),
     width: Optional[float] = Form(None),
@@ -111,6 +111,19 @@ async def upload_to_library(
 
     if track is not None and (track < 0 or track > 21):
         raise ValidationError("Track must be an integer between 0 and 21.")
+
+    if not identification or not identification.strip():
+        raise ValidationError("Anomaly Identification is required.")
+    if not anomaly_id or not anomaly_id.strip():
+        raise ValidationError("Anomaly ID is required.")
+    anomaly_id = anomaly_id.strip()
+    identification = identification.strip()
+
+    if await file_store_service.find_by_anomaly_id(anomaly_id):
+        raise ValidationError(
+            f"Anomaly ID '{anomaly_id}' is already in use by another entry.",
+            details={"field": "anomaly_id"},
+        )
 
     parsed_tags: list[str] = []
     if panel_tags:
@@ -151,11 +164,11 @@ async def upload_to_library(
         anomaly_status=anomaly_status,
         anomaly_type=anomaly_type,
         identification=identification,
+        anomaly_id=anomaly_id,
         wall_location=wall_location,
         run_number=run_number,
         analysis_comment=analysis_comment,
         analyst=analyst,
-        anomaly_name=anomaly_name,
         classification_status=classification_status,
         depth=depth,
         width=width,
@@ -184,6 +197,7 @@ async def upload_to_library(
     await event_log_service.log_event(
         "upload",
         image_id=str(image_id),
+        anomaly_id=anomaly_id,
         analyst=analyst,
         anomaly_type=anomaly_type,
         media_count=len(files),
@@ -264,7 +278,7 @@ async def browse_library(
                 filter(
                     None,
                     [
-                        img.anomaly_name,
+                        img.anomaly_id,
                         img.anomaly_description,
                         img.signal_description,
                         img.identification,
@@ -356,11 +370,11 @@ async def update_library_entry(
     anomaly_status: Optional[str] = Form(None),
     anomaly_type: Optional[str] = Form(None),
     identification: Optional[str] = Form(None),
+    anomaly_id: Optional[str] = Form(None),
     wall_location: Optional[str] = Form(None),
     run_number: Optional[str] = Form(None),
     analysis_comment: Optional[str] = Form(None),
     analyst: Optional[str] = Form(None),
-    anomaly_name: Optional[str] = Form(None),
     classification_status: Optional[str] = Form(None),
     depth: Optional[str] = Form(None),
     width: Optional[str] = Form(None),
@@ -402,6 +416,23 @@ async def update_library_entry(
     track_val = _resolved_num(track, existing.track, int)
     if track_val is not None and (track_val < 0 or track_val > 21):
         raise ValidationError("Track must be an integer between 0 and 21.")
+
+    identification_val = _resolved(identification, existing.identification)
+    if not identification_val or not identification_val.strip():
+        raise ValidationError("Anomaly Identification is required.")
+    identification_val = identification_val.strip()
+
+    anomaly_id_val = _resolved(anomaly_id, existing.anomaly_id)
+    if not anomaly_id_val or not anomaly_id_val.strip():
+        raise ValidationError("Anomaly ID is required.")
+    anomaly_id_val = anomaly_id_val.strip()
+
+    conflict = await file_store_service.find_by_anomaly_id(anomaly_id_val, exclude_id=image_id)
+    if conflict:
+        raise ValidationError(
+            f"Anomaly ID '{anomaly_id_val}' is already in use by another entry.",
+            details={"field": "anomaly_id"},
+        )
 
     current_paths = [existing.image_path, *(existing.additional_image_paths or [])]
 
@@ -483,12 +514,12 @@ async def update_library_entry(
         anomaly_description=_resolved(anomaly_description, existing.anomaly_description),
         anomaly_status=_resolved(anomaly_status, existing.anomaly_status),
         anomaly_type=_resolved(anomaly_type, existing.anomaly_type),
-        identification=_resolved(identification, existing.identification),
+        identification=identification_val,
+        anomaly_id=anomaly_id_val,
         wall_location=_resolved(wall_location, existing.wall_location),
         run_number=_resolved(run_number, existing.run_number),
         analysis_comment=_resolved(analysis_comment, existing.analysis_comment),
         analyst=_resolved(analyst, existing.analyst),
-        anomaly_name=_resolved(anomaly_name, existing.anomaly_name),
         classification_status=_resolved(classification_status, existing.classification_status),
         depth=_resolved_num(depth, existing.depth, float),
         width=_resolved_num(width, existing.width, float),

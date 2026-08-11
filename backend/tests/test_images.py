@@ -65,6 +65,7 @@ class TestGetFilters:
                     ["Run 42"],                     # run_number
                     ["Approved"],                   # anomaly_status
                     ["Confirmed", "Edge Case"],     # classification_status
+                    ["Corrosion Pitting", "Dent"],  # identification
                 ]
             )
 
@@ -81,6 +82,7 @@ class TestGetFilters:
             assert data["run_numbers"] == ["Run 42"]
             assert data["anomaly_statuses"] == ["Approved"]
             assert "Confirmed" in data["classification_statuses"]
+            assert "Corrosion Pitting" in data["identifications"]
 
 
 class TestGetImageMedia:

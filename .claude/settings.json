@@ -71,7 +71,12 @@
       "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/a8bd152b-88ba-4dad-88ad-abf62ffe2390 -F anomaly_name=Hacked)",
       "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/a8bd152b-88ba-4dad-88ad-abf62ffe2390 -F anomaly_name=Hacked -H 'X-Delete-Passkey: wrong')",
       "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/a8bd152b-88ba-4dad-88ad-abf62ffe2390 -F 'anomaly_name=Correctly Edited' -H 'X-Delete-Passkey: admin123')",
-      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/a8bd152b-88ba-4dad-88ad-abf62ffe2390 -F 'anomaly_name=Final Edit' -F 'panel_tags=Beamforming Panel' -H 'X-Delete-Passkey: admin123')"
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/a8bd152b-88ba-4dad-88ad-abf62ffe2390 -F 'anomaly_name=Final Edit' -F 'panel_tags=Beamforming Panel' -H 'X-Delete-Passkey: admin123')",
+      "Bash(grep -n \"const \\\\[runs, setRuns\\\\]\\\\|refreshRuns\\\\|useEffect\\(\\(\\) => {\" src/components/LibraryUpload.jsx)",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/library/upload -F 'files=@field_test.jpg;type=image/jpeg' -F 'identification=Corrosion Pitting' -F anomaly_id=FIELD-TEST-001 -F analyst=field-test)",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X POST http://localhost:8001/api/v1/library/upload -F 'files=@field_test.jpg;type=image/jpeg' -F 'identification=Different Category' -F anomaly_id=FIELD-TEST-001 -F analyst=field-test-2)",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X POST http://localhost:8001/api/v1/library/upload -F 'files=@field_test.jpg;type=image/jpeg' -F 'identification=Different Category' -F anomaly_id=field-test-001)",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/dc50eadf-cac3-451b-bc35-fe539f6e560d -F 'identification=Corrosion Pitting' -F anomaly_id=FIELD-TEST-001 -F analysis_comment=edited -H 'X-Delete-Passkey: admin123')"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

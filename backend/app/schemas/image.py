@@ -19,11 +19,11 @@ class ImageBase(BaseModel):
     anomaly_status: Optional[str] = None
     anomaly_type: Optional[str] = None
     identification: Optional[str] = None
+    anomaly_id: Optional[str] = None
     wall_location: Optional[str] = None
     run_number: Optional[str] = None
     analysis_comment: Optional[str] = None
     analyst: Optional[str] = None
-    anomaly_name: Optional[str] = None
     classification_status: Optional[str] = None
     depth: Optional[float] = None
     width: Optional[float] = None

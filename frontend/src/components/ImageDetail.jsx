@@ -63,7 +63,7 @@ export default function ImageDetail({
   }, [canNavigate, hasPrev, hasNext, onPrev, onNext]);
 
   const title =
-    image.anomaly_name ||
+    image.identification ||
     image.anomaly_description ||
     image.diagnosis ||
     "Image Details";
@@ -297,6 +297,8 @@ export default function ImageDetail({
 
           <table className="detail-table">
             <tbody>
+              <DetailRow label="Anomaly ID" value={image.anomaly_id} />
+              <DetailRow label="Identification" value={image.identification} />
               <DetailRow label="Anomaly Type" value={image.anomaly_type} />
               <DetailRow label="Run" value={image.run_number} />
               <DetailRow label="ZeroAngle Frame Index" value={image.zero_angle_frame_index} />

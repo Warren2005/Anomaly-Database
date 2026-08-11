@@ -188,6 +188,25 @@ class FileStoreService:
         instead of needing a recompute."""
         return await asyncio.to_thread(self._get_raw_record_sync, image_id)
 
+    def _find_by_anomaly_id_sync(
+        self, anomaly_id: str, exclude_id: Optional[UUID] = None
+    ) -> Optional[Image]:
+        needle = anomaly_id.strip().lower()
+        for r in self._read_json(self._images_file):
+            if exclude_id is not None and r["id"] == str(exclude_id):
+                continue
+            if str(r.get("anomaly_id") or "").strip().lower() == needle:
+                return _record_to_image(r)
+        return None
+
+    async def find_by_anomaly_id(
+        self, anomaly_id: str, exclude_id: Optional[UUID] = None
+    ) -> Optional[Image]:
+        """Case-insensitive lookup for enforcing anomaly_id uniqueness.
+        `exclude_id` lets an edit check uniqueness against every *other*
+        record without tripping over the record's own unchanged value."""
+        return await asyncio.to_thread(self._find_by_anomaly_id_sync, anomaly_id, exclude_id)
+
     def _upsert_image_sync(
         self,
         image: Image,

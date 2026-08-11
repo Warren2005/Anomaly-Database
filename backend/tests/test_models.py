@@ -15,10 +15,10 @@ def test_image_model_fields():
         "tissue_type", "benign_malignant", "age", "sex",
         "created_at", "updated_at",
         "anomaly_description", "anomaly_status", "anomaly_type",
-        "identification", "wall_location", "run_number",
+        "identification", "anomaly_id", "wall_location", "run_number",
         "analysis_comment", "analyst",
         # ILI / Zach reference-library fields
-        "anomaly_name", "classification_status",
+        "classification_status",
         "depth", "width", "length",
         "is_qc_flag", "qc_raised_by", "qc_reviewer", "qc_decision_rationale",
         "signal_description", "notes", "panel_tags",

@@ -221,7 +221,7 @@ export default function LibraryBrowser() {
                 id="browse-filter-q"
                 className="form-input"
                 type="search"
-                placeholder="Comments, notes, anomaly name…"
+                placeholder="Comments, notes, Anomaly ID, identification…"
                 value={filters.q}
                 onChange={(e) => setFilter("q", e.target.value)}
               />
@@ -345,15 +345,16 @@ export default function LibraryBrowser() {
               >
                 <img
                   src={resolveImageUrl(item.image_url)}
-                  alt={img.anomaly_name || "Library entry"}
+                  alt={img.identification || "Library entry"}
                   className="result-image"
                   loading="lazy"
                 />
                 <div className="result-info">
                   <div className="result-diagnosis">
-                    {img.anomaly_name || img.anomaly_description || "Untitled"}
+                    {img.identification || img.anomaly_description || "Untitled"}
                   </div>
                   <div className="result-info-row">
+                    {img.anomaly_id && <span className="badge">{img.anomaly_id}</span>}
                     {img.anomaly_type && (
                       <span className="badge badge-anomaly">{img.anomaly_type}</span>
                     )}

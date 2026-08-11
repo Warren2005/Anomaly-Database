@@ -30,6 +30,11 @@ async def get_filters():
     run_numbers = await file_store_service.get_distinct("run_number")
     anomaly_statuses = await file_store_service.get_distinct("anomaly_status")
     classification_statuses = await file_store_service.get_distinct("classification_status")
+    # Growing catalog for the "Anomaly Identification" dropdown — whatever
+    # values have actually been used across entries so far. Grows on its
+    # own as people fill in new ones; no separate admin "add" step needed
+    # (unlike the Run catalog, which is more deliberately curated).
+    identifications = await file_store_service.get_distinct("identification")
 
     return FiltersResponse(
         diagnoses=diagnoses,
@@ -39,6 +44,7 @@ async def get_filters():
         run_numbers=run_numbers,
         anomaly_statuses=anomaly_statuses,
         classification_statuses=classification_statuses,
+        identifications=identifications,
     )
 
 

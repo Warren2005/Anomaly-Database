@@ -51,12 +51,15 @@ export default function ResultsGrid({ results, onResultClick, queryImageId }) {
               <div className="result-score">
                 {(result.similarity_score * 100).toFixed(1)}% match
               </div>
-              {result.image.anomaly_name || result.image.diagnosis ? (
+              {result.image.identification || result.image.diagnosis ? (
                 <div className="result-diagnosis">
-                  {result.image.anomaly_name || result.image.diagnosis}
+                  {result.image.identification || result.image.diagnosis}
                 </div>
               ) : null}
               <div className="result-info-row">
+                {result.image.anomaly_id && (
+                  <span className="badge">{result.image.anomaly_id}</span>
+                )}
                 {result.image.anomaly_type && (
                   <span className="badge badge-anomaly">
                     {result.image.anomaly_type}

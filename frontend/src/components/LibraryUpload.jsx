@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { uploadToLibrary, updateLibraryEntry, getRuns, addRun, resolveImageUrl } from "../api/client";
+import { uploadToLibrary, updateLibraryEntry, getRuns, addRun, getFilters, resolveImageUrl } from "../api/client";
 import {
   ANOMALY_TYPES,
   CLASSIFICATION_STATUS_OPTIONS,
@@ -18,7 +18,8 @@ const FALLBACK_RUNS = RUN_OPTIONS.map((run) => ({
 }));
 
 const EMPTY_FORM = {
-  anomaly_name: "",
+  identification: "",
+  anomaly_id: "",
   anomaly_description: "",
   signal_description: "",
   classification_status: "",
@@ -40,7 +41,8 @@ const EMPTY_FORM = {
 function formFromImage(image) {
   if (!image) return EMPTY_FORM;
   return {
-    anomaly_name: image.anomaly_name || "",
+    identification: image.identification || "",
+    anomaly_id: image.anomaly_id || "",
     anomaly_description: image.anomaly_description || "",
     signal_description: image.signal_description || "",
     classification_status: image.classification_status || "",
@@ -87,6 +89,7 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   const [fieldErrors, setFieldErrors] = useState({});
   const [editPasskey, setEditPasskey] = useState("");
   const [runs, setRuns] = useState(FALLBACK_RUNS);
+  const [identificationOptions, setIdentificationOptions] = useState([]);
   const [showAddRun, setShowAddRun] = useState(false);
   const [newRunName, setNewRunName] = useState("");
   const [newRunId, setNewRunId] = useState("");
@@ -125,6 +128,15 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   useEffect(() => {
     refreshRuns();
   }, [refreshRuns]);
+
+  useEffect(() => {
+    // Growing catalog for the Anomaly Identification dropdown — whatever
+    // values have been used across entries so far. No admin gate needed:
+    // typing a new one here is itself what "adds" it for next time.
+    getFilters()
+      .then((data) => setIdentificationOptions(data.identifications || []))
+      .catch(() => {});
+  }, []);
 
   const runIdFor = useCallback(
     (run) => {
@@ -268,7 +280,8 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
     if (isEditMode && !editPasskey) errs.editPasskey = "Passkey required to save changes";
     if (!form.anomaly_type) errs.anomaly_type = "Required";
     if (!form.run_number.trim()) errs.run_number = "Required";
-    if (!form.anomaly_name.trim()) errs.anomaly_name = "Required";
+    if (!form.identification.trim()) errs.identification = "Required";
+    if (!form.anomaly_id.trim()) errs.anomaly_id = "Required";
     if (!form.classification_status) errs.classification_status = "Required";
     if (!form.analyst.trim()) errs.analyst = "Required";
     if (survivingExisting.length + files.length === 0) {
@@ -353,6 +366,9 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
       }
     } catch (err) {
       setError(err.message);
+      if (err.details?.field) {
+        setFieldErrors((prev) => ({ ...prev, [err.details.field]: err.message }));
+      }
       if (isEditMode) setEditPasskey("");
     } finally {
       setUploading(false);
@@ -626,26 +642,47 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
 
         <div className="form-row">
           <div className="form-field">
-            <label className="form-label">Anomaly Name <span className="req">*</span></label>
+            <label className="form-label">Anomaly Identification <span className="req">*</span></label>
             <input
-              className={`form-input${fieldErrors.anomaly_name ? " has-error-input" : ""}`}
+              className={`form-input${fieldErrors.identification ? " has-error-input" : ""}`}
               type="text"
-              placeholder="Short descriptive name"
-              value={form.anomaly_name}
-              onChange={(e) => handleFormChange("anomaly_name", e.target.value)}
+              list="identification-options"
+              placeholder="e.g. Corrosion Pitting"
+              value={form.identification}
+              onChange={(e) => handleFormChange("identification", e.target.value)}
+              autoComplete="off"
             />
+            <datalist id="identification-options">
+              {identificationOptions.map((opt) => <option key={opt} value={opt} />)}
+            </datalist>
+            <p className="form-hint">
+              Reusable category — pick an existing one or type a new one to add it
+            </p>
           </div>
           <div className="form-field">
-            <label className="form-label">Classification Status <span className="req">*</span></label>
-            <select
-              className={`form-select${fieldErrors.classification_status ? " has-error-input" : ""}`}
-              value={form.classification_status}
-              onChange={(e) => handleFormChange("classification_status", e.target.value)}
-            >
-              <option value="">— Select —</option>
-              {CLASSIFICATION_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
+            <label className="form-label">Anomaly ID <span className="req">*</span></label>
+            <input
+              className={`form-input${fieldErrors.anomaly_id ? " has-error-input" : ""}`}
+              type="text"
+              placeholder="Unique ID for this anomaly"
+              value={form.anomaly_id}
+              onChange={(e) => handleFormChange("anomaly_id", e.target.value)}
+              autoComplete="off"
+            />
+            <p className="form-hint">Must be unique — no two anomalies can share this ID</p>
           </div>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">Classification Status <span className="req">*</span></label>
+          <select
+            className={`form-select${fieldErrors.classification_status ? " has-error-input" : ""}`}
+            value={form.classification_status}
+            onChange={(e) => handleFormChange("classification_status", e.target.value)}
+          >
+            <option value="">— Select —</option>
+            {CLASSIFICATION_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+          </select>
         </div>
 
         <div className="form-field">

@@ -102,6 +102,7 @@ async def upload_to_library(
     signal_description: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     panel_tags: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
     zero_angle_frame_index: Optional[int] = Form(None),
     track: Optional[int] = Form(None),
 ):
@@ -133,6 +134,8 @@ async def upload_to_library(
             if t.strip()
         ]
     # Ordered 1:1 with media files when provided that way (primary, then extras).
+
+    parsed_anomaly_tags = _parse_tag_list(tags)
 
     image_id = uuid4()
     primary = files[0]
@@ -180,6 +183,7 @@ async def upload_to_library(
         signal_description=signal_description,
         notes=notes,
         panel_tags=parsed_tags,
+        tags=parsed_anomaly_tags,
         zero_angle_frame_index=zero_angle_frame_index,
         track=track,
         additional_image_paths=additional_paths,
@@ -289,6 +293,7 @@ async def browse_library(
                         img.anomaly_type,
                         img.qc_decision_rationale,
                         " ".join(img.panel_tags or []),
+                        " ".join(img.tags or []),
                     ],
                 )
             ).lower()
@@ -333,6 +338,27 @@ async def add_run(
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
     return RunEntry(**entry)
+
+
+def _parse_tag_list(raw: Optional[str]) -> list[str]:
+    """Comma-separated tags -> a clean, case-insensitively-deduped list,
+    preserving the first-seen casing. Always authoritative (the caller —
+    the edit form especially — is expected to resend the complete current
+    list on every save, same convention as panel_tags), so there's no
+    None-vs-blank ambiguity to resolve here: nothing/blank just means "no
+    tags," on both create and edit.
+    """
+    if not raw:
+        return []
+    seen: set[str] = set()
+    result: list[str] = []
+    for t in raw.split(","):
+        t = t.strip()
+        if not t or t.lower() in seen:
+            continue
+        seen.add(t.lower())
+        result.append(t)
+    return result
 
 
 def _resolved(raw: Optional[str], existing):
@@ -385,6 +411,7 @@ async def update_library_entry(
     qc_decision_rationale: Optional[str] = Form(None),
     signal_description: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
+    tags: Optional[str] = Form(None),
     zero_angle_frame_index: Optional[str] = Form(None),
     track: Optional[str] = Form(None),
     x_delete_passkey: Optional[str] = Header(default=None),
@@ -531,6 +558,7 @@ async def update_library_entry(
         signal_description=_resolved(signal_description, existing.signal_description),
         notes=_resolved(notes, existing.notes),
         panel_tags=final_tags,
+        tags=_parse_tag_list(tags),
         zero_angle_frame_index=_resolved_num(
             zero_angle_frame_index, existing.zero_angle_frame_index, int
         ),

@@ -90,6 +90,9 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   const [editPasskey, setEditPasskey] = useState("");
   const [runs, setRuns] = useState(FALLBACK_RUNS);
   const [identificationOptions, setIdentificationOptions] = useState([]);
+  const [tagOptions, setTagOptions] = useState([]);
+  const [selectedTags, setSelectedTags] = useState(() => editingImage?.image?.tags || []);
+  const [tagInput, setTagInput] = useState("");
   const [showAddRun, setShowAddRun] = useState(false);
   const [newRunName, setNewRunName] = useState("");
   const [newRunId, setNewRunId] = useState("");
@@ -100,11 +103,15 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
 
   const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
 
+  const [initialTags] = useState(() => editingImage?.image?.tags || []);
+
   const isDirty = !success && (
     files.length > 0
     || filePanelTags.some(Boolean)
     || showAddRun
     || existingMedia.some((m) => m.removed)
+    || selectedTags.length !== initialTags.length
+    || selectedTags.some((t) => !initialTags.includes(t))
     || Object.keys(EMPTY_FORM).some((key) => form[key] !== initialForm[key])
   );
 
@@ -130,12 +137,33 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   }, [refreshRuns]);
 
   useEffect(() => {
-    // Growing catalog for the Anomaly Identification dropdown — whatever
-    // values have been used across entries so far. No admin gate needed:
-    // typing a new one here is itself what "adds" it for next time.
+    // Growing catalogs for the Anomaly Identification and Tags fields —
+    // whatever values have been used across entries so far. No admin gate
+    // needed: typing a new one here is itself what "adds" it for next time.
     getFilters()
-      .then((data) => setIdentificationOptions(data.identifications || []))
+      .then((data) => {
+        setIdentificationOptions(data.identifications || []);
+        setTagOptions(data.tags || []);
+      })
       .catch(() => {});
+  }, []);
+
+  const commitTag = useCallback((raw) => {
+    const tag = raw.trim();
+    if (!tag) return;
+    setSelectedTags((prev) =>
+      prev.some((t) => t.toLowerCase() === tag.toLowerCase()) ? prev : [...prev, tag]
+    );
+    setTagOptions((prev) =>
+      prev.some((t) => t.toLowerCase() === tag.toLowerCase())
+        ? prev
+        : [...prev, tag].sort((a, b) => a.localeCompare(b))
+    );
+    setTagInput("");
+  }, []);
+
+  const removeTag = useCallback((tag) => {
+    setSelectedTags((prev) => prev.filter((t) => t !== tag));
   }, []);
 
   const runIdFor = useCallback(
@@ -335,6 +363,7 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
             ? String(form.zero_angle_frame_index).trim()
             : undefined,
         is_qc_flag: form.is_qc_flag ? "true" : "false",
+        tags: selectedTags.join(","),
       };
       delete payload.track;
       if (!form.is_qc_flag) {
@@ -380,6 +409,8 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
     setFilePanelTags([]);
     setPreviews([]);
     setForm(EMPTY_FORM);
+    setSelectedTags([]);
+    setTagInput("");
     setSuccess(null);
     setError(null);
     setFieldErrors({});
@@ -683,6 +714,57 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
             <option value="">— Select —</option>
             {CLASSIFICATION_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
           </select>
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">Tags <span className="opt">optional</span></label>
+          <input
+            className="form-input"
+            type="text"
+            list="tag-options"
+            placeholder="Type a tag and press Enter, or pick one below"
+            value={tagInput}
+            onChange={(e) => {
+              const val = e.target.value;
+              setTagInput(val);
+              // Clicking a native <datalist> suggestion sets the value
+              // directly to an existing option — commit right away rather
+              // than making the user press Enter too.
+              if (tagOptions.some((t) => t.toLowerCase() === val.toLowerCase())) {
+                commitTag(val);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitTag(tagInput);
+              }
+            }}
+            autoComplete="off"
+          />
+          <datalist id="tag-options">
+            {tagOptions.map((opt) => <option key={opt} value={opt} />)}
+          </datalist>
+          <p className="form-hint">
+            Pick an existing tag or type a new one — new tags are added for everyone to reuse
+          </p>
+          {selectedTags.length > 0 && (
+            <div className="tag-chip-row">
+              {selectedTags.map((t) => (
+                <span key={t} className="badge badge-panel tag-chip">
+                  {t}
+                  <button
+                    type="button"
+                    className="tag-chip-remove"
+                    onClick={() => removeTag(t)}
+                    aria-label={`Remove tag ${t}`}
+                  >
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
         </div>
 
         <div className="form-field">

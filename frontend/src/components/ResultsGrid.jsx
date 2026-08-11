@@ -68,6 +68,9 @@ export default function ResultsGrid({ results, onResultClick, queryImageId }) {
                 {panelTags.map((tag) => (
                   <span key={tag} className="badge badge-panel">{tag}</span>
                 ))}
+                {(result.image.tags || []).map((tag) => (
+                  <span key={tag} className="badge">{tag}</span>
+                ))}
                 {result.image.run_number && (
                   <span className="badge">{result.image.run_number}</span>
                 )}

@@ -68,6 +68,9 @@ class TestGetFilters:
                     ["Corrosion Pitting", "Dent"],  # identification
                 ]
             )
+            mock_store.get_distinct_list_field = AsyncMock(
+                return_value=["High Priority", "Reviewed"]  # tags
+            )
 
             client = TestClient(app)
             response = client.get("/api/v1/images/filters")
@@ -83,6 +86,7 @@ class TestGetFilters:
             assert data["anomaly_statuses"] == ["Approved"]
             assert "Confirmed" in data["classification_statuses"]
             assert "Corrosion Pitting" in data["identifications"]
+            assert "High Priority" in data["tags"]
 
 
 class TestGetImageMedia:

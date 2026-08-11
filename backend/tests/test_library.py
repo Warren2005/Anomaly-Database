@@ -356,6 +356,109 @@ class TestUploadLibraryEntry:
             assert response.json()["image"]["anomaly_id"] == "PIT-2026-001"
             assert response.json()["image"]["identification"] == "Corrosion Pitting"
 
+    def test_upload_parses_and_dedupes_tags(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data=self._valid_data(tags="High Priority, reviewed, High priority, "),
+                files={"files": ("a.jpg", b"fake-bytes", "image/jpeg")},
+            )
+
+            assert response.status_code == 200
+            # Case-insensitively deduped (first-seen casing kept), blanks dropped
+            assert response.json()["image"]["tags"] == ["High Priority", "reviewed"]
+
+    def test_upload_with_no_tags_defaults_to_empty_list(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data=self._valid_data(),
+                files={"files": ("a.jpg", b"fake-bytes", "image/jpeg")},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["image"]["tags"] == []
+
+
+class TestUpdateLibraryEntryTags:
+    def test_update_replaces_tags_with_submitted_list(self):
+        image_id = uuid4()
+        existing = _make_image(image_id, tags=["Old Tag"])
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service"),
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={"tags": "New Tag, Another Tag"},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["image"]["tags"] == ["New Tag", "Another Tag"]
+
+    def test_update_omitting_tags_clears_them(self):
+        """tags is always-authoritative (same convention as panel_tags) —
+        an edit that doesn't include a tags value results in no tags, not
+        a silent "keep whatever was there." The edit form is expected to
+        always resend the complete current tag list on every save."""
+        image_id = uuid4()
+        existing = _make_image(image_id, tags=["Old Tag"])
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service"),
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={"analysis_comment": "unrelated edit"},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["image"]["tags"] == []
+
 
 class TestUpdateLibraryEntryAnomalyIdUniqueness:
     def test_update_rejects_anomaly_id_already_used_by_another_entry(self):

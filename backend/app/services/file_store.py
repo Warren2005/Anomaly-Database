@@ -317,6 +317,20 @@ class FileStoreService:
     async def get_distinct(self, field: str) -> list[str]:
         return await asyncio.to_thread(self._get_distinct_sync, field)
 
+    def _get_distinct_list_field_sync(self, field: str) -> list[str]:
+        """Like _get_distinct_sync, but for fields that hold a *list* per
+        record (e.g. tags, panel_tags) rather than a single scalar value —
+        flattens and dedupes across every record's list."""
+        values: set[str] = set()
+        for r in self._read_json(self._images_file):
+            for v in (r.get(field) or []):
+                if v:
+                    values.add(v)
+        return sorted(values)
+
+    async def get_distinct_list_field(self, field: str) -> list[str]:
+        return await asyncio.to_thread(self._get_distinct_list_field_sync, field)
+
     def _search_sync(
         self,
         vector: list[float],

@@ -32,6 +32,7 @@ export default function ImageDetail({
   const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
   const hasNext = canNavigate && currentIndex < totalCount - 1 && typeof onNext === "function";
   const panelTags = Array.isArray(image.panel_tags) ? image.panel_tags : [];
+  const tags = Array.isArray(image.tags) ? image.tags : [];
 
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
@@ -284,6 +285,14 @@ export default function ImageDetail({
                 <span key={`${tag}-${i}`} className="badge badge-panel">
                   {i + 1}. {tag}
                 </span>
+              ))}
+            </div>
+          )}
+
+          {tags.length > 0 && (
+            <div className="panel-tag-row">
+              {tags.map((tag) => (
+                <span key={tag} className="badge">{tag}</span>
               ))}
             </div>
           )}

@@ -283,6 +283,25 @@ async def test_file_store_get_distinct_filters_none():
 
 
 @pytest.mark.asyncio
+async def test_file_store_get_distinct_list_field_flattens_and_dedupes():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        store = FileStoreService(tmpdir)
+        store.connect()
+        await store.upsert_image(
+            Image(id=uuid4(), image_path="a.jpg", tags=["High Priority", "Reviewed"]), [0.1]
+        )
+        await store.upsert_image(
+            Image(id=uuid4(), image_path="b.jpg", tags=["Reviewed", "Needs Follow-up"]), [0.1]
+        )
+        await store.upsert_image(
+            Image(id=uuid4(), image_path="c.jpg", tags=[]), [0.1]
+        )
+
+        values = await store.get_distinct_list_field("tags")
+        assert values == ["High Priority", "Needs Follow-up", "Reviewed"]
+
+
+@pytest.mark.asyncio
 async def test_file_store_feedback_net_votes():
     with tempfile.TemporaryDirectory() as tmpdir:
         store = FileStoreService(tmpdir)

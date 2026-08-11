@@ -53,6 +53,11 @@ class Image:
     notes: Optional[str] = None
     # Panel view tags (e.g. Image Panel, Beamforming Panel) — multi-select
     panel_tags: Optional[list] = field(default_factory=list)
+    # Free-form, user-growable tags for the anomaly as a whole (distinct
+    # from panel_tags, which is per-image from a fixed vocabulary). New
+    # values just get typed in — see /api/v1/images/filters' `tags`,
+    # sourced from FileStoreService.get_distinct_list_field("tags").
+    tags: Optional[list] = field(default_factory=list)
     # Optional ILI viewer metadata
     zero_angle_frame_index: Optional[int] = None
     track: Optional[int] = None

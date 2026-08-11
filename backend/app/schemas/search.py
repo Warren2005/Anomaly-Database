@@ -37,6 +37,7 @@ class FiltersResponse(BaseModel):
     anomaly_statuses: list[str] = []
     classification_statuses: list[str] = []
     identifications: list[str] = []
+    tags: list[str] = []
 
 
 class LibraryBrowseResponse(BaseModel):

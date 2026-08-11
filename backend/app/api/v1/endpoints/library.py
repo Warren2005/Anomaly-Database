@@ -373,8 +373,13 @@ async def update_library_entry(
     notes: Optional[str] = Form(None),
     zero_angle_frame_index: Optional[str] = Form(None),
     track: Optional[str] = Form(None),
+    x_delete_passkey: Optional[str] = Header(default=None),
 ):
     """Edit an existing library entry's fields and/or its images.
+
+    Requires the same X-Delete-Passkey header as deleting an entry — a
+    lightweight speed bump against casual edits, not a real auth system
+    (this app deliberately has none — see RUNNING_INSTRUCTIONS.md).
 
     Media handling: `remove_media` is a comma-separated list of indices
     into the entry's current [primary, *additional] media list (0 =
@@ -385,6 +390,9 @@ async def update_library_entry(
     if it wouldn't, the whole edit is rejected before anything is
     written or uploaded.
     """
+    if x_delete_passkey != settings.library_delete_passkey:
+        raise ForbiddenError("Incorrect passkey.")
+
     existing = await file_store_service.get_image(image_id)
     if not existing:
         raise NotFoundError(
@@ -422,11 +430,14 @@ async def update_library_entry(
         new_paths.append(path)
 
     final_paths = surviving + new_paths
-    final_tags: list[Optional[str]] = (
-        [t.strip() or None for t in panel_tags.split(",")] if panel_tags else []
+    # Padded with "" rather than None: ImageResponse's panel_tags is
+    # list[str] (not nullable), matching how the upload endpoint's own
+    # parsing never produces None entries either.
+    final_tags: list[str] = (
+        [t.strip() for t in panel_tags.split(",")] if panel_tags else []
     )
     if len(final_tags) < len(final_paths):
-        final_tags += [None] * (len(final_paths) - len(final_tags))
+        final_tags += [""] * (len(final_paths) - len(final_tags))
     final_tags = final_tags[: len(final_paths)]
 
     # Now that we know the edit is going through, remove the files that

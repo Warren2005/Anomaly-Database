@@ -208,7 +208,8 @@ export async function uploadToLibrary(files, metadata) {
 export async function updateLibraryEntry(
   imageId,
   { newFiles = [], panelTags = [], removeIndices = [] } = {},
-  metadata
+  metadata,
+  passkey
 ) {
   const form = new FormData();
   newFiles.forEach((f) => form.append("new_files", f));
@@ -223,6 +224,7 @@ export async function updateLibraryEntry(
   });
   const response = await fetch(`${BASE_URL}/library/${imageId}`, {
     method: "PUT",
+    headers: { "X-Delete-Passkey": passkey ?? "" },
     body: form,
   });
   if (!response.ok) {

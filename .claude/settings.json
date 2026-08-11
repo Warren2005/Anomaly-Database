@@ -65,7 +65,13 @@
       "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/b5ecb1d2-92ec-478a-86b2-5ef4c8e7296c -F remove_media=0 -F 'panel_tags=Beamforming Panel,Image Panel' -F 'new_files=@edit_test_c.jpg;type=image/jpeg')",
       "Bash(curl -s -X POST http://localhost:8001/api/v1/search/similar -F \"file=@edit_test_b.jpg;type=image/jpeg\")",
       "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X DELETE http://localhost:8001/api/v1/library/b5ecb1d2-92ec-478a-86b2-5ef4c8e7296c -H 'X-Delete-Passkey: admin123')",
-      "Bash(rm -f edit_test_a.jpg edit_test_b.jpg edit_test_c.jpg)"
+      "Bash(rm -f edit_test_a.jpg edit_test_b.jpg edit_test_c.jpg)",
+      "Bash(taskkill //PID 24212 //F)",
+      "Bash(taskkill //PID 43548 //F)",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/a8bd152b-88ba-4dad-88ad-abf62ffe2390 -F anomaly_name=Hacked)",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/a8bd152b-88ba-4dad-88ad-abf62ffe2390 -F anomaly_name=Hacked -H 'X-Delete-Passkey: wrong')",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/a8bd152b-88ba-4dad-88ad-abf62ffe2390 -F 'anomaly_name=Correctly Edited' -H 'X-Delete-Passkey: admin123')",
+      "Bash(curl -s -w '\\\\nHTTP:%{http_code}\\\\n' -X PUT http://localhost:8001/api/v1/library/a8bd152b-88ba-4dad-88ad-abf62ffe2390 -F 'anomaly_name=Final Edit' -F 'panel_tags=Beamforming Panel' -H 'X-Delete-Passkey: admin123')"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

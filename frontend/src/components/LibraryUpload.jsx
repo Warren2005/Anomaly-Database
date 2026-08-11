@@ -85,6 +85,7 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   const [success, setSuccess] = useState(null);
   const [error, setError] = useState(null);
   const [fieldErrors, setFieldErrors] = useState({});
+  const [editPasskey, setEditPasskey] = useState("");
   const [runs, setRuns] = useState(FALLBACK_RUNS);
   const [showAddRun, setShowAddRun] = useState(false);
   const [newRunName, setNewRunName] = useState("");
@@ -264,6 +265,7 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
 
   const validate = () => {
     const errs = {};
+    if (isEditMode && !editPasskey) errs.editPasskey = "Passkey required to save changes";
     if (!form.anomaly_type) errs.anomaly_type = "Required";
     if (!form.run_number.trim()) errs.run_number = "Required";
     if (!form.anomaly_name.trim()) errs.anomaly_name = "Required";
@@ -335,7 +337,8 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
         const result = await updateLibraryEntry(
           editingImage.image.id,
           { newFiles: files, panelTags, removeIndices },
-          payload
+          payload,
+          editPasskey
         );
         // No local "success" screen here — the parent (LibraryBrowser)
         // navigates straight back to the updated detail view, which is
@@ -350,6 +353,7 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
       }
     } catch (err) {
       setError(err.message);
+      if (isEditMode) setEditPasskey("");
     } finally {
       setUploading(false);
     }
@@ -746,6 +750,28 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
             onChange={(e) => handleFormChange("analyst", e.target.value)}
           />
         </div>
+
+        {isEditMode && (
+          <div className="form-field" style={{ alignSelf: "flex-end", width: 180 }}>
+            <label className="form-label">
+              Passkey <span className="req">*</span>
+            </label>
+            <input
+              className={`form-input${fieldErrors.editPasskey ? " has-error-input" : ""}`}
+              type="password"
+              placeholder="Admin passkey"
+              value={editPasskey}
+              onChange={(e) => {
+                setEditPasskey(e.target.value);
+                setFieldErrors((prev) => ({ ...prev, editPasskey: undefined }));
+              }}
+              autoComplete="off"
+            />
+            {fieldErrors.editPasskey && (
+              <p className="add-run-error">{fieldErrors.editPasskey}</p>
+            )}
+          </div>
+        )}
 
         <button
           type="submit"

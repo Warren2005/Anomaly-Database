@@ -87,6 +87,64 @@ class TestDeleteLibraryEntryPasskey:
 
 
 class TestUpdateLibraryEntry:
+    def test_update_without_passkey_is_forbidden(self):
+        image_id = uuid4()
+        with patch("app.api.v1.endpoints.library.file_store_service") as mock_store:
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}", data={"anomaly_name": "New name"}
+            )
+
+            assert response.status_code == 403
+            assert response.json()["error"]["code"] == "FORBIDDEN"
+            mock_store.get_image.assert_not_called()
+
+    def test_update_with_wrong_passkey_is_forbidden(self):
+        image_id = uuid4()
+        with patch("app.api.v1.endpoints.library.file_store_service") as mock_store:
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={"anomaly_name": "New name"},
+                headers={"X-Delete-Passkey": "wrong-passkey"},
+            )
+
+            assert response.status_code == 403
+            mock_store.get_image.assert_not_called()
+
+    def test_update_without_panel_tags_does_not_crash_response_validation(self):
+        """Regression test: panel_tags padding must use "" not None —
+        ImageResponse.panel_tags is list[str], not nullable, so a request
+        that edits fields without touching panel_tags must not produce a
+        response with a None entry in that list."""
+        image_id = uuid4()
+        existing = _make_image(
+            image_id, image_path="library/only.jpg", panel_tags=["Image Panel"]
+        )
+        raw_record = {
+            "embedding": [0.1],
+            "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai",
+            "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service"),
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={"anomaly_name": "Renamed only"},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["image"]["panel_tags"] == [""]
+
     def test_update_nonexistent_entry_is_not_found(self):
         image_id = uuid4()
         with patch("app.api.v1.endpoints.library.file_store_service") as mock_store:
@@ -94,7 +152,9 @@ class TestUpdateLibraryEntry:
 
             client = TestClient(app)
             response = client.put(
-                f"/api/v1/library/{image_id}", data={"anomaly_name": "New name"}
+                f"/api/v1/library/{image_id}",
+                data={"anomaly_name": "New name"},
+                headers={"X-Delete-Passkey": "admin123"},
             )
 
             assert response.status_code == 404
@@ -133,6 +193,7 @@ class TestUpdateLibraryEntry:
                     "anomaly_name": "Updated name",
                     "panel_tags": "Image Panel,Beamforming Panel",
                 },
+                headers={"X-Delete-Passkey": "admin123"},
             )
 
             assert response.status_code == 200
@@ -160,6 +221,7 @@ class TestUpdateLibraryEntry:
             response = client.put(
                 f"/api/v1/library/{image_id}",
                 data={"remove_media": "0"},
+                headers={"X-Delete-Passkey": "admin123"},
             )
 
             assert response.status_code == 400
@@ -193,6 +255,7 @@ class TestUpdateLibraryEntry:
                 f"/api/v1/library/{image_id}",
                 data={"remove_media": "0", "panel_tags": "Beamforming Panel,New Panel"},
                 files={"new_files": ("replacement.jpg", b"fake-bytes", "image/jpeg")},
+                headers={"X-Delete-Passkey": "admin123"},
             )
 
             assert response.status_code == 200

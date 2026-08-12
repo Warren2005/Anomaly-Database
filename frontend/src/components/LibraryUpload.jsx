@@ -835,22 +835,22 @@ export default function LibraryUpload({
 
         <div className="form-field">
           <label className="form-label">Tags <span className="opt">optional</span></label>
+          <select
+            className="form-select"
+            value=""
+            onChange={(e) => {
+              if (e.target.value) commitTag(e.target.value);
+            }}
+          >
+            <option value="">— Select existing tag —</option>
+            {tagOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+          </select>
           <input
             className="form-input"
             type="text"
-            list="tag-options"
-            placeholder="Type a tag and press Enter, or pick one below"
+            placeholder="Or type a new tag and press Enter"
             value={tagInput}
-            onChange={(e) => {
-              const val = e.target.value;
-              setTagInput(val);
-              // Clicking a native <datalist> suggestion sets the value
-              // directly to an existing option — commit right away rather
-              // than making the user press Enter too.
-              if (tagOptions.some((t) => t.toLowerCase() === val.toLowerCase())) {
-                commitTag(val);
-              }
-            }}
+            onChange={(e) => setTagInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter") {
                 e.preventDefault();
@@ -859,11 +859,8 @@ export default function LibraryUpload({
             }}
             autoComplete="off"
           />
-          <datalist id="tag-options">
-            {tagOptions.map((opt) => <option key={opt} value={opt} />)}
-          </datalist>
           <p className="form-hint">
-            Pick an existing tag or type a new one — new tags are added for everyone to reuse
+            Pick an existing tag above, or type a new one and press Enter — new tags are added for everyone to reuse
           </p>
           {selectedTags.length > 0 && (
             <div className="tag-chip-row">

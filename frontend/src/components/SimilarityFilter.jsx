@@ -1,8 +1,8 @@
-import React from "react";
+import React, { useCallback, useRef } from "react";
 
 /**
  * Dual-thumb range filter for similarity confidence (0–100%).
- * Filters client-side over ranked search results.
+ * Click the track to move the nearest thumb; drag a thumb to adjust it.
  */
 export default function SimilarityFilter({
   minPercent,
@@ -10,7 +10,10 @@ export default function SimilarityFilter({
   onChange,
   totalCount,
   visibleCount,
+  showRangeLabel = false,
 }) {
+  const trackRef = useRef(null);
+
   const handleMin = (e) => {
     const next = Math.min(Number(e.target.value), maxPercent);
     onChange(next, maxPercent);
@@ -21,19 +24,56 @@ export default function SimilarityFilter({
     onChange(minPercent, next);
   };
 
+  const valueFromClientX = useCallback((clientX) => {
+    const el = trackRef.current;
+    if (!el) return null;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0) return null;
+    const ratio = (clientX - rect.left) / rect.width;
+    return Math.round(Math.min(100, Math.max(0, ratio * 100)));
+  }, []);
+
+  const moveNearestThumb = useCallback(
+    (clientX) => {
+      const value = valueFromClientX(clientX);
+      if (value == null) return;
+
+      const distMin = Math.abs(value - minPercent);
+      const distMax = Math.abs(value - maxPercent);
+
+      if (distMin <= distMax) {
+        onChange(Math.min(value, maxPercent), maxPercent);
+      } else {
+        onChange(minPercent, Math.max(value, minPercent));
+      }
+    },
+    [valueFromClientX, minPercent, maxPercent, onChange]
+  );
+
+  const handleTrackPointerDown = (e) => {
+    if (e.target.closest?.("input[type='range']")) return;
+    e.preventDefault();
+    moveNearestThumb(e.clientX);
+  };
+
   const left = minPercent;
   const right = 100 - maxPercent;
 
   return (
     <div className="similarity-filter" role="group" aria-label="Similarity confidence filter">
-      <div className="similarity-filter-header">
-        <span className="filter-label">Similarity confidence</span>
-        <span className="similarity-filter-values">
-          {minPercent}% – {maxPercent}%
-        </span>
-      </div>
+      {showRangeLabel && (
+        <div className="similarity-filter-header">
+          <span className="similarity-filter-values">
+            {minPercent}% – {maxPercent}%
+          </span>
+        </div>
+      )}
 
-      <div className="similarity-range">
+      <div
+        className="similarity-range"
+        ref={trackRef}
+        onPointerDown={handleTrackPointerDown}
+      >
         <div className="similarity-range-track">
           <div
             className="similarity-range-fill"
@@ -65,7 +105,6 @@ export default function SimilarityFilter({
       </div>
 
       <div className="similarity-filter-footer">
-        <span className="similarity-filter-hint">Drag to set the match range you want to review</span>
         <span className="similarity-filter-count">
           Showing {visibleCount} of {totalCount}
         </span>

@@ -372,33 +372,56 @@ export default function App() {
         {mode === "search" && (state === "results" || state === "detail") && results && (
           <>
             {state === "results" && (
-              <>
-                <div className="search-results-header">
-                  <div>
-                    <h2 className="library-browser-title">Search results</h2>
-                    {activeSearchPanelTag && (
-                      <p className="library-browser-subtitle">
-                        Scoped to entries with <strong>{activeSearchPanelTag}</strong>
-                      </p>
-                    )}
+              <div className="library-browser">
+                <aside className="browse-filter-sidebar" aria-label="Search filters">
+                  <div className="browse-filter-panel-head">
+                    <h3>Filters</h3>
                   </div>
-                  <button type="button" className="btn btn-secondary" onClick={goHome}>
-                    Back to Library
-                  </button>
+                  {activeSearchPanelTag && (
+                    <div className="browse-filter-section is-open">
+                      <div className="browse-filter-section-static">
+                        <span className="browse-filter-section-label">Panel scope</span>
+                      </div>
+                      <div className="browse-filter-section-body">
+                        <p className="browse-filter-scope-text">{activeSearchPanelTag}</p>
+                      </div>
+                    </div>
+                  )}
+                  <div className="browse-filter-section is-open">
+                    <div className="browse-filter-section-static">
+                      <span className="browse-filter-section-label">Similarity</span>
+                      <span className="similarity-filter-values">
+                        {minSimilarity}% – {maxSimilarity}%
+                      </span>
+                    </div>
+                    <div className="browse-filter-section-body">
+                      <SimilarityFilter
+                        minPercent={minSimilarity}
+                        maxPercent={maxSimilarity}
+                        onChange={handleSimilarityChange}
+                        totalCount={allResults.length}
+                        visibleCount={filteredResults.length}
+                      />
+                    </div>
+                  </div>
+                </aside>
+
+                <div className="library-browser-main">
+                  <div className="library-browser-header search-results-header">
+                    <div>
+                      <h2 className="library-browser-title">Search results</h2>
+                    </div>
+                    <button type="button" className="btn btn-secondary" onClick={goHome}>
+                      Back to Library
+                    </button>
+                  </div>
+                  <ResultsGrid
+                    results={filteredResults}
+                    onResultClick={handleResultClick}
+                    queryImageId={queryFile ? null : null}
+                  />
                 </div>
-                <SimilarityFilter
-                  minPercent={minSimilarity}
-                  maxPercent={maxSimilarity}
-                  onChange={handleSimilarityChange}
-                  totalCount={allResults.length}
-                  visibleCount={filteredResults.length}
-                />
-                <ResultsGrid
-                  results={filteredResults}
-                  onResultClick={handleResultClick}
-                  queryImageId={queryFile ? null : null}
-                />
-              </>
+              </div>
             )}
 
             {state === "detail" && selectedResult && (

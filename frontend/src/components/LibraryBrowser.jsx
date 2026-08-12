@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { browseLibrary, getFilters, resolveImageUrl, verifyPasskey } from "../api/client";
+import { browseLibrary, getFilters, verifyPasskey } from "../api/client";
 import ImageDetail from "./ImageDetail";
 import LibraryUpload from "./LibraryUpload";
+import ReferenceCard from "./ReferenceCard";
 import {
   ALL_IDENTIFICATIONS,
   ANOMALY_TYPES,
@@ -318,9 +319,6 @@ export default function LibraryBrowser() {
         <div className="library-browser-header">
           <div>
             <h2 className="library-browser-title">Reference Library</h2>
-            <p className="library-browser-subtitle">
-              Browse curated ILI examples by type, panel, run, and status
-            </p>
           </div>
           <div className="library-browser-tools">
             <span className="library-count">{total} entr{total === 1 ? "y" : "ies"}</span>
@@ -348,36 +346,17 @@ export default function LibraryBrowser() {
         )}
 
         {!loading && items.length > 0 && (
-          <div className="results-grid browse-grid">
+          <div className="results-grid browse-grid ref-grid">
             {items.map((item, index) => {
               const img = item.image;
               return (
-                <div
+                <ReferenceCard
                   key={img.id}
-                  className="result-card"
-                  style={{ animationDelay: `${Math.min(index, 7) * 55}ms` }}
+                  image={img}
+                  imageUrl={item.image_url}
+                  animationDelay={Math.min(index, 7) * 55}
                   onClick={() => setSelected(item)}
-                >
-                  <img
-                    src={resolveImageUrl(item.image_url)}
-                    alt={img.anomaly_id || img.identification || "Library entry"}
-                    className="result-image"
-                    loading="lazy"
-                  />
-                  <div className="result-info">
-                    <div className="result-diagnosis">
-                      {img.anomaly_id || "No Anomaly ID"}
-                    </div>
-                    <div className="result-info-row">
-                      {img.anomaly_type && (
-                        <span className="badge badge-anomaly">{img.anomaly_type}</span>
-                      )}
-                      {img.identification && (
-                        <span className="browse-card-identification">{img.identification}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
+                />
               );
             })}
           </div>

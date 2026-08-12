@@ -16,8 +16,7 @@ def test_image_model_fields():
         "created_at", "updated_at",
         "anomaly_description", "anomaly_status", "anomaly_type",
         "identification", "anomaly_id", "wall_location", "run_number",
-        "analysis_comment", "revision_history",
-        "interacts_with_other_features", "interaction_related_items",
+        "analysis_comment", "analyst",
         # ILI / Zach reference-library fields
         "classification_status",
         "depth", "width", "length",

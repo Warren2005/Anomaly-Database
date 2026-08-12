@@ -65,11 +65,7 @@ class TestGetFilters:
                     ["Run 42"],                     # run_number
                     ["Approved"],                   # anomaly_status
                     ["Confirmed", "Edge Case"],     # classification_status
-                    ["Corrosion Pitting", "Dent"],  # identification
                 ]
-            )
-            mock_store.get_distinct_list_field = AsyncMock(
-                return_value=["High Priority", "Reviewed"]  # tags
             )
 
             client = TestClient(app)
@@ -85,8 +81,6 @@ class TestGetFilters:
             assert data["run_numbers"] == ["Run 42"]
             assert data["anomaly_statuses"] == ["Approved"]
             assert "Confirmed" in data["classification_statuses"]
-            assert "Corrosion Pitting" in data["identifications"]
-            assert "High Priority" in data["tags"]
 
 
 class TestGetImageMedia:

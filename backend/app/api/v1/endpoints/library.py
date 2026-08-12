@@ -271,6 +271,7 @@ async def browse_library(
     anomaly_status: Optional[str] = None,
     classification_status: Optional[str] = None,
     panel_tags: Optional[str] = None,
+    identifications: Optional[str] = None,
     q: Optional[str] = None,
     depth_min: Optional[float] = None,
     depth_max: Optional[float] = None,
@@ -292,6 +293,12 @@ async def browse_library(
     if panel_tags:
         panel_set.update(t.strip() for t in panel_tags.split(",") if t.strip())
 
+    identification_set = set()
+    if identifications:
+        identification_set.update(
+            t.strip() for t in identifications.split(",") if t.strip()
+        )
+
     def in_range(value: Optional[float], lo: Optional[float], hi: Optional[float]) -> bool:
         if value is None:
             return lo is None and hi is None
@@ -308,6 +315,8 @@ async def browse_library(
             tags = set(img.panel_tags or [])
             if not panel_set.intersection(tags):
                 return False
+        if identification_set and img.identification not in identification_set:
+            return False
         if run_number and img.run_number != run_number:
             return False
         if anomaly_status and img.anomaly_status != anomaly_status:

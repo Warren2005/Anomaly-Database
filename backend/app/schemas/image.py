@@ -7,13 +7,6 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 
-class RevisionEntry(BaseModel):
-    version: int
-    name: str
-    comment: Optional[str] = None
-    timestamp: datetime
-
-
 class ImageBase(BaseModel):
     dataset_source: Optional[str] = None
     image_path: str
@@ -30,7 +23,7 @@ class ImageBase(BaseModel):
     wall_location: Optional[str] = None
     run_number: Optional[str] = None
     analysis_comment: Optional[str] = None
-    revision_history: list[RevisionEntry] = []
+    revision_history: Optional[list] = None
     classification_status: Optional[str] = None
     depth: Optional[float] = None
     width: Optional[float] = None
@@ -70,5 +63,4 @@ class LibraryUploadResponse(BaseModel):
     image: ImageResponse
     image_url: str
     media_urls: list[str] = []
-    orientation_image_url: Optional[str] = None
     message: str

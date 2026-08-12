@@ -94,6 +94,11 @@ export const IDENTIFICATION_BY_TYPE = {
   ],
 };
 
+/** Flat list of all Identification values across types (for Library filters) */
+export const ALL_IDENTIFICATIONS = [
+  ...new Set(Object.values(IDENTIFICATION_BY_TYPE).flat()),
+];
+
 /** Default Identification when an Anomaly Type is selected */
 export const IDENTIFICATION_DEFAULTS = {
   "Metal Loss": "Corrosion",

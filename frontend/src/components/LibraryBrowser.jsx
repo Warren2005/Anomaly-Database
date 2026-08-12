@@ -223,7 +223,7 @@ export default function LibraryBrowser() {
                 id="browse-filter-q"
                 className="form-input"
                 type="search"
-                placeholder="Comments, notes, Anomaly ID, identification…"
+                placeholder="Detection signature, Anomaly ID, identification…"
                 value={filters.q}
                 onChange={(e) => setFilter("q", e.target.value)}
               />

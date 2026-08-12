@@ -107,6 +107,8 @@ async def upload_to_library(
     qc_reviewer: Optional[str] = Form(None),
     qc_decision_rationale: Optional[str] = Form(None),
     signal_description: Optional[str] = Form(None),
+    differential_diagnosis: Optional[str] = Form(None),
+    limitations_uncertainty: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     panel_tags: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
@@ -197,6 +199,8 @@ async def upload_to_library(
         qc_reviewer=qc_reviewer,
         qc_decision_rationale=qc_decision_rationale,
         signal_description=signal_description,
+        differential_diagnosis=differential_diagnosis,
+        limitations_uncertainty=limitations_uncertainty,
         notes=notes,
         panel_tags=parsed_tags,
         tags=parsed_anomaly_tags,
@@ -304,6 +308,8 @@ async def browse_library(
                         img.anomaly_id,
                         img.anomaly_description,
                         img.signal_description,
+                        img.differential_diagnosis,
+                        img.limitations_uncertainty,
                         img.identification,
                         img.analysis_comment,
                         img.notes,
@@ -432,6 +438,8 @@ async def update_library_entry(
     qc_reviewer: Optional[str] = Form(None),
     qc_decision_rationale: Optional[str] = Form(None),
     signal_description: Optional[str] = Form(None),
+    differential_diagnosis: Optional[str] = Form(None),
+    limitations_uncertainty: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     zero_angle_frame_index: Optional[str] = Form(None),
@@ -601,6 +609,12 @@ async def update_library_entry(
         qc_reviewer=_resolved(qc_reviewer, existing.qc_reviewer),
         qc_decision_rationale=_resolved(qc_decision_rationale, existing.qc_decision_rationale),
         signal_description=_resolved(signal_description, existing.signal_description),
+        differential_diagnosis=_resolved(
+            differential_diagnosis, existing.differential_diagnosis
+        ),
+        limitations_uncertainty=_resolved(
+            limitations_uncertainty, existing.limitations_uncertainty
+        ),
         notes=_resolved(notes, existing.notes),
         panel_tags=final_tags,
         tags=_parse_tag_list(tags),

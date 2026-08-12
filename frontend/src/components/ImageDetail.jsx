@@ -350,9 +350,21 @@ export default function ImageDetail({
               <DetailRow label="Run" value={image.run_number} />
               <DetailRow label="ZeroAngle Frame Index" value={image.zero_angle_frame_index} />
               <DetailRow label="Run ID" value={image.anomaly_description} />
-              <DetailRow label="Signal Description" value={image.signal_description} />
-              <DetailRow label="Comments" value={image.analysis_comment} />
-              <DetailRow label="Notes" value={image.notes} />
+              <DetailRow label="Detection signature" value={image.signal_description} />
+              <DetailRow
+                label="Similar anomalies / differential diagnosis"
+                value={image.differential_diagnosis}
+              />
+              <DetailRow
+                label="Limitations / uncertainty"
+                value={image.limitations_uncertainty}
+              />
+              {image.analysis_comment && (
+                <DetailRow label="Comments" value={image.analysis_comment} />
+              )}
+              {image.notes && (
+                <DetailRow label="Notes" value={image.notes} />
+              )}
               <DetailRow label="Depth (mm)" value={image.depth} />
               <DetailRow label="Width (mm)" value={image.width} />
               <DetailRow label="Length (mm)" value={image.length} />

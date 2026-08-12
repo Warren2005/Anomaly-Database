@@ -49,7 +49,9 @@ class Image:
     qc_raised_by: Optional[str] = None
     qc_reviewer: Optional[str] = None
     qc_decision_rationale: Optional[str] = None
-    signal_description: Optional[str] = None
+    signal_description: Optional[str] = None  # Detection signature
+    differential_diagnosis: Optional[str] = None  # Similar anomalies / differential diagnosis
+    limitations_uncertainty: Optional[str] = None  # Limitations / uncertainty
     notes: Optional[str] = None
     # Panel view tags (e.g. Image Panel, Beamforming Panel) — multi-select
     panel_tags: Optional[list] = field(default_factory=list)

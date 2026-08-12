@@ -33,6 +33,8 @@ class ImageBase(BaseModel):
     qc_reviewer: Optional[str] = None
     qc_decision_rationale: Optional[str] = None
     signal_description: Optional[str] = None
+    differential_diagnosis: Optional[str] = None
+    limitations_uncertainty: Optional[str] = None
     notes: Optional[str] = None
     panel_tags: Optional[list[str]] = None
     tags: Optional[list[str]] = None

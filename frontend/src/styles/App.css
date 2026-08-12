@@ -2127,6 +2127,17 @@ body {
   color: var(--text-muted);
 }
 
+.comment-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 4px;
+}
+
+.comment-categories .form-hint {
+  margin: -2px 0 6px;
+}
+
 .form-textarea {
   resize: vertical;
   min-height: 72px;

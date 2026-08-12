@@ -22,13 +22,14 @@ const EMPTY_FORM = {
   anomaly_id: "",
   anomaly_description: "",
   signal_description: "",
+  differential_diagnosis: "",
+  limitations_uncertainty: "",
   classification_status: "",
   anomaly_type: "",
   run_number: "",
   depth: "",
   width: "",
   length: "",
-  analysis_comment: "",
   notes: "",
   analyst: "",
   zero_angle_frame_index: "",
@@ -46,13 +47,14 @@ function formFromImage(image) {
     anomaly_id: image.anomaly_id || "",
     anomaly_description: image.anomaly_description || "",
     signal_description: image.signal_description || "",
+    differential_diagnosis: image.differential_diagnosis || "",
+    limitations_uncertainty: image.limitations_uncertainty || "",
     classification_status: image.classification_status || "",
     anomaly_type: image.anomaly_type || "",
     run_number: image.run_number || "",
     depth: image.depth ?? "",
     width: image.width ?? "",
     length: image.length ?? "",
-    analysis_comment: image.analysis_comment || "",
     notes: image.notes || "",
     analyst: image.analyst || "",
     zero_angle_frame_index: image.zero_angle_frame_index ?? "",
@@ -345,6 +347,9 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
     if (!form.anomaly_id.trim()) errs.anomaly_id = "Required";
     if (!form.classification_status) errs.classification_status = "Required";
     if (!form.analyst.trim()) errs.analyst = "Required";
+    if (!form.signal_description.trim()) errs.signal_description = "Required";
+    if (!form.differential_diagnosis.trim()) errs.differential_diagnosis = "Required";
+    if (!form.limitations_uncertainty.trim()) errs.limitations_uncertainty = "Required";
     if (survivingExisting.length + files.length === 0) {
       errs.file = "An anomaly must have at least one image, each tagged with its panel type";
     } else {
@@ -392,6 +397,9 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
     try {
       const payload = {
         ...form,
+        signal_description: form.signal_description.trim(),
+        differential_diagnosis: form.differential_diagnosis.trim(),
+        limitations_uncertainty: form.limitations_uncertainty.trim(),
         depth: form.depth !== "" ? String(form.depth).trim() : undefined,
         width: form.width !== "" ? String(form.width).trim() : undefined,
         length: form.length !== "" ? String(form.length).trim() : undefined,
@@ -404,6 +412,8 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
         tags: selectedTags.join(","),
       };
       delete payload.track;
+      delete payload.analysis_comment;
+      delete payload.notes;
       if (!form.is_qc_flag) {
         delete payload.qc_raised_by;
         delete payload.qc_reviewer;
@@ -828,14 +838,51 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
           />
         </div>
 
-        <div className="form-field">
-          <label className="form-label">Comments <span className="opt">full-text searchable</span></label>
-          <textarea
-            className="form-textarea"
-            placeholder='Engineering observations — e.g. "axially intermittent", threshold notes'
-            value={form.analysis_comment}
-            onChange={(e) => handleFormChange("analysis_comment", e.target.value)}
-          />
+        <div className="comment-categories">
+          <div className="form-field">
+            <label className="form-label">
+              Detection signature <span className="req">*</span>
+            </label>
+            <p className="form-hint">
+              What the analyst sees in the data; main panels used for identification / sizing
+            </p>
+            <textarea
+              className={`form-textarea${fieldErrors.signal_description ? " has-error-input" : ""}`}
+              placeholder='e.g. Clear metal-loss signature on beamforming + image panels'
+              value={form.signal_description}
+              onChange={(e) => handleFormChange("signal_description", e.target.value)}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label">
+              Similar anomalies / differential diagnosis <span className="req">*</span>
+            </label>
+            <p className="form-hint">
+              How to distinguish it from other features; main differences
+            </p>
+            <textarea
+              className={`form-textarea${fieldErrors.differential_diagnosis ? " has-error-input" : ""}`}
+              placeholder="e.g. Differs from weld anomaly by axial intermittency and depth response"
+              value={form.differential_diagnosis}
+              onChange={(e) => handleFormChange("differential_diagnosis", e.target.value)}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label">
+              Limitations / uncertainty <span className="req">*</span>
+            </label>
+            <p className="form-hint">
+              Similarities with other anomalies; uncertainties
+            </p>
+            <textarea
+              className={`form-textarea${fieldErrors.limitations_uncertainty ? " has-error-input" : ""}`}
+              placeholder="e.g. May resemble shallow corrosion near threshold; sizing uncertain without…"
+              value={form.limitations_uncertainty}
+              onChange={(e) => handleFormChange("limitations_uncertainty", e.target.value)}
+            />
+          </div>
         </div>
 
         {requiredDims.length > 0 && (

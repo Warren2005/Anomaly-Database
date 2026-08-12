@@ -21,6 +21,7 @@ export async function searchSimilar(file, filters = {}) {
   if (filters.tissue_type) params.set("tissue_type", filters.tissue_type);
   if (filters.benign_malignant)
     params.set("benign_malignant", filters.benign_malignant);
+  if (filters.panel_tag) params.set("panel_tag", filters.panel_tag);
 
   const url = `${BASE_URL}/search/similar?${params.toString()}`;
 

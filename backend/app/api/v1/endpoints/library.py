@@ -127,7 +127,7 @@ async def upload_to_library(
         raise ValidationError("Track must be an integer between 0 and 21.")
 
     if not identification or not identification.strip():
-        raise ValidationError("Anomaly Identification is required.")
+        raise ValidationError("Identification is required.")
     if not anomaly_id or not anomaly_id.strip():
         raise ValidationError("Anomaly ID is required.")
     anomaly_id = anomaly_id.strip()
@@ -508,7 +508,7 @@ async def update_library_entry(
 
     identification_val = _resolved(identification, existing.identification)
     if not identification_val or not identification_val.strip():
-        raise ValidationError("Anomaly Identification is required.")
+        raise ValidationError("Identification is required.")
     identification_val = identification_val.strip()
 
     anomaly_id_val = _resolved(anomaly_id, existing.anomaly_id)

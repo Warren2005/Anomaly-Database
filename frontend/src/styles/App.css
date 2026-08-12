@@ -194,6 +194,14 @@ body {
   justify-self: end;
 }
 
+.header-panel-select {
+  height: 36px;
+  min-width: 160px;
+  max-width: 200px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .header-image-search {
   display: inline-flex;
   align-items: center;

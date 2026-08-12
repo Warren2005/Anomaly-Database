@@ -6,6 +6,7 @@ import StatusBar from "./components/StatusBar";
 import LibraryUpload from "./components/LibraryUpload";
 import LibraryBrowser from "./components/LibraryBrowser";
 import SimilarityFilter from "./components/SimilarityFilter";
+import { PANEL_TAG_OPTIONS } from "./lib/iliConstants";
 import logoMark from "./assets/ili-brary-logo.png";
 
 function SkeletonCard({ delay }) {
@@ -67,6 +68,8 @@ export default function App() {
   const [health, setHealth] = useState(null);
   const [error, setError] = useState(null);
   const [queryFile, setQueryFile] = useState(null);
+  const [searchPanelTag, setSearchPanelTag] = useState("");
+  const [activeSearchPanelTag, setActiveSearchPanelTag] = useState("");
   const [isDark, setIsDark] = useState(
     () => (localStorage.getItem("theme") ?? "dark") === "dark"
   );
@@ -148,8 +151,10 @@ export default function App() {
   }, [filteredResults, selectedResult]);
 
   const handleSearch = useCallback(
-    async (file) => {
+    async (file, panelTag) => {
+      const panel = (panelTag || "").trim();
       setQueryFile(file);
+      setActiveSearchPanelTag(panel);
       setMode("search");
       setState("searching");
       setError(null);
@@ -158,7 +163,10 @@ export default function App() {
       setMaxSimilarity(100);
 
       try {
-        const data = await searchSimilar(file, filters);
+        const data = await searchSimilar(file, {
+          ...filters,
+          panel_tag: panel || undefined,
+        });
         setResults(data);
         setState("results");
       } catch (err) {
@@ -174,10 +182,23 @@ export default function App() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
+    if (!searchPanelTag) {
+      setError("Select a panel type before searching by image.");
+      return;
+    }
     runWithLeaveGuard("search", () => {
-      void handleSearch(file);
+      void handleSearch(file, searchPanelTag);
     });
-  }, [runWithLeaveGuard, handleSearch]);
+  }, [runWithLeaveGuard, handleSearch, searchPanelTag]);
+
+  const startImageSearch = useCallback(() => {
+    if (!searchPanelTag) {
+      setError("Select a panel type before searching by image.");
+      return;
+    }
+    setError(null);
+    imageSearchRef.current?.click();
+  }, [searchPanelTag]);
 
   const handleResultClick = useCallback((result) => {
     setSelectedResult(result);
@@ -229,6 +250,7 @@ export default function App() {
     setResults(null);
     setSelectedResult(null);
     setQueryFile(null);
+    setActiveSearchPanelTag("");
     setMinSimilarity(0);
     setMaxSimilarity(100);
     setMode("browse");
@@ -271,12 +293,28 @@ export default function App() {
           </button>
         </nav>
         <div className="header-actions">
+          <select
+            className="form-select header-panel-select"
+            value={searchPanelTag}
+            onChange={(e) => setSearchPanelTag(e.target.value)}
+            aria-label="Panel type for image search"
+            title="Search only library entries that include this panel"
+          >
+            <option value="">Panel for search…</option>
+            {PANEL_TAG_OPTIONS.map((tag) => (
+              <option key={tag} value={tag}>{tag}</option>
+            ))}
+          </select>
           <button
             type="button"
             className="btn btn-primary header-image-search"
-            onClick={() => imageSearchRef.current?.click()}
+            onClick={startImageSearch}
             aria-label="Search by image"
-            title="Upload an image to find similar library entries"
+            title={
+              searchPanelTag
+                ? `Search within ${searchPanelTag} entries`
+                : "Select a panel type first, then upload an image"
+            }
           >
             <ImageSearchIcon />
             <span>Search by image</span>
@@ -336,7 +374,14 @@ export default function App() {
             {state === "results" && (
               <>
                 <div className="search-results-header">
-                  <h2 className="library-browser-title">Search results</h2>
+                  <div>
+                    <h2 className="library-browser-title">Search results</h2>
+                    {activeSearchPanelTag && (
+                      <p className="library-browser-subtitle">
+                        Scoped to entries with <strong>{activeSearchPanelTag}</strong>
+                      </p>
+                    )}
+                  </div>
                   <button type="button" className="btn btn-secondary" onClick={goHome}>
                     Back to Library
                   </button>

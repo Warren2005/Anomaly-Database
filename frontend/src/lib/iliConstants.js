@@ -40,6 +40,70 @@ export const DIMENSION_REQUIREMENTS = {
   Lamination: ["depth"],
 };
 
+/**
+ * Identification options keyed by Anomaly Type (ILI viewer taxonomy).
+ */
+export const IDENTIFICATION_BY_TYPE = {
+  "Metal Loss": [
+    "Corrosion",
+    "Corrosion Cluster",
+    "Grinding",
+    "Gouge",
+    "Scratches",
+    "Manufactured",
+  ],
+  Weld: [
+    "Girth Weld Anomaly",
+    "Longitudinal Weld Anomaly",
+    "Spiral Weld Anomaly",
+    "Arc Strike",
+    "Slag Inclusion",
+  ],
+  "Crack-like": [
+    "Crack",
+    "Stress Corrosion Cracking",
+    "Hook Crack",
+    "EDM Notch",
+    "Crack Cluster",
+    "Lack of Fusion",
+    "Weld Trim",
+  ],
+  Deformation: [
+    "Ovality",
+    "Dent Complex",
+    "Dent Kinked",
+    "Dent Plain",
+    "Dent Re-Rounded",
+    "Ripple/Wrinkle",
+    "Buckle",
+    "Roof Topping",
+  ],
+  Lamination: [
+    "Planar Lamination",
+    "Sloped Lamination",
+    "Bulging Lamination",
+    "Inclusion",
+  ],
+  Other: [
+    "Debris",
+    "Artificial Anomaly",
+    "Coating Disbondment",
+    "Wall Thickness Increase",
+    "Bubble",
+    "Nominal Pipe",
+  ],
+};
+
+/** Default Identification when an Anomaly Type is selected */
+export const IDENTIFICATION_DEFAULTS = {
+  "Metal Loss": "Corrosion",
+  Weld: "Girth Weld Anomaly",
+  "Crack-like": "Crack",
+  Deformation: "Ovality",
+  Lamination: "Planar Lamination",
+  Other: "Debris",
+};
+
 export const STATUS_COLORS = {
   Confirmed: "#34d399",
   "Edge Case": "#fbbf24",

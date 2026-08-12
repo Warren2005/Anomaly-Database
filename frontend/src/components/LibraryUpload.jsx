@@ -4,6 +4,8 @@ import {
   ANOMALY_TYPES,
   CLASSIFICATION_STATUS_OPTIONS,
   DIMENSION_REQUIREMENTS,
+  IDENTIFICATION_BY_TYPE,
+  IDENTIFICATION_DEFAULTS,
   ACCEPTED_IMAGE_TYPES,
   PANEL_TAG_OPTIONS,
   RUN_OPTIONS,
@@ -103,7 +105,6 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   const [fieldErrors, setFieldErrors] = useState({});
   const [editPasskey, setEditPasskey] = useState("");
   const [runs, setRuns] = useState(FALLBACK_RUNS);
-  const [identificationOptions, setIdentificationOptions] = useState([]);
   const [tagOptions, setTagOptions] = useState([]);
   const [selectedTags, setSelectedTags] = useState(() => editingImage?.image?.tags || []);
   const [tagInput, setTagInput] = useState("");
@@ -123,6 +124,14 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   const fileInputRef = useRef(null);
 
   const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
+  const typeIdentifications = IDENTIFICATION_BY_TYPE[form.anomaly_type] || null;
+  const identificationSelectOptions = typeIdentifications
+    ? (
+      form.identification && !typeIdentifications.includes(form.identification)
+        ? [form.identification, ...typeIdentifications]
+        : typeIdentifications
+    )
+    : null;
 
   const [initialTags] = useState(() => editingImage?.image?.tags || []);
 
@@ -160,12 +169,9 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   }, [refreshRuns]);
 
   useEffect(() => {
-    // Growing catalogs for the Anomaly Identification and Tags fields —
-    // whatever values have been used across entries so far. No admin gate
-    // needed: typing a new one here is itself what "adds" it for next time.
+    // Growing catalog for Tags — typing a new one here adds it for next time.
     getFilters()
       .then((data) => {
-        setIdentificationOptions(data.identifications || []);
         setTagOptions(data.tags || []);
       })
       .catch(() => {});
@@ -304,9 +310,24 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
       if (field === "run_number") {
         next.anomaly_description = value ? runIdFor(value) : "";
       }
+      if (field === "anomaly_type") {
+        const opts = IDENTIFICATION_BY_TYPE[value];
+        if (opts?.length) {
+          if (!opts.includes(prev.identification)) {
+            next.identification = IDENTIFICATION_DEFAULTS[value] || opts[0];
+          }
+        } else if (IDENTIFICATION_BY_TYPE[prev.anomaly_type]) {
+          // Leaving a typed dropdown — clear so free-text types start blank
+          next.identification = "";
+        }
+      }
       return next;
     });
-    setFieldErrors((prev) => ({ ...prev, [field]: undefined }));
+    setFieldErrors((prev) => {
+      const cleared = { ...prev, [field]: undefined };
+      if (field === "anomaly_type") cleared.identification = undefined;
+      return cleared;
+    });
   };
 
   const handleRunSelect = (value) => {
@@ -757,22 +778,30 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
 
         <div className="form-row">
           <div className="form-field">
-            <label className="form-label">Anomaly Identification <span className="req">*</span></label>
-            <input
-              className={`form-input${fieldErrors.identification ? " has-error-input" : ""}`}
-              type="text"
-              list="identification-options"
-              placeholder="e.g. Corrosion Pitting"
-              value={form.identification}
-              onChange={(e) => handleFormChange("identification", e.target.value)}
-              autoComplete="off"
-            />
-            <datalist id="identification-options">
-              {identificationOptions.map((opt) => <option key={opt} value={opt} />)}
-            </datalist>
-            <p className="form-hint">
-              Reusable category — pick an existing one or type a new one to add it
-            </p>
+            <label className="form-label">Identification <span className="req">*</span></label>
+            {identificationSelectOptions ? (
+              <select
+                className={`form-select${fieldErrors.identification ? " has-error-input" : ""}`}
+                value={form.identification}
+                onChange={(e) => handleFormChange("identification", e.target.value)}
+              >
+                {identificationSelectOptions.map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ) : (
+              <select
+                className={`form-select${fieldErrors.identification ? " has-error-input" : ""}`}
+                value=""
+                disabled
+              >
+                <option value="">
+                  {form.anomaly_type
+                    ? "— Options for this type coming soon —"
+                    : "— Select Anomaly Type first —"}
+                </option>
+              </select>
+            )}
           </div>
           <div className="form-field">
             <label className="form-label">Anomaly ID <span className="req">*</span></label>
@@ -784,7 +813,6 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
               onChange={(e) => handleFormChange("anomaly_id", e.target.value)}
               autoComplete="off"
             />
-            <p className="form-hint">Must be unique — no two anomalies can share this ID</p>
           </div>
         </div>
 

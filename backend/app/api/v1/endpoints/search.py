@@ -40,6 +40,7 @@ async def search_similar(
     diagnosis: Optional[str] = Query(default=None),
     tissue_type: Optional[str] = Query(default=None),
     benign_malignant: Optional[str] = Query(default=None),
+    panel_tag: Optional[str] = Query(default=None),
 ):
     """Accept an image and return the top-N most visually similar images."""
     total_start = time.time()
@@ -80,6 +81,7 @@ async def search_similar(
         tissue_type=tissue_type,
         benign_malignant=benign_malignant,
         embedding_model=embedding_service.model_tag,
+        panel_tag=panel_tag.strip() if panel_tag else None,
     )
     search_time = (time.time() - search_start) * 1000
 

@@ -339,6 +339,7 @@ class FileStoreService:
         tissue_type: Optional[str],
         benign_malignant: Optional[str],
         embedding_model: Optional[str] = None,
+        panel_tag: Optional[str] = None,
     ) -> list[tuple[Image, float]]:
         records = self._read_json(self._images_file)
         if diagnosis:
@@ -348,6 +349,12 @@ class FileStoreService:
         if benign_malignant:
             records = [
                 r for r in records if r.get("benign_malignant") == benign_malignant
+            ]
+        if panel_tag:
+            needle = panel_tag.strip()
+            records = [
+                r for r in records
+                if needle in (r.get("panel_tags") or [])
             ]
         if embedding_model is not None:
             before = len(records)
@@ -385,6 +392,7 @@ class FileStoreService:
         tissue_type: Optional[str] = None,
         benign_malignant: Optional[str] = None,
         embedding_model: Optional[str] = None,
+        panel_tag: Optional[str] = None,
     ) -> list[tuple[Image, float]]:
         return await asyncio.to_thread(
             self._search_sync,
@@ -394,6 +402,7 @@ class FileStoreService:
             tissue_type,
             benign_malignant,
             embedding_model,
+            panel_tag,
         )
 
     # --- Feedback -----------------------------------------------------------

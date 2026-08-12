@@ -122,7 +122,15 @@
       "Bash(curl -s -X POST 'http://localhost:8001/api/v1/search/similar?panel_tag=Beamforming%20Panel&limit=10' -F 'file=@scratch_beamforming_query.png;type=image/png')",
       "Bash(taskkill //PID 40224 //F)",
       "Bash(taskkill //PID 45032 //F)",
-      "Bash(curl -s -X POST 'http://localhost:8001/api/v1/search/similar?panel_tag=Beamforming%20Panel&limit=5' -F 'file=@scratch_beamforming_query.png;type=image/png')"
+      "Bash(curl -s -X POST 'http://localhost:8001/api/v1/search/similar?panel_tag=Beamforming%20Panel&limit=5' -F 'file=@scratch_beamforming_query.png;type=image/png')",
+      "Bash(tasklist //FI \"IMAGENAME eq ngrok.exe\")",
+      "Bash(curl -s http://127.0.0.1:4040/api/tunnels)",
+      "Bash(npm run *)",
+      "Bash(taskkill //PID 41148 //F)",
+      "Bash(taskkill //PID 32164 //F)",
+      "Bash(curl -s http://localhost:8001/ -w \"\\\\nstatus:%{http_code}\\\\n\")",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/library/verify-passkey -H \"Content-Type: application/json\" -d '{\"passkey\":\"wrong\"}' -w \"\\\\nstatus:%{http_code}\\\\n\")",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/library/verify-passkey -H \"Content-Type: application/json\" -d '{\"passkey\":\"admin123\"}' -w \"\\\\nstatus:%{http_code}\\\\n\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

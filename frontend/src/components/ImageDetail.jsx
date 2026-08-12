@@ -11,6 +11,9 @@ export default function ImageDetail({
   allowDelete = false,
   allowEdit = false,
   onEdit = null,
+  adminPasskey = null,
+  onUnlock = null,
+  onAuthError = null,
   currentIndex = null,
   totalCount = null,
   onPrev = null,
@@ -26,8 +29,10 @@ export default function ImageDetail({
   const [error, setError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const [deletePasskey, setDeletePasskey] = useState("");
   const [deleteError, setDeleteError] = useState(null);
+  const [unlockInput, setUnlockInput] = useState("");
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState(null);
 
   const canNavigate = typeof currentIndex === "number" && totalCount > 0 && (onPrev || onNext);
   const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
@@ -49,8 +54,10 @@ export default function ImageDetail({
     setShowOrientation(false);
     setError(null);
     setConfirmDelete(false);
-    setDeletePasskey("");
     setDeleteError(null);
+    setUnlockInput("");
+    setUnlocking(false);
+    setUnlockError(null);
   }, [image.id]);
 
   useEffect(() => {
@@ -111,14 +118,29 @@ export default function ImageDetail({
     setDeleting(true);
     setDeleteError(null);
     try {
-      await deleteLibraryEntry(image.id, deletePasskey);
+      await deleteLibraryEntry(image.id, adminPasskey);
       if (onDeleted) onDeleted();
       else onBack();
     } catch (err) {
       setDeleteError(err.message);
-      setDeletePasskey("");
+      if (err.status === 403) onAuthError?.();
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleUnlockSubmit = async (e) => {
+    e.preventDefault();
+    if (!unlockInput || unlocking) return;
+    setUnlocking(true);
+    setUnlockError(null);
+    try {
+      await onUnlock?.(unlockInput);
+      setUnlockInput("");
+    } catch (err) {
+      setUnlockError(err.message);
+    } finally {
+      setUnlocking(false);
     }
   };
 
@@ -165,12 +187,32 @@ export default function ImageDetail({
           </div>
         )}
 
-        {allowEdit && !confirmDelete && (
+        {(allowEdit || allowDelete) && !adminPasskey && !confirmDelete && (
+          <form className="delete-confirm" onSubmit={handleUnlockSubmit}>
+            <input
+              type="password"
+              className="form-input delete-passkey-input"
+              placeholder="Passkey to edit/delete"
+              value={unlockInput}
+              onChange={(e) => setUnlockInput(e.target.value)}
+              autoComplete="off"
+            />
+            <button
+              type="submit"
+              className="btn btn-secondary"
+              disabled={unlocking || !unlockInput}
+            >
+              {unlocking ? "Checking…" : "Unlock"}
+            </button>
+            {unlockError && <span className="heatmap-error delete-error">{unlockError}</span>}
+          </form>
+        )}
+        {allowEdit && adminPasskey && !confirmDelete && (
           <button className="btn btn-secondary" onClick={() => onEdit?.(result)}>
             Edit Entry
           </button>
         )}
-        {allowDelete && !confirmDelete && (
+        {allowDelete && adminPasskey && !confirmDelete && (
           <button
             className="btn btn-danger"
             onClick={() => { setConfirmDelete(true); setDeleteError(null); }}
@@ -178,29 +220,20 @@ export default function ImageDetail({
             Delete Entry
           </button>
         )}
-        {allowDelete && confirmDelete && (
+        {allowDelete && adminPasskey && confirmDelete && (
           <form
             className="delete-confirm"
             onSubmit={(e) => {
               e.preventDefault();
-              if (!deleting && deletePasskey) handleDelete();
+              if (!deleting) handleDelete();
             }}
           >
             <span>Delete this entry permanently?</span>
             <strong className="delete-warning">DELETION CANNOT BE UNDONE</strong>
-            <input
-              type="password"
-              className="form-input delete-passkey-input"
-              placeholder="Passkey"
-              value={deletePasskey}
-              onChange={(e) => setDeletePasskey(e.target.value)}
-              autoFocus
-              autoComplete="off"
-            />
             <button
               type="submit"
               className="btn btn-danger"
-              disabled={deleting || !deletePasskey}
+              disabled={deleting}
             >
               {deleting ? "Deleting…" : "Confirm"}
             </button>
@@ -209,7 +242,6 @@ export default function ImageDetail({
               className="btn btn-secondary"
               onClick={() => {
                 setConfirmDelete(false);
-                setDeletePasskey("");
                 setDeleteError(null);
               }}
             >

@@ -89,12 +89,25 @@ export async function deleteLibraryEntry(imageId, passkey) {
     headers: { "X-Delete-Passkey": passkey ?? "" },
   });
   if (!response.ok) {
-    const error = await response.json().catch(() => ({}));
-    throw new Error(
-      error?.error?.message || `Delete failed: ${response.status}`
-    );
+    const err = await response.json().catch(() => ({}));
+    const error = new Error(err?.error?.message || `Delete failed: ${response.status}`);
+    error.status = response.status;
+    throw error;
   }
   return response.json();
+}
+
+export async function verifyPasskey(passkey) {
+  const response = await fetch(`${BASE_URL}/library/verify-passkey`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ passkey }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(error?.error?.message || "Incorrect passkey.");
+  }
+  return true;
 }
 
 export async function getRuns() {
@@ -248,6 +261,7 @@ export async function updateLibraryEntry(
     const err = await response.json().catch(() => ({}));
     const error = new Error(err?.error?.message || `Update failed: ${response.status}`);
     error.details = err?.error?.details;
+    error.status = response.status;
     throw error;
   }
   return response.json();

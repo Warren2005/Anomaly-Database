@@ -104,6 +104,29 @@ class TestDeleteLibraryEntryPasskey:
             assert response.status_code == 404
 
 
+class TestVerifyPasskey:
+    def test_verify_passkey_with_correct_passkey_succeeds(self):
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/library/verify-passkey", json={"passkey": "admin123"}
+        )
+        assert response.status_code == 200
+        assert response.json() == {"ok": True}
+
+    def test_verify_passkey_with_wrong_passkey_is_forbidden(self):
+        client = TestClient(app)
+        response = client.post(
+            "/api/v1/library/verify-passkey", json={"passkey": "wrong-passkey"}
+        )
+        assert response.status_code == 403
+        assert response.json()["error"]["code"] == "FORBIDDEN"
+
+    def test_verify_passkey_missing_body_field_is_unprocessable(self):
+        client = TestClient(app)
+        response = client.post("/api/v1/library/verify-passkey", json={})
+        assert response.status_code == 400
+
+
 class TestUpdateLibraryEntry:
     def test_update_without_passkey_is_forbidden(self):
         image_id = uuid4()

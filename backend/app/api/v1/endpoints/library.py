@@ -398,6 +398,21 @@ async def add_run(
     return RunEntry(**entry)
 
 
+class VerifyPasskeyRequest(BaseModel):
+    passkey: str
+
+
+@router.post("/verify-passkey")
+async def verify_passkey(body: VerifyPasskeyRequest):
+    """Check a passkey with no side effects — lets the frontend gate the
+    Edit/Delete buttons behind a single upfront check instead of only
+    discovering a wrong/missing passkey when a PUT/DELETE is submitted.
+    """
+    if body.passkey != settings.library_delete_passkey:
+        raise ForbiddenError("Incorrect passkey.")
+    return {"ok": True}
+
+
 def _parse_tag_list(raw: Optional[str]) -> list[str]:
     """Comma-separated tags -> a clean, case-insensitively-deduped list,
     preserving the first-seen casing. Always authoritative (the caller —

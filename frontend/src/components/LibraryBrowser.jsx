@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { browseLibrary, getFilters, resolveImageUrl } from "../api/client";
+import { browseLibrary, getFilters, resolveImageUrl, verifyPasskey } from "../api/client";
 import ImageDetail from "./ImageDetail";
 import LibraryUpload from "./LibraryUpload";
 import {
@@ -52,6 +52,18 @@ export default function LibraryBrowser() {
   const [error, setError] = useState(null);
   const [selected, setSelected] = useState(null);
   const [editingItem, setEditingItem] = useState(null);
+  // Edit/Delete unlock — scoped to whichever anomaly is currently open, not
+  // the whole session: cleared whenever the user leaves it (Back, a
+  // completed delete, or a completed edit), but survives cancelling an
+  // edit back into the same anomaly's detail view.
+  const [adminPasskey, setAdminPasskey] = useState(null);
+
+  const handleUnlock = useCallback(async (passkey) => {
+    await verifyPasskey(passkey);
+    setAdminPasskey(passkey);
+  }, []);
+
+  const lockAdmin = useCallback(() => setAdminPasskey(null), []);
   const [openSections, setOpenSections] = useState({
     type: true,
     identification: true,
@@ -115,12 +127,15 @@ export default function LibraryBrowser() {
     return (
       <LibraryUpload
         editingImage={editingItem}
+        adminPasskey={adminPasskey}
+        onAuthError={lockAdmin}
         onCancel={() => {
           setSelected(editingItem);
           setEditingItem(null);
         }}
         onSuccess={(result) => {
           setEditingItem(null);
+          lockAdmin();
           if (result) {
             setSelected({
               image: result.image,
@@ -145,9 +160,13 @@ export default function LibraryBrowser() {
           orientation_image_url: selected.orientation_image_url,
           similarity_score: null,
         }}
-        onBack={() => setSelected(null)}
+        onBack={() => {
+          setSelected(null);
+          lockAdmin();
+        }}
         onDeleted={() => {
           setSelected(null);
+          lockAdmin();
           load();
         }}
         onEdit={(result) => {
@@ -157,6 +176,9 @@ export default function LibraryBrowser() {
         backLabel="Back to Library"
         allowDelete
         allowEdit
+        adminPasskey={adminPasskey}
+        onUnlock={handleUnlock}
+        onAuthError={lockAdmin}
       />
     );
   }

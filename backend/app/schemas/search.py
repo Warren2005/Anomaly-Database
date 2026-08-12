@@ -11,6 +11,7 @@ class SearchResult(BaseModel):
     image: ImageResponse
     similarity_score: float
     image_url: str
+    orientation_image_url: Optional[str] = None
 
 
 class SearchResponse(BaseModel):
@@ -26,6 +27,7 @@ class ImageDetailResponse(BaseModel):
     image: ImageResponse
     image_url: str
     media_urls: list[str] = []
+    orientation_image_url: Optional[str] = None
 
 
 class FiltersResponse(BaseModel):

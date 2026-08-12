@@ -71,6 +71,11 @@ async def search_by_text(body: TextSearchRequest):
             image=ImageResponse.model_validate(image),
             similarity_score=score,
             image_url=f"/api/v1/images/{image.id}/file",
+            orientation_image_url=(
+                f"/api/v1/images/{image.id}/orientation"
+                if image.orientation_image_path
+                else None
+            ),
         )
         for image, score in matches
     ]

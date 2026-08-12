@@ -32,6 +32,7 @@ const EMPTY_FORM = {
   notes: "",
   analyst: "",
   zero_angle_frame_index: "",
+  pipe_angle: "",
   is_qc_flag: false,
   qc_raised_by: "",
   qc_reviewer: "",
@@ -55,6 +56,7 @@ function formFromImage(image) {
     notes: image.notes || "",
     analyst: image.analyst || "",
     zero_angle_frame_index: image.zero_angle_frame_index ?? "",
+    pipe_angle: image.pipe_angle ?? "",
     is_qc_flag: Boolean(image.is_qc_flag),
     qc_raised_by: image.qc_raised_by || "",
     qc_reviewer: image.qc_reviewer || "",
@@ -93,6 +95,10 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   const [tagOptions, setTagOptions] = useState([]);
   const [selectedTags, setSelectedTags] = useState(() => editingImage?.image?.tags || []);
   const [tagInput, setTagInput] = useState("");
+  const [orientationFile, setOrientationFile] = useState(null);
+  const [orientationPreview, setOrientationPreview] = useState(null);
+  const [orientationRemoved, setOrientationRemoved] = useState(false);
+  const orientationInputRef = useRef(null);
   const [showAddRun, setShowAddRun] = useState(false);
   const [newRunName, setNewRunName] = useState("");
   const [newRunId, setNewRunId] = useState("");
@@ -112,6 +118,8 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
     || existingMedia.some((m) => m.removed)
     || selectedTags.length !== initialTags.length
     || selectedTags.some((t) => !initialTags.includes(t))
+    || Boolean(orientationFile)
+    || orientationRemoved
     || Object.keys(EMPTY_FORM).some((key) => form[key] !== initialForm[key])
   );
 
@@ -165,6 +173,31 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   const removeTag = useCallback((tag) => {
     setSelectedTags((prev) => prev.filter((t) => t !== tag));
   }, []);
+
+  const existingOrientationUrl =
+    !orientationFile && !orientationRemoved ? editingImage?.orientation_image_url : null;
+
+  const handleOrientationPick = (file) => {
+    if (!file) return;
+    if (!ACCEPTED_IMAGE_TYPES.includes(file.type) && !file.type.startsWith("image/")) {
+      setError("Please use JPEG, PNG, TIFF, GIF, or WebP for the orientation image.");
+      return;
+    }
+    setOrientationFile(file);
+    setOrientationRemoved(false);
+    const reader = new FileReader();
+    reader.onload = (e) => setOrientationPreview(e.target.result);
+    reader.readAsDataURL(file);
+  };
+
+  const clearOrientation = () => {
+    setOrientationFile(null);
+    setOrientationPreview(null);
+    if (isEditMode && editingImage?.orientation_image_url) {
+      setOrientationRemoved(true);
+    }
+    if (orientationInputRef.current) orientationInputRef.current.value = "";
+  };
 
   const runIdFor = useCallback(
     (run) => {
@@ -340,6 +373,10 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
     if (frameRaw !== "" && !/^\d+$/.test(frameRaw)) {
       errs.zero_angle_frame_index = "Whole number only";
     }
+    const pipeAngleRaw = String(form.pipe_angle ?? "").trim();
+    if (pipeAngleRaw !== "" && !/^\d+(\.\d+)?$/.test(pipeAngleRaw)) {
+      errs.pipe_angle = "Numbers only (any decimals)";
+    }
     return errs;
   };
 
@@ -362,6 +399,7 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
           form.zero_angle_frame_index !== ""
             ? String(form.zero_angle_frame_index).trim()
             : undefined,
+        pipe_angle: form.pipe_angle !== "" ? String(form.pipe_angle).trim() : undefined,
         is_qc_flag: form.is_qc_flag ? "true" : "false",
         tags: selectedTags.join(","),
       };
@@ -378,7 +416,13 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
         const panelTags = [...survivingExisting.map((m) => m.panelTag), ...filePanelTags];
         const result = await updateLibraryEntry(
           editingImage.image.id,
-          { newFiles: files, panelTags, removeIndices },
+          {
+            newFiles: files,
+            panelTags,
+            removeIndices,
+            newOrientationImage: orientationFile,
+            removeOrientationImage: orientationRemoved,
+          },
           payload,
           editPasskey
         );
@@ -389,7 +433,7 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
       } else {
         // Ordered 1:1 with uploaded files (primary first, then extras)
         payload.panel_tags = filePanelTags.join(",");
-        const result = await uploadToLibrary(files, payload);
+        const result = await uploadToLibrary(files, payload, orientationFile);
         setSuccess(result);
         if (onSuccess) onSuccess();
       }
@@ -411,6 +455,9 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
     setForm(EMPTY_FORM);
     setSelectedTags([]);
     setTagInput("");
+    setOrientationFile(null);
+    setOrientationPreview(null);
+    setOrientationRemoved(false);
     setSuccess(null);
     setError(null);
     setFieldErrors({});
@@ -868,6 +915,56 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
             value={form.analyst}
             onChange={(e) => handleFormChange("analyst", e.target.value)}
           />
+        </div>
+
+        <div className="form-field orientation-field">
+          <label className="form-label">
+            Orientation Image <span className="opt">optional — reference only, never used in search</span>
+          </label>
+          {(orientationPreview || existingOrientationUrl) ? (
+            <div className="orientation-preview">
+              <img src={orientationPreview || resolveImageUrl(existingOrientationUrl)} alt="Orientation reference" />
+              <button
+                type="button"
+                className="remove-img"
+                onClick={clearOrientation}
+                aria-label="Remove orientation image"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => orientationInputRef.current?.click()}
+            >
+              Choose orientation image…
+            </button>
+          )}
+          <input
+            ref={orientationInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/tiff,image/gif,image/webp"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              handleOrientationPick(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+          <div className="form-field pipe-angle-field">
+            <label className="form-label">
+              Pipe Angle <span className="opt">optional — degrees</span>
+            </label>
+            <input
+              className={`form-input${fieldErrors.pipe_angle ? " has-error-input" : ""}`}
+              type="text"
+              inputMode="decimal"
+              placeholder="e.g. 47.5"
+              value={form.pipe_angle}
+              onChange={(e) => handleFormChange("pipe_angle", e.target.value)}
+            />
+          </div>
         </div>
 
         {isEditMode && (

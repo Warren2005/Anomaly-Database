@@ -4,6 +4,8 @@ Image detail and filter endpoints.
 GET /api/v1/images/filters — distinct filter values for UI dropdowns
 GET /api/v1/images/{image_id} — single image metadata + proxy URL
 GET /api/v1/images/{image_id}/file — raw image bytes
+GET /api/v1/images/{image_id}/orientation — the optional reference-only
+    orientation image (never part of search — see Image.orientation_image_path)
 """
 
 from uuid import UUID
@@ -94,6 +96,22 @@ async def get_image_media(image_id: UUID, index: int):
     return Response(content=data, media_type=media_type)
 
 
+@router.get("/{image_id}/orientation")
+async def get_image_orientation(image_id: UUID):
+    """Serve the optional orientation reference image — never part of the
+    searchable media set (see Image.orientation_image_path)."""
+    image = await file_store_service.get_image(image_id)
+    if not image or not image.orientation_image_path:
+        raise NotFoundError(
+            f"No orientation image for {image_id}",
+            details={"image_id": str(image_id)},
+        )
+    data = await local_storage_service.get_image(image.orientation_image_path)
+    suffix = image.orientation_image_path.rsplit(".", 1)[-1].lower()
+    media_type = "image/jpeg" if suffix in ("jpg", "jpeg") else f"image/{suffix}"
+    return Response(content=data, media_type=media_type)
+
+
 @router.get("/{image_id}", response_model=ImageDetailResponse)
 async def get_image(image_id: UUID):
     """Fetch a single image's metadata and media URLs."""
@@ -106,8 +124,12 @@ async def get_image(image_id: UUID):
     media_urls = [f"/api/v1/images/{image_id}/file"]
     for i in range(len(image.additional_image_paths or [])):
         media_urls.append(f"/api/v1/images/{image_id}/media/{i + 1}")
+    orientation_url = (
+        f"/api/v1/images/{image_id}/orientation" if image.orientation_image_path else None
+    )
     return ImageDetailResponse(
         image=ImageResponse.model_validate(image),
         image_url=media_urls[0],
         media_urls=media_urls,
+        orientation_image_url=orientation_url,
     )

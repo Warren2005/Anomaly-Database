@@ -63,5 +63,13 @@ class Image:
     track: Optional[int] = None
     # Extra media paths beyond image_path (primary / CLIP source)
     additional_image_paths: Optional[list] = field(default_factory=list)
+    # A single optional reference image (team-specific "orientation" shot)
+    # shown alongside an entry for context — deliberately NOT part of
+    # image_path/additional_image_paths, so it's structurally impossible
+    # for it to ever be embedded, searched, or promoted to primary: the
+    # entire search/embedding pipeline only ever looks at those two fields.
+    orientation_image_path: Optional[str] = None
+    # Pipe angle in degrees, associated with the orientation image.
+    pipe_angle: Optional[float] = None
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

@@ -402,6 +402,203 @@ class TestUploadLibraryEntry:
             assert response.json()["image"]["tags"] == []
 
 
+class TestOrientationImage:
+    """The orientation image is reference-only and must never enter the
+    search/embedding pipeline — these tests specifically guard that."""
+
+    def _valid_data(self, **overrides):
+        data = {"identification": "Corrosion Pitting", "anomaly_id": "ORIENT-001"}
+        data.update(overrides)
+        return data
+
+    def test_upload_with_orientation_image_is_never_embedded_or_searchable(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data=self._valid_data(),
+                files={
+                    "files": ("a.jpg", b"searchable-bytes", "image/jpeg"),
+                    "orientation_image": ("o.jpg", b"orientation-bytes", "image/jpeg"),
+                },
+            )
+
+            assert response.status_code == 200
+            body = response.json()
+            # Never in the searchable media list
+            assert "orientation" not in " ".join(body["media_urls"])
+            assert body["image"]["additional_image_paths"] == []
+            # Served through its own dedicated URL instead
+            assert body["orientation_image_url"] == f"/api/v1/images/{body['image']['id']}/orientation"
+            # Embedded exactly once — for the primary searchable image only
+            mock_embed.get_embedding.assert_called_once_with(b"searchable-bytes")
+
+    def test_upload_stores_pipe_angle(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data=self._valid_data(pipe_angle="47.5"),
+                files={"files": ("a.jpg", b"fake-bytes", "image/jpeg")},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["image"]["pipe_angle"] == 47.5
+
+    def test_update_changes_pipe_angle(self):
+        image_id = uuid4()
+        existing = _make_image(image_id, pipe_angle=10.0)
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service"),
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={"pipe_angle": "275"},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["image"]["pipe_angle"] == 275.0
+
+    def test_upload_without_orientation_image_has_no_orientation_url(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data=self._valid_data(),
+                files={"files": ("a.jpg", b"fake-bytes", "image/jpeg")},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["orientation_image_url"] is None
+
+    def test_update_replaces_orientation_image_and_deletes_old_file(self):
+        image_id = uuid4()
+        existing = _make_image(
+            image_id, orientation_image_path="library/old_orientation.jpg"
+        )
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            mock_local.delete_image = AsyncMock()
+            mock_local.upload_image = AsyncMock()
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={},
+                files={"new_orientation_image": ("new.jpg", b"new-bytes", "image/jpeg")},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            mock_local.delete_image.assert_called_once_with("library/old_orientation.jpg")
+            assert response.json()["orientation_image_url"] is not None
+            # Primary embedding untouched — orientation swap doesn't affect search
+            assert response.json()["image"]["image_path"] == existing.image_path
+
+    def test_update_removes_orientation_image(self):
+        image_id = uuid4()
+        existing = _make_image(
+            image_id, orientation_image_path="library/old_orientation.jpg"
+        )
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            mock_local.delete_image = AsyncMock()
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={"remove_orientation_image": "true"},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            mock_local.delete_image.assert_called_once_with("library/old_orientation.jpg")
+            assert response.json()["orientation_image_url"] is None
+
+    def test_delete_entry_also_removes_orientation_file(self):
+        image_id = uuid4()
+        deleted_image = _make_image(
+            image_id, orientation_image_path="library/orientation_to_clean.jpg"
+        )
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+        ):
+            mock_store.delete_image = AsyncMock(return_value=deleted_image)
+            mock_local.delete_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.delete(
+                f"/api/v1/library/{image_id}",
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            mock_local.delete_image.assert_any_call("library/orientation_to_clean.jpg")
+
+
 class TestUpdateLibraryEntryTags:
     def test_update_replaces_tags_with_submitted_list(self):
         image_id = uuid4()

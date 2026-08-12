@@ -16,11 +16,12 @@ export default function ImageDetail({
   onPrev = null,
   onNext = null,
 }) {
-  const { image, similarity_score, image_url, media_urls } = result;
+  const { image, similarity_score, image_url, media_urls, orientation_image_url } = result;
   const media = (media_urls && media_urls.length ? media_urls : [image_url]).filter(Boolean);
   const [mediaIdx, setMediaIdx] = useState(0);
   const [heatmapUrl, setHeatmapUrl] = useState(null);
   const [showHeatmap, setShowHeatmap] = useState(false);
+  const [showOrientation, setShowOrientation] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -39,6 +40,7 @@ export default function ImageDetail({
     setMediaIdx(0);
     setHeatmapUrl(null);
     setShowHeatmap(false);
+    setShowOrientation(false);
     setError(null);
     setConfirmDelete(false);
     setDeletePasskey("");
@@ -76,6 +78,7 @@ export default function ImageDetail({
       setShowHeatmap(false);
       return;
     }
+    setShowOrientation(false);
     if (heatmapUrl) {
       setShowHeatmap(true);
       return;
@@ -91,6 +94,11 @@ export default function ImageDetail({
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleToggleOrientation = () => {
+    setShowOrientation((prev) => !prev);
+    setShowHeatmap(false);
   };
 
   const handleDelete = async () => {
@@ -109,9 +117,12 @@ export default function ImageDetail({
   };
 
   const currentSrc =
-    showHeatmap && heatmapUrl
+    showOrientation && orientation_image_url
+      ? resolveImageUrl(orientation_image_url)
+      : showHeatmap && heatmapUrl
       ? heatmapUrl
       : resolveImageUrl(media[mediaIdx] || image_url);
+  const currentAlt = showOrientation ? "Orientation reference" : title;
 
   return (
     <div className="image-detail">
@@ -205,8 +216,13 @@ export default function ImageDetail({
 
       <div className="detail-content">
         <div className="detail-image-container">
-          <ZoomableImage src={currentSrc} alt={title} />
-          {media.length > 1 && !showHeatmap && (
+          <ZoomableImage src={currentSrc} alt={currentAlt} />
+          {showOrientation && (
+            <div className="media-nav">
+              <span>Orientation Image (reference only)</span>
+            </div>
+          )}
+          {media.length > 1 && !showHeatmap && !showOrientation && (
             <div className="media-nav">
               <button
                 className="btn btn-secondary"
@@ -228,12 +244,12 @@ export default function ImageDetail({
               </button>
             </div>
           )}
-          {panelTags[mediaIdx] && (
+          {panelTags[mediaIdx] && !showOrientation && (
             <div className="panel-tag-row current-panel-tag">
               <span className="badge badge-panel">{panelTags[mediaIdx]}</span>
             </div>
           )}
-          {media.length > 1 && !showHeatmap && (
+          {media.length > 1 && !showHeatmap && !showOrientation && (
             <div className="media-thumbs">
               {media.map((url, i) => (
                 <button
@@ -259,6 +275,14 @@ export default function ImageDetail({
             >
               {loading ? "Generating..." : showHeatmap ? "Show Original" : "Show Attention Map"}
             </button>
+            {orientation_image_url && (
+              <button
+                className={`btn ${showOrientation ? "btn-primary" : "btn-secondary"}`}
+                onClick={handleToggleOrientation}
+              >
+                {showOrientation ? "Show Original" : "View Orientation Image"}
+              </button>
+            )}
             {error && <span className="heatmap-error">{error}</span>}
           </div>
         </div>
@@ -297,6 +321,19 @@ export default function ImageDetail({
             </div>
           )}
 
+          {orientation_image_url && (
+            <div className="orientation-detail">
+              <span className="orientation-detail-label">Orientation Image (reference only)</span>
+              <button
+                type="button"
+                onClick={handleToggleOrientation}
+                className="orientation-detail-thumb"
+              >
+                <img src={resolveImageUrl(orientation_image_url)} alt="Orientation reference" />
+              </button>
+            </div>
+          )}
+
           {similarity_score != null && (
             <div className="detail-score">
               <span className="detail-label">Similarity</span>
@@ -308,6 +345,7 @@ export default function ImageDetail({
             <tbody>
               <DetailRow label="Anomaly ID" value={image.anomaly_id} />
               <DetailRow label="Identification" value={image.identification} />
+              <DetailRow label="Pipe Angle" value={image.pipe_angle != null ? `${image.pipe_angle}°` : null} />
               <DetailRow label="Anomaly Type" value={image.anomaly_type} />
               <DetailRow label="Run" value={image.run_number} />
               <DetailRow label="ZeroAngle Frame Index" value={image.zero_angle_frame_index} />

@@ -53,11 +53,16 @@ def _media_urls(image_id: UUID, image: Image) -> list[str]:
     return urls
 
 
+def _orientation_url(image_id: UUID, image: Image) -> Optional[str]:
+    return f"/api/v1/images/{image_id}/orientation" if image.orientation_image_path else None
+
+
 def _detail(image: Image) -> ImageDetailResponse:
     return ImageDetailResponse(
         image=ImageResponse.model_validate(image),
         image_url=f"/api/v1/images/{image.id}/file",
         media_urls=_media_urls(image.id, image),
+        orientation_image_url=_orientation_url(image.id, image),
     )
 
 
@@ -82,6 +87,8 @@ async def _store_upload(upload: UploadFile, object_name: str) -> bytes:
 @router.post("/upload", response_model=LibraryUploadResponse)
 async def upload_to_library(
     files: list[UploadFile] = File(...),
+    orientation_image: Optional[UploadFile] = File(None),
+    pipe_angle: Optional[float] = Form(None),
     anomaly_description: Optional[str] = Form(None),
     anomaly_status: Optional[str] = Form(None),
     anomaly_type: Optional[str] = Form(None),
@@ -150,6 +157,15 @@ async def upload_to_library(
         await _store_upload(extra, path)
         additional_paths.append(path)
 
+    # Reference-only image (never embedded, never searched — see the
+    # Image.orientation_image_path docstring). Stored and served through
+    # entirely separate paths/endpoints from the searchable media above.
+    orientation_path: Optional[str] = None
+    if orientation_image is not None and orientation_image.filename:
+        ext = CONTENT_TYPE_EXT.get(orientation_image.content_type or "", ".jpg")
+        orientation_path = f"library/{image_id}_orientation{ext}"
+        await _store_upload(orientation_image, orientation_path)
+
     embedding = await embedding_service.get_embedding(primary_bytes)
     rerank_embedding = None
     if settings.rerank_enabled and rerank_embedding_service.health_check():
@@ -187,6 +203,8 @@ async def upload_to_library(
         zero_angle_frame_index=zero_angle_frame_index,
         track=track,
         additional_image_paths=additional_paths,
+        orientation_image_path=orientation_path,
+        pipe_angle=pipe_angle,
     )
     await file_store_service.upsert_image(
         record,
@@ -212,6 +230,7 @@ async def upload_to_library(
         image=ImageResponse.model_validate(record),
         image_url=media[0],
         media_urls=media,
+        orientation_image_url=_orientation_url(image_id, record),
         message="Image saved to library",
     )
 
@@ -390,6 +409,9 @@ def _resolved_num(raw: Optional[str], existing, cast):
 async def update_library_entry(
     image_id: UUID,
     new_files: list[UploadFile] = File(default=[]),
+    new_orientation_image: Optional[UploadFile] = File(None),
+    remove_orientation_image: Optional[bool] = Form(None),
+    pipe_angle: Optional[str] = Form(None),
     panel_tags: Optional[str] = Form(None),
     remove_media: Optional[str] = Form(None),
     anomaly_description: Optional[str] = Form(None),
@@ -487,6 +509,29 @@ async def update_library_entry(
         await _store_upload(f, path)
         new_paths.append(path)
 
+    # Orientation reference image — handled entirely separately from the
+    # searchable media above/below; never touches primary/embedding logic.
+    # A replacement takes priority over a removal request in the same
+    # submission (the frontend never sends both at once, but if it did,
+    # "here's the new one" is the more sensible read than "delete it").
+    orientation_path = existing.orientation_image_path
+    if new_orientation_image is not None and new_orientation_image.filename:
+        ext = CONTENT_TYPE_EXT.get(new_orientation_image.content_type or "", ".jpg")
+        new_o_path = f"library/{image_id}_orientation_{uuid4().hex[:8]}{ext}"
+        await _store_upload(new_orientation_image, new_o_path)
+        if existing.orientation_image_path:
+            try:
+                await local_storage_service.delete_image(existing.orientation_image_path)
+            except Exception:
+                pass
+        orientation_path = new_o_path
+    elif remove_orientation_image and existing.orientation_image_path:
+        try:
+            await local_storage_service.delete_image(existing.orientation_image_path)
+        except Exception:
+            pass
+        orientation_path = None
+
     final_paths = surviving + new_paths
     # Padded with "" rather than None: ImageResponse's panel_tags is
     # list[str] (not nullable), matching how the upload endpoint's own
@@ -564,6 +609,8 @@ async def update_library_entry(
         ),
         track=track_val,
         additional_image_paths=new_additional_paths,
+        orientation_image_path=orientation_path,
+        pipe_angle=_resolved_num(pipe_angle, existing.pipe_angle, float),
         created_at=existing.created_at,
     )
 
@@ -587,6 +634,7 @@ async def update_library_entry(
         image=ImageResponse.model_validate(updated),
         image_url=media[0],
         media_urls=media,
+        orientation_image_url=_orientation_url(image_id, updated),
         message="Entry updated",
     )
 
@@ -609,7 +657,11 @@ async def delete_library_entry(image_id: UUID, x_delete_passkey: Optional[str] =
             details={"image_id": str(image_id)},
         )
 
-    paths = [deleted.image_path, *(deleted.additional_image_paths or [])]
+    paths = [
+        deleted.image_path,
+        *(deleted.additional_image_paths or []),
+        deleted.orientation_image_path,
+    ]
     for path in paths:
         if path:
             try:

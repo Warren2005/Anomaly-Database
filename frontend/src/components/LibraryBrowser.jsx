@@ -120,6 +120,7 @@ export default function LibraryBrowser() {
               image: result.image,
               image_url: result.image_url,
               media_urls: result.media_urls,
+              orientation_image_url: result.orientation_image_url,
               similarity_score: null,
             });
           }
@@ -136,6 +137,7 @@ export default function LibraryBrowser() {
           image: selected.image,
           image_url: selected.image_url,
           media_urls: selected.media_urls,
+          orientation_image_url: selected.orientation_image_url,
           similarity_score: null,
         }}
         onBack={() => setSelected(null)}

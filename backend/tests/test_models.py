@@ -23,6 +23,7 @@ def test_image_model_fields():
         "is_qc_flag", "qc_raised_by", "qc_reviewer", "qc_decision_rationale",
         "signal_description", "notes", "panel_tags", "tags",
         "zero_angle_frame_index", "track", "additional_image_paths",
+        "orientation_image_path", "pipe_angle",
     }
     assert field_names == expected
 

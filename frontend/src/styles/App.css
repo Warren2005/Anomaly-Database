@@ -1564,6 +1564,32 @@ body {
   object-fit: cover;
 }
 
+.orientation-field {
+  padding: 12px;
+  border: 1px dashed var(--border);
+  border-radius: 10px;
+}
+
+.pipe-angle-field {
+  margin-top: 14px;
+  max-width: 220px;
+}
+
+.orientation-preview {
+  position: relative;
+  width: 140px;
+  height: 110px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.orientation-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
 .preview-primary {
   position: absolute;
   left: 4px;
@@ -1865,6 +1891,40 @@ body {
   font-weight: 700;
   color: var(--accent);
   letter-spacing: -0.02em;
+}
+
+.orientation-detail {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 14px;
+}
+
+.orientation-detail-label {
+  display: block;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  font-weight: 500;
+  margin-bottom: 8px;
+}
+
+.orientation-detail-thumb {
+  display: block;
+  width: 140px;
+  height: 110px;
+  border-radius: 10px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  padding: 0;
+  background: none;
+  cursor: pointer;
+}
+
+.orientation-detail-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .detail-table {

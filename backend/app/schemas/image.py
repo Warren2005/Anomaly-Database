@@ -39,6 +39,8 @@ class ImageBase(BaseModel):
     zero_angle_frame_index: Optional[int] = None
     track: Optional[int] = None
     additional_image_paths: Optional[list[str]] = None
+    orientation_image_path: Optional[str] = None
+    pipe_angle: Optional[float] = None
 
 
 class ImageCreate(ImageBase):
@@ -57,4 +59,5 @@ class LibraryUploadResponse(BaseModel):
     image: ImageResponse
     image_url: str
     media_urls: list[str] = []
+    orientation_image_url: Optional[str] = None
     message: str

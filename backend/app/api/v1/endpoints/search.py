@@ -107,6 +107,11 @@ async def search_similar(
                 image=ImageResponse.model_validate(image),
                 similarity_score=round(adjusted_score, 6),
                 image_url=f"/api/v1/images/{image.id}/file",
+                orientation_image_url=(
+                    f"/api/v1/images/{image.id}/orientation"
+                    if image.orientation_image_path
+                    else None
+                ),
             )
         )
 

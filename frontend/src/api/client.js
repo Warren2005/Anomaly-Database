@@ -187,10 +187,13 @@ export async function getExplainability(imageId) {
   return URL.createObjectURL(blob);
 }
 
-export async function uploadToLibrary(files, metadata) {
+export async function uploadToLibrary(files, metadata, orientationImage) {
   const form = new FormData();
   const list = Array.isArray(files) ? files : [files];
   list.forEach((f) => form.append("files", f));
+  // Reference-only image — a completely separate field from `files`, so
+  // it's structurally impossible for it to end up as searchable media.
+  if (orientationImage) form.append("orientation_image", orientationImage);
   Object.entries(metadata).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== "") form.append(k, v);
   });
@@ -209,7 +212,13 @@ export async function uploadToLibrary(files, metadata) {
 
 export async function updateLibraryEntry(
   imageId,
-  { newFiles = [], panelTags = [], removeIndices = [] } = {},
+  {
+    newFiles = [],
+    panelTags = [],
+    removeIndices = [],
+    newOrientationImage = null,
+    removeOrientationImage = false,
+  } = {},
   metadata,
   passkey
 ) {
@@ -217,6 +226,8 @@ export async function updateLibraryEntry(
   newFiles.forEach((f) => form.append("new_files", f));
   if (panelTags.length) form.append("panel_tags", panelTags.join(","));
   if (removeIndices.length) form.append("remove_media", removeIndices.join(","));
+  if (newOrientationImage) form.append("new_orientation_image", newOrientationImage);
+  if (removeOrientationImage) form.append("remove_orientation_image", "true");
   // Unlike upload, every field is sent even when blank — an edit form
   // always resends the current value, and a genuinely blank value means
   // "clear this field," not "wasn't provided" (see library.py's _resolved).

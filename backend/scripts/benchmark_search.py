@@ -52,7 +52,7 @@ def build_synthetic_corpus(data_dir: Path, n: int) -> None:
             "wall_location": None,
             "run_number": None,
             "analysis_comment": None,
-            "analyst": None,
+            "revision_history": [],
             "created_at": "2026-01-01T00:00:00+00:00",
             "updated_at": "2026-01-01T00:00:00+00:00",
             "embedding": vec.tolist(),

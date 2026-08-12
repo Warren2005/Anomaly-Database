@@ -9,6 +9,7 @@ PUT    /api/v1/library/{image_id}
 DELETE /api/v1/library/{image_id}
 """
 
+from datetime import datetime, timezone
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -97,7 +98,8 @@ async def upload_to_library(
     wall_location: Optional[str] = Form(None),
     run_number: Optional[str] = Form(None),
     analysis_comment: Optional[str] = Form(None),
-    analyst: Optional[str] = Form(None),
+    contributor_name: Optional[str] = Form(None),
+    contributor_comment: Optional[str] = Form(None),
     classification_status: Optional[str] = Form(None),
     depth: Optional[float] = Form(None),
     width: Optional[float] = Form(None),
@@ -112,6 +114,8 @@ async def upload_to_library(
     notes: Optional[str] = Form(None),
     panel_tags: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
+    interacts_with_other_features: Optional[bool] = Form(None),
+    interaction_related_items: Optional[str] = Form(None),
     zero_angle_frame_index: Optional[int] = Form(None),
     track: Optional[int] = Form(None),
 ):
@@ -129,11 +133,20 @@ async def upload_to_library(
     anomaly_id = anomaly_id.strip()
     identification = identification.strip()
 
+    if not contributor_name or not contributor_name.strip():
+        raise ValidationError("Contributor name is required.")
+
     if await file_store_service.find_by_anomaly_id(anomaly_id):
         raise ValidationError(
             f"Anomaly ID '{anomaly_id}' is already in use by another entry.",
             details={"field": "anomaly_id"},
         )
+
+    parsed_interaction_items = (
+        _parse_tag_list(interaction_related_items) if interacts_with_other_features else []
+    )
+    if interacts_with_other_features and not parsed_interaction_items:
+        raise ValidationError("Select at least one related anomaly type or component.")
 
     parsed_tags: list[str] = []
     if panel_tags:
@@ -189,7 +202,7 @@ async def upload_to_library(
         wall_location=wall_location,
         run_number=run_number,
         analysis_comment=analysis_comment,
-        analyst=analyst,
+        revision_history=[_build_revision_entry(1, contributor_name, contributor_comment)],
         classification_status=classification_status,
         depth=depth,
         width=width,
@@ -204,6 +217,8 @@ async def upload_to_library(
         notes=notes,
         panel_tags=parsed_tags,
         tags=parsed_anomaly_tags,
+        interacts_with_other_features=interacts_with_other_features,
+        interaction_related_items=parsed_interaction_items,
         zero_angle_frame_index=zero_angle_frame_index,
         track=track,
         additional_image_paths=additional_paths,
@@ -224,7 +239,7 @@ async def upload_to_library(
         "upload",
         image_id=str(image_id),
         anomaly_id=anomaly_id,
-        analyst=analyst,
+        contributor=contributor_name,
         anomaly_type=anomaly_type,
         media_count=len(files),
     )
@@ -313,7 +328,7 @@ async def browse_library(
                         img.identification,
                         img.analysis_comment,
                         img.notes,
-                        img.analyst,
+                        " ".join(e.get("name", "") for e in (img.revision_history or [])),
                         img.run_number,
                         img.anomaly_type,
                         img.qc_decision_rationale,
@@ -386,6 +401,20 @@ def _parse_tag_list(raw: Optional[str]) -> list[str]:
     return result
 
 
+def _build_revision_entry(version: int, name: str, comment: Optional[str]) -> dict:
+    """timestamp is baked in as an ISO string here (not a datetime) because
+    it ends up nested inside Image.revision_history, a plain list field —
+    file_store.py's _image_to_record() only isoformat()s the top-level
+    created_at/updated_at, so a raw datetime here would break json.dumps.
+    """
+    return {
+        "version": version,
+        "name": name.strip(),
+        "comment": (comment or "").strip() or None,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
 def _resolved(raw: Optional[str], existing):
     """Resolve a raw form value against the existing field value:
     - field absent from the form (raw is None)  -> keep existing
@@ -428,7 +457,8 @@ async def update_library_entry(
     wall_location: Optional[str] = Form(None),
     run_number: Optional[str] = Form(None),
     analysis_comment: Optional[str] = Form(None),
-    analyst: Optional[str] = Form(None),
+    contributor_name: Optional[str] = Form(None),
+    contributor_comment: Optional[str] = Form(None),
     classification_status: Optional[str] = Form(None),
     depth: Optional[str] = Form(None),
     width: Optional[str] = Form(None),
@@ -442,6 +472,8 @@ async def update_library_entry(
     limitations_uncertainty: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
+    interacts_with_other_features: Optional[bool] = Form(None),
+    interaction_related_items: Optional[str] = Form(None),
     zero_angle_frame_index: Optional[str] = Form(None),
     track: Optional[str] = Form(None),
     x_delete_passkey: Optional[str] = Header(default=None),
@@ -490,6 +522,22 @@ async def update_library_entry(
             f"Anomaly ID '{anomaly_id_val}' is already in use by another entry.",
             details={"field": "anomaly_id"},
         )
+
+    if not contributor_name or not contributor_name.strip():
+        raise ValidationError("Contributor name is required.")
+    next_revision_version = len(existing.revision_history or []) + 1
+    revision_history_val = (existing.revision_history or []) + [
+        _build_revision_entry(next_revision_version, contributor_name, contributor_comment)
+    ]
+
+    interacts_val = (
+        interacts_with_other_features
+        if interacts_with_other_features is not None
+        else existing.interacts_with_other_features
+    )
+    interaction_items_val = _parse_tag_list(interaction_related_items) if interacts_val else []
+    if interacts_val and not interaction_items_val:
+        raise ValidationError("Select at least one related anomaly type or component.")
 
     current_paths = [existing.image_path, *(existing.additional_image_paths or [])]
 
@@ -599,7 +647,7 @@ async def update_library_entry(
         wall_location=_resolved(wall_location, existing.wall_location),
         run_number=_resolved(run_number, existing.run_number),
         analysis_comment=_resolved(analysis_comment, existing.analysis_comment),
-        analyst=_resolved(analyst, existing.analyst),
+        revision_history=revision_history_val,
         classification_status=_resolved(classification_status, existing.classification_status),
         depth=_resolved_num(depth, existing.depth, float),
         width=_resolved_num(width, existing.width, float),
@@ -618,6 +666,8 @@ async def update_library_entry(
         notes=_resolved(notes, existing.notes),
         panel_tags=final_tags,
         tags=_parse_tag_list(tags),
+        interacts_with_other_features=interacts_val,
+        interaction_related_items=interaction_items_val,
         zero_angle_frame_index=_resolved_num(
             zero_angle_frame_index, existing.zero_angle_frame_index, int
         ),

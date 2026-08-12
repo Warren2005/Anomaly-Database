@@ -60,7 +60,7 @@ async def feedback_task(client: httpx.AsyncClient, base_url: str, image_id: str,
 
 async def upload_task(client: httpx.AsyncClient, base_url: str, seed: int) -> dict:
     files = {"file": (f"upload_{seed}.jpg", make_test_image(seed + 1000), "image/jpeg")}
-    data = {"anomaly_type": "Weld", "analyst": f"load-test-{seed}"}
+    data = {"anomaly_type": "Weld", "contributor_name": f"load-test-{seed}"}
     start = time.time()
     try:
         r = await client.post(f"{base_url}/api/v1/library/upload", files=files, data=data, timeout=30)

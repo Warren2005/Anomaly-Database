@@ -8,6 +8,7 @@ import {
   PANEL_TAG_OPTIONS,
   RUN_OPTIONS,
   RUN_DESCRIPTIONS,
+  INTERACTION_OPTIONS,
 } from "../lib/iliConstants";
 
 const ADD_NEW_RUN = "__add_new__";
@@ -31,13 +32,15 @@ const EMPTY_FORM = {
   width: "",
   length: "",
   notes: "",
-  analyst: "",
+  contributor_name: "",
+  contributor_comment: "",
   zero_angle_frame_index: "",
   pipe_angle: "",
   is_qc_flag: false,
   qc_raised_by: "",
   qc_reviewer: "",
   qc_decision_rationale: "",
+  interacts_with_other_features: "",
 };
 
 function formFromImage(image) {
@@ -56,13 +59,20 @@ function formFromImage(image) {
     width: image.width ?? "",
     length: image.length ?? "",
     notes: image.notes || "",
-    analyst: image.analyst || "",
+    contributor_name: "",
+    contributor_comment: "",
     zero_angle_frame_index: image.zero_angle_frame_index ?? "",
     pipe_angle: image.pipe_angle ?? "",
     is_qc_flag: Boolean(image.is_qc_flag),
     qc_raised_by: image.qc_raised_by || "",
     qc_reviewer: image.qc_reviewer || "",
     qc_decision_rationale: image.qc_decision_rationale || "",
+    interacts_with_other_features:
+      image.interacts_with_other_features === true
+        ? "yes"
+        : image.interacts_with_other_features === false
+        ? "no"
+        : "",
   };
 }
 
@@ -97,6 +107,9 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
   const [tagOptions, setTagOptions] = useState([]);
   const [selectedTags, setSelectedTags] = useState(() => editingImage?.image?.tags || []);
   const [tagInput, setTagInput] = useState("");
+  const [selectedInteractionItems, setSelectedInteractionItems] = useState(
+    () => editingImage?.image?.interaction_related_items || []
+  );
   const [orientationFile, setOrientationFile] = useState(null);
   const [orientationPreview, setOrientationPreview] = useState(null);
   const [orientationRemoved, setOrientationRemoved] = useState(false);
@@ -174,6 +187,12 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
 
   const removeTag = useCallback((tag) => {
     setSelectedTags((prev) => prev.filter((t) => t !== tag));
+  }, []);
+
+  const toggleInteractionItem = useCallback((item) => {
+    setSelectedInteractionItems((prev) =>
+      prev.includes(item) ? prev.filter((t) => t !== item) : [...prev, item]
+    );
   }, []);
 
   const existingOrientationUrl =
@@ -346,10 +365,14 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
     if (!form.identification.trim()) errs.identification = "Required";
     if (!form.anomaly_id.trim()) errs.anomaly_id = "Required";
     if (!form.classification_status) errs.classification_status = "Required";
-    if (!form.analyst.trim()) errs.analyst = "Required";
+    if (!form.contributor_name.trim()) errs.contributor_name = "Required";
     if (!form.signal_description.trim()) errs.signal_description = "Required";
     if (!form.differential_diagnosis.trim()) errs.differential_diagnosis = "Required";
     if (!form.limitations_uncertainty.trim()) errs.limitations_uncertainty = "Required";
+    if (!form.interacts_with_other_features) errs.interacts_with_other_features = "Required";
+    if (form.interacts_with_other_features === "yes" && selectedInteractionItems.length === 0) {
+      errs.interaction_related_items = "Select at least one related type/component";
+    }
     if (survivingExisting.length + files.length === 0) {
       errs.file = "An anomaly must have at least one image, each tagged with its panel type";
     } else {
@@ -410,6 +433,10 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
         pipe_angle: form.pipe_angle !== "" ? String(form.pipe_angle).trim() : undefined,
         is_qc_flag: form.is_qc_flag ? "true" : "false",
         tags: selectedTags.join(","),
+        contributor_name: form.contributor_name.trim(),
+        interacts_with_other_features: form.interacts_with_other_features === "yes" ? "true" : "false",
+        interaction_related_items:
+          form.interacts_with_other_features === "yes" ? selectedInteractionItems.join(",") : "",
       };
       delete payload.track;
       delete payload.analysis_comment;
@@ -954,13 +981,82 @@ export default function LibraryUpload({ onSuccess, onDirtyChange, editingImage =
         </div>
 
         <div className="form-field">
-          <label className="form-label">Contributed By <span className="req">*</span></label>
+          <label className="form-label">
+            Interacting with other features? <span className="req">*</span>
+          </label>
+          <select
+            className={`form-select${fieldErrors.interacts_with_other_features ? " has-error-input" : ""}`}
+            value={form.interacts_with_other_features}
+            onChange={(e) => handleFormChange("interacts_with_other_features", e.target.value)}
+          >
+            <option value="">— Select —</option>
+            <option value="yes">Yes</option>
+            <option value="no">No</option>
+          </select>
+        </div>
+
+        {form.interacts_with_other_features === "yes" && (
+          <div className="form-field">
+            <label className="form-label">
+              Related Anomaly Types / Components <span className="req">*</span>
+            </label>
+            <div className="tag-chip-row interaction-chip-row">
+              {INTERACTION_OPTIONS.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  className={`tag-chip${
+                    selectedInteractionItems.includes(item) ? " tag-chip-active" : ""
+                  }`}
+                  onClick={() => toggleInteractionItem(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+            {fieldErrors.interaction_related_items && (
+              <p className="add-run-error">{fieldErrors.interaction_related_items}</p>
+            )}
+          </div>
+        )}
+
+        {isEditMode && editingImage?.image?.revision_history?.length > 0 && (
+          <div className="form-field revision-history-field">
+            <label className="form-label">Revision History</label>
+            <ul className="revision-history-list">
+              {editingImage.image.revision_history.map((rev) => (
+                <li key={rev.version}>
+                  <strong>V{rev.version}</strong> — {rev.name} —{" "}
+                  {new Date(rev.timestamp).toLocaleDateString()}
+                  {rev.comment && <div className="revision-comment">{rev.comment}</div>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="form-field">
+          <label className="form-label">
+            {isEditMode ? "Sign this revision" : "Your Name"} <span className="req">*</span>
+          </label>
           <input
-            className={`form-input${fieldErrors.analyst ? " has-error-input" : ""}`}
+            className={`form-input${fieldErrors.contributor_name ? " has-error-input" : ""}`}
             type="text"
             placeholder="Your name"
-            value={form.analyst}
-            onChange={(e) => handleFormChange("analyst", e.target.value)}
+            value={form.contributor_name}
+            onChange={(e) => handleFormChange("contributor_name", e.target.value)}
+          />
+        </div>
+
+        <div className="form-field">
+          <label className="form-label">
+            Comment <span className="opt">optional</span>
+          </label>
+          <textarea
+            className="form-textarea"
+            placeholder={isEditMode ? "What changed and why…" : "e.g. Initial entry"}
+            value={form.contributor_comment}
+            onChange={(e) => handleFormChange("contributor_comment", e.target.value)}
           />
         </div>
 

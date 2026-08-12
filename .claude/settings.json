@@ -101,7 +101,19 @@
       "Bash(curl -s \"http://localhost:8001/api/v1/library/browse?query=E2E-PIPEANGLE-002\")",
       "Bash(curl -s -X DELETE http://localhost:8001/api/v1/library/3e20f8f6-acd6-4255-ad10-78c211def7df -H 'X-Delete-Passkey: admin123' -w '\\\\nstatus:%{http_code}\\\\n')",
       "Bash(curl -s http://localhost:8001/api/v1/images/3e20f8f6-acd6-4255-ad10-78c211def7df -w '\\\\nstatus:%{http_code}\\\\n')",
-      "Bash(curl -s -o /dev/null -w 'status:%{http_code}\\\\n' http://localhost:8001/api/v1/images/3e20f8f6-acd6-4255-ad10-78c211def7df/orientation)"
+      "Bash(curl -s -o /dev/null -w 'status:%{http_code}\\\\n' http://localhost:8001/api/v1/images/3e20f8f6-acd6-4255-ad10-78c211def7df/orientation)",
+      "Bash(taskkill //PID 23964 //F)",
+      "Bash(taskkill //PID 25764 //F)",
+      "Bash(curl -s -o /dev/null -w \"post-kill status:%{http_code}\\\\n\" http://localhost:8001/api/v1/health --max-time 3)",
+      "Bash(curl -s http://localhost:8001/api/v1/health -w \"\\\\nstatus:%{http_code}\\\\n\")",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/library/upload -F 'files=@scratch_e2e.jpg;type=image/jpeg' -F 'identification=E2E Revision Test' -F anomaly_id=E2E-REV-001 -w '\\\\nstatus:%{http_code}\\\\n')",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/library/upload -F 'files=@scratch_e2e.jpg;type=image/jpeg' -F 'identification=E2E Interaction Test' -F anomaly_id=E2E-INT-001 -F contributor_name=Tester -F interacts_with_other_features=true -w '\\\\nstatus:%{http_code}\\\\n')",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/library/upload -F 'files=@scratch_e2e.jpg;type=image/jpeg' -F 'identification=E2E Revision Test' -F anomaly_id=E2E-REV-001 -F 'contributor_name=Warren D.' -F 'contributor_comment=Initial entry' -F interacts_with_other_features=true -F 'interaction_related_items=Valve, Girth Weld')",
+      "Bash(curl -s -X PUT http://localhost:8001/api/v1/library/690b2569-a709-44da-81c3-fa4d36e75d74 -H 'X-Delete-Passkey: admin123' -F 'contributor_name=Second Editor' -F 'contributor_comment=Verified pipe angle' -F interacts_with_other_features=false)",
+      "Bash(curl -s http://localhost:8001/api/v1/images/690b2569-a709-44da-81c3-fa4d36e75d74)",
+      "Bash(curl -s \"http://localhost:8001/api/v1/library/browse?query=%22Second+Editor%22\" -G --data-urlencode \"q=Second Editor\")",
+      "Bash(curl -s -X DELETE http://localhost:8001/api/v1/library/690b2569-a709-44da-81c3-fa4d36e75d74 -H 'X-Delete-Passkey: admin123' -w '\\\\nstatus:%{http_code}\\\\n')",
+      "Bash(curl -s http://localhost:8001/api/v1/images/690b2569-a709-44da-81c3-fa4d36e75d74 -w '\\\\nstatus:%{http_code}\\\\n')"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

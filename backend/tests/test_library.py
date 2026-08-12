@@ -21,7 +21,14 @@ def _make_image(image_id, **overrides) -> Image:
         panel_tags=[],
         identification="Original Category",
         anomaly_id="ORIG-001",
-        analyst="original-analyst",
+        revision_history=[
+            {
+                "version": 1,
+                "name": "original-analyst",
+                "comment": None,
+                "timestamp": "2026-01-01T00:00:00+00:00",
+            }
+        ],
         created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
         updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
     )
@@ -150,7 +157,7 @@ class TestUpdateLibraryEntry:
             client = TestClient(app)
             response = client.put(
                 f"/api/v1/library/{image_id}",
-                data={"analysis_comment": "Renamed only"},
+                data={"analysis_comment": "Renamed only", "contributor_name": "Tester"},
                 headers={"X-Delete-Passkey": "admin123"},
             )
 
@@ -205,6 +212,7 @@ class TestUpdateLibraryEntry:
                 data={
                     "identification": "Updated Category",
                     "panel_tags": "Image Panel,Beamforming Panel",
+                    "contributor_name": "Tester",
                 },
                 headers={"X-Delete-Passkey": "admin123"},
             )
@@ -234,7 +242,7 @@ class TestUpdateLibraryEntry:
             client = TestClient(app)
             response = client.put(
                 f"/api/v1/library/{image_id}",
-                data={"remove_media": "0"},
+                data={"remove_media": "0", "contributor_name": "Tester"},
                 headers={"X-Delete-Passkey": "admin123"},
             )
 
@@ -268,7 +276,11 @@ class TestUpdateLibraryEntry:
             client = TestClient(app)
             response = client.put(
                 f"/api/v1/library/{image_id}",
-                data={"remove_media": "0", "panel_tags": "Beamforming Panel,New Panel"},
+                data={
+                    "remove_media": "0",
+                    "panel_tags": "Beamforming Panel,New Panel",
+                    "contributor_name": "Tester",
+                },
                 files={"new_files": ("replacement.jpg", b"fake-bytes", "image/jpeg")},
                 headers={"X-Delete-Passkey": "admin123"},
             )
@@ -289,7 +301,11 @@ class TestUpdateLibraryEntry:
 
 class TestUploadLibraryEntry:
     def _valid_data(self, **overrides):
-        data = {"identification": "Corrosion Pitting", "anomaly_id": "PIT-2026-001"}
+        data = {
+            "identification": "Corrosion Pitting",
+            "anomaly_id": "PIT-2026-001",
+            "contributor_name": "Tester",
+        }
         data.update(overrides)
         return data
 
@@ -407,7 +423,11 @@ class TestOrientationImage:
     search/embedding pipeline — these tests specifically guard that."""
 
     def _valid_data(self, **overrides):
-        data = {"identification": "Corrosion Pitting", "anomaly_id": "ORIENT-001"}
+        data = {
+            "identification": "Corrosion Pitting",
+            "anomaly_id": "ORIENT-001",
+            "contributor_name": "Tester",
+        }
         data.update(overrides)
         return data
 
@@ -484,7 +504,7 @@ class TestOrientationImage:
             client = TestClient(app)
             response = client.put(
                 f"/api/v1/library/{image_id}",
-                data={"pipe_angle": "275"},
+                data={"pipe_angle": "275", "contributor_name": "Tester"},
                 headers={"X-Delete-Passkey": "admin123"},
             )
 
@@ -536,7 +556,7 @@ class TestOrientationImage:
             client = TestClient(app)
             response = client.put(
                 f"/api/v1/library/{image_id}",
-                data={},
+                data={"contributor_name": "Tester"},
                 files={"new_orientation_image": ("new.jpg", b"new-bytes", "image/jpeg")},
                 headers={"X-Delete-Passkey": "admin123"},
             )
@@ -569,7 +589,7 @@ class TestOrientationImage:
             client = TestClient(app)
             response = client.put(
                 f"/api/v1/library/{image_id}",
-                data={"remove_orientation_image": "true"},
+                data={"remove_orientation_image": "true", "contributor_name": "Tester"},
                 headers={"X-Delete-Passkey": "admin123"},
             )
 
@@ -619,7 +639,7 @@ class TestUpdateLibraryEntryTags:
             client = TestClient(app)
             response = client.put(
                 f"/api/v1/library/{image_id}",
-                data={"tags": "New Tag, Another Tag"},
+                data={"tags": "New Tag, Another Tag", "contributor_name": "Tester"},
                 headers={"X-Delete-Passkey": "admin123"},
             )
 
@@ -649,7 +669,7 @@ class TestUpdateLibraryEntryTags:
             client = TestClient(app)
             response = client.put(
                 f"/api/v1/library/{image_id}",
-                data={"analysis_comment": "unrelated edit"},
+                data={"analysis_comment": "unrelated edit", "contributor_name": "Tester"},
                 headers={"X-Delete-Passkey": "admin123"},
             )
 
@@ -702,7 +722,7 @@ class TestUpdateLibraryEntryAnomalyIdUniqueness:
             client = TestClient(app)
             response = client.put(
                 f"/api/v1/library/{image_id}",
-                data={"anomaly_id": "MINE-001"},
+                data={"anomaly_id": "MINE-001", "contributor_name": "Tester"},
                 headers={"X-Delete-Passkey": "admin123"},
             )
             assert response.status_code == 200
@@ -741,3 +761,275 @@ class TestUpdateLibraryEntryAnomalyIdUniqueness:
             )
             assert response.status_code == 400
             mock_store.upsert_image.assert_not_called()
+
+
+class TestRevisionHistory:
+    def test_upload_requires_contributor_name(self):
+        with patch("app.api.v1.endpoints.library.file_store_service") as mock_store:
+            _no_conflict(mock_store)
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data={
+                    "identification": "Corrosion Pitting",
+                    "anomaly_id": "REV-001",
+                    "contributor_name": "",
+                },
+                files={"files": ("a.jpg", b"fake-bytes", "image/jpeg")},
+            )
+            assert response.status_code == 400
+            mock_store.upsert_image.assert_not_called()
+
+    def test_upload_seeds_v1_revision_with_name_and_comment(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data={
+                    "identification": "Corrosion Pitting",
+                    "anomaly_id": "REV-002",
+                    "contributor_name": "Warren D.",
+                    "contributor_comment": "Initial entry",
+                },
+                files={"files": ("a.jpg", b"fake-bytes", "image/jpeg")},
+            )
+
+            assert response.status_code == 200
+            history = response.json()["image"]["revision_history"]
+            assert len(history) == 1
+            assert history[0]["version"] == 1
+            assert history[0]["name"] == "Warren D."
+            assert history[0]["comment"] == "Initial entry"
+            assert history[0]["timestamp"]
+
+    def test_update_requires_contributor_name(self):
+        image_id = uuid4()
+        existing = _make_image(image_id)
+        with patch("app.api.v1.endpoints.library.file_store_service") as mock_store:
+            mock_store.get_image = AsyncMock(return_value=existing)
+            _no_conflict(mock_store)
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={"anomaly_description": "unrelated edit"},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+            assert response.status_code == 400
+            mock_store.upsert_image.assert_not_called()
+
+    def test_update_appends_new_revision_entry_and_preserves_history(self):
+        """Editing must append a new versioned, signed entry — the prior
+        history (e.g. the original V1 creator) must never be overwritten."""
+        image_id = uuid4()
+        existing = _make_image(image_id)
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service"),
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={
+                    "contributor_name": "Second Editor",
+                    "contributor_comment": "Updated depth",
+                },
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            history = response.json()["image"]["revision_history"]
+            assert len(history) == 2
+            assert history[0]["version"] == 1
+            assert history[0]["name"] == "original-analyst"
+            assert history[1]["version"] == 2
+            assert history[1]["name"] == "Second Editor"
+            assert history[1]["comment"] == "Updated depth"
+
+    def test_search_matches_contributor_name(self):
+        image_id = uuid4()
+        image = _make_image(
+            image_id,
+            revision_history=[
+                {
+                    "version": 1,
+                    "name": "Searchable Contributor",
+                    "comment": None,
+                    "timestamp": "2026-01-01T00:00:00+00:00",
+                }
+            ],
+        )
+        with patch("app.api.v1.endpoints.library.file_store_service") as mock_store:
+            mock_store.get_all_images = AsyncMock(return_value=[image])
+            client = TestClient(app)
+            response = client.get("/api/v1/library/browse", params={"q": "Searchable Contributor"})
+            assert response.status_code == 200
+            assert response.json()["total"] == 1
+
+
+class TestInteractionFields:
+    def test_upload_requires_items_when_interacts_is_yes(self):
+        with patch("app.api.v1.endpoints.library.file_store_service") as mock_store:
+            _no_conflict(mock_store)
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data={
+                    "identification": "Corrosion Pitting",
+                    "anomaly_id": "INT-001",
+                    "contributor_name": "Tester",
+                    "interacts_with_other_features": "true",
+                },
+                files={"files": ("a.jpg", b"fake-bytes", "image/jpeg")},
+            )
+            assert response.status_code == 400
+            mock_store.upsert_image.assert_not_called()
+
+    def test_upload_allows_omission_when_interacts_is_no(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data={
+                    "identification": "Corrosion Pitting",
+                    "anomaly_id": "INT-002",
+                    "contributor_name": "Tester",
+                    "interacts_with_other_features": "false",
+                    "interaction_related_items": "Valve,Weld",
+                },
+                files={"files": ("a.jpg", b"fake-bytes", "image/jpeg")},
+            )
+
+            assert response.status_code == 200
+            body = response.json()["image"]
+            assert body["interacts_with_other_features"] is False
+            # Items submitted anyway under "No" are dropped, not persisted
+            assert body["interaction_related_items"] == []
+
+    def test_upload_persists_items_when_interacts_is_yes(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data={
+                    "identification": "Corrosion Pitting",
+                    "anomaly_id": "INT-003",
+                    "contributor_name": "Tester",
+                    "interacts_with_other_features": "true",
+                    "interaction_related_items": "Valve, Weld",
+                },
+                files={"files": ("a.jpg", b"fake-bytes", "image/jpeg")},
+            )
+
+            assert response.status_code == 200
+            body = response.json()["image"]
+            assert body["interacts_with_other_features"] is True
+            assert body["interaction_related_items"] == ["Valve", "Weld"]
+
+    def test_update_replaces_interaction_items_with_submitted_list(self):
+        image_id = uuid4()
+        existing = _make_image(
+            image_id,
+            interacts_with_other_features=True,
+            interaction_related_items=["Old Item"],
+        )
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service"),
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={
+                    "contributor_name": "Tester",
+                    "interacts_with_other_features": "true",
+                    "interaction_related_items": "Tee, Sleeve",
+                },
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            body = response.json()["image"]
+            assert body["interaction_related_items"] == ["Tee", "Sleeve"]
+
+    def test_update_answering_no_clears_existing_items(self):
+        image_id = uuid4()
+        existing = _make_image(
+            image_id,
+            interacts_with_other_features=True,
+            interaction_related_items=["Old Item"],
+        )
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service"),
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={
+                    "contributor_name": "Tester",
+                    "interacts_with_other_features": "false",
+                },
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            body = response.json()["image"]
+            assert body["interacts_with_other_features"] is False
+            assert body["interaction_related_items"] == []

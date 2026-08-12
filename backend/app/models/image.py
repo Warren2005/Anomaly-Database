@@ -39,7 +39,14 @@ class Image:
     wall_location: Optional[str] = None
     run_number: Optional[str] = None
     analysis_comment: Optional[str] = None
-    analyst: Optional[str] = None
+    # Ordered log of who signed off on this entry, oldest first. V1 is
+    # always the original creator; every subsequent edit appends (never
+    # overwrites) a new {"version", "name", "comment", "timestamp"} entry —
+    # see the upload/PUT endpoints in api/v1/endpoints/library.py. timestamp
+    # is stored as an ISO string, not a datetime: file_store.py's
+    # _image_to_record() only isoformat()s the top-level created_at/updated_at,
+    # and a raw datetime nested in this list would break json.dumps on write.
+    revision_history: Optional[list] = field(default_factory=list)
     # Zach / ILI reference-library fields
     classification_status: Optional[str] = None
     depth: Optional[float] = None
@@ -60,6 +67,12 @@ class Image:
     # values just get typed in — see /api/v1/images/filters' `tags`,
     # sourced from FileStoreService.get_distinct_list_field("tags").
     tags: Optional[list] = field(default_factory=list)
+    # Whether this anomaly interacts with other features/components on the
+    # pipe. When True, interaction_related_items lists which anomaly
+    # types/components it interacts with (values drawn from ANOMALY_TYPES +
+    # COMPONENT_OPTIONS on the frontend; forced to [] here when False/None).
+    interacts_with_other_features: Optional[bool] = None
+    interaction_related_items: Optional[list] = field(default_factory=list)
     # Optional ILI viewer metadata
     zero_angle_frame_index: Optional[int] = None
     track: Optional[int] = None

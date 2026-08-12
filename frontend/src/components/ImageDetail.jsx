@@ -347,6 +347,27 @@ export default function ImageDetail({
               <DetailRow label="Identification" value={image.identification} />
               <DetailRow label="Pipe Angle" value={image.pipe_angle != null ? `${image.pipe_angle}°` : null} />
               <DetailRow label="Anomaly Type" value={image.anomaly_type} />
+              <DetailRow
+                label="Interacting with Other Features"
+                value={
+                  image.interacts_with_other_features === true
+                    ? "Yes"
+                    : image.interacts_with_other_features === false
+                    ? "No"
+                    : null
+                }
+              />
+              {image.interacts_with_other_features && (image.interaction_related_items || []).length > 0 && (
+                <tr>
+                  <td colSpan={2}>
+                    <div className="panel-tag-row">
+                      {image.interaction_related_items.map((item) => (
+                        <span key={item} className="badge">{item}</span>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              )}
               <DetailRow label="Run" value={image.run_number} />
               <DetailRow label="ZeroAngle Frame Index" value={image.zero_angle_frame_index} />
               <DetailRow label="Run ID" value={image.anomaly_description} />
@@ -368,7 +389,24 @@ export default function ImageDetail({
               <DetailRow label="Depth (mm)" value={image.depth} />
               <DetailRow label="Width (mm)" value={image.width} />
               <DetailRow label="Length (mm)" value={image.length} />
-              <DetailRow label="Contributed By" value={image.analyst} />
+              {(image.revision_history || []).length > 0 && (
+                <>
+                  <tr>
+                    <td colSpan={2} className="detail-section-divider">Revision History</td>
+                  </tr>
+                  {[...image.revision_history]
+                    .sort((a, b) => a.version - b.version)
+                    .map((rev) => (
+                      <tr key={rev.version}>
+                        <td className="detail-label">V{rev.version}</td>
+                        <td className="detail-value">
+                          {rev.name} — {new Date(rev.timestamp).toLocaleDateString()}
+                          {rev.comment && <div className="revision-comment">{rev.comment}</div>}
+                        </td>
+                      </tr>
+                    ))}
+                </>
+              )}
               {image.is_qc_flag && (
                 <>
                   <tr>

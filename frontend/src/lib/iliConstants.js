@@ -9,6 +9,22 @@ export const ANOMALY_TYPES = [
   "Other",
 ];
 
+/** Pipeline component types, for the "interacting with other features" multi-select */
+export const COMPONENT_OPTIONS = [
+  "Valve",
+  "Tee",
+  "Flange",
+  "Girth Weld",
+  "Sleeve",
+  "Casing",
+  "Tap",
+  "Bend/Elbow",
+  "Other",
+];
+
+/** Combined options for the interacting-features multi-select (deduped, e.g. both lists have "Other") */
+export const INTERACTION_OPTIONS = [...new Set([...ANOMALY_TYPES, ...COMPONENT_OPTIONS])];
+
 export const CLASSIFICATION_STATUS_OPTIONS = [
   "Confirmed",
   "Edge Case",

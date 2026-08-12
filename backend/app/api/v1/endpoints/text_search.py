@@ -62,7 +62,11 @@ async def search_by_text(body: TextSearchRequest):
     if settings.rerank_enabled and rerank_embedding_service.health_check() and matches:
         rerank_start = time.time()
         rerank_query_vector = await rerank_embedding_service.get_text_embedding(body.query)
-        matches = await rerank(matches, rerank_query_vector, rerank_embedding_service.model_tag)
+        primary_pairs = [(image, score) for image, score, _ in matches]
+        primary_pairs = await rerank(
+            primary_pairs, rerank_query_vector, rerank_embedding_service.model_tag
+        )
+        matches = [(image, score, None) for image, score in primary_pairs]
         rerank_time = (time.time() - rerank_start) * 1000
     matches = matches[: body.top_k]
 
@@ -77,7 +81,7 @@ async def search_by_text(body: TextSearchRequest):
                 else None
             ),
         )
-        for image, score in matches
+        for image, score, _ in matches
     ]
 
     total_time = (time.time() - total_start) * 1000

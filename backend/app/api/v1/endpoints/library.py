@@ -119,7 +119,7 @@ async def upload_to_library(
     zero_angle_frame_index: Optional[int] = Form(None),
     track: Optional[int] = Form(None),
 ):
-    """Upload one or more images with ILI metadata; first file is CLIP-indexed."""
+    """Upload one or more images with ILI metadata; every media file is CLIP-indexed."""
     if not files:
         raise ValidationError("At least one image is required.")
 
@@ -166,11 +166,13 @@ async def upload_to_library(
     primary_bytes = await _store_upload(primary, primary_path)
 
     additional_paths: list[str] = []
+    additional_bytes: list[bytes] = []
     for idx, extra in enumerate(files[1:], start=1):
         ext = CONTENT_TYPE_EXT.get(extra.content_type or "", ".jpg")
         path = f"library/{image_id}_{idx}{ext}"
-        await _store_upload(extra, path)
+        extra_bytes = await _store_upload(extra, path)
         additional_paths.append(path)
+        additional_bytes.append(extra_bytes)
 
     # Reference-only image (never embedded, never searched — see the
     # Image.orientation_image_path docstring). Stored and served through
@@ -181,7 +183,13 @@ async def upload_to_library(
         orientation_path = f"library/{image_id}_orientation{ext}"
         await _store_upload(orientation_image, orientation_path)
 
-    embedding = await embedding_service.get_embedding(primary_bytes)
+    # Embed every searchable media file so panel-scoped search can compare
+    # against the Beamforming (etc.) screenshot, not only the primary.
+    all_media_bytes = [primary_bytes, *additional_bytes]
+    media_embeddings: list[list[float]] = []
+    for media_bytes in all_media_bytes:
+        media_embeddings.append(await embedding_service.get_embedding(media_bytes))
+    embedding = media_embeddings[0]
     rerank_embedding = None
     if settings.rerank_enabled and rerank_embedding_service.health_check():
         rerank_embedding = await rerank_embedding_service.get_embedding(primary_bytes)
@@ -233,6 +241,7 @@ async def upload_to_library(
         rerank_embedding_model=rerank_embedding_service.model_tag
         if rerank_embedding is not None
         else None,
+        media_embeddings=media_embeddings,
     )
 
     await event_log_service.log_event(
@@ -559,11 +568,13 @@ async def update_library_entry(
         )
 
     new_paths: list[str] = []
+    new_path_bytes: dict[str, bytes] = {}
     for f in new_files:
         ext = CONTENT_TYPE_EXT.get(f.content_type or "", ".jpg")
         path = f"library/{image_id}_{uuid4().hex[:8]}{ext}"
-        await _store_upload(f, path)
+        uploaded = await _store_upload(f, path)
         new_paths.append(path)
+        new_path_bytes[path] = uploaded
 
     # Orientation reference image — handled entirely separately from the
     # searchable media above/below; never touches primary/embedding logic.
@@ -612,28 +623,76 @@ async def update_library_entry(
     new_primary_path = final_paths[0]
     new_additional_paths = final_paths[1:]
 
-    if new_primary_path != existing.image_path:
-        primary_bytes = await local_storage_service.get_image(new_primary_path)
-        embedding = await embedding_service.get_embedding(primary_bytes)
-        rerank_embedding = None
-        if settings.rerank_enabled and rerank_embedding_service.health_check():
-            rerank_embedding = await rerank_embedding_service.get_embedding(primary_bytes)
-        embedding_model = embedding_service.model_tag
-        rerank_embedding_model = (
-            rerank_embedding_service.model_tag if rerank_embedding is not None else None
-        )
-    else:
-        # Primary image unchanged — carry the existing embedding forward
-        # rather than recomputing it (same bytes, same vector).
-        raw = await file_store_service.get_raw_record(image_id)
-        embedding = raw.get("embedding") if raw else None
+    raw = await file_store_service.get_raw_record(image_id)
+    old_paths = [existing.image_path, *(existing.additional_image_paths or [])]
+    old_media_embs = list((raw or {}).get("media_embeddings") or [])
+    path_to_emb: dict[str, list[float]] = {}
+    for i, path in enumerate(old_paths):
+        if i < len(old_media_embs) and old_media_embs[i]:
+            path_to_emb[path] = old_media_embs[i]
+        elif i == 0 and raw and raw.get("embedding"):
+            path_to_emb[path] = raw["embedding"]
+
+    media_unchanged = not remove_indices and not new_paths and final_paths == old_paths
+    if media_unchanged:
+        # Metadata-only edit: reuse stored vectors, never re-fetch/re-embed.
+        media_embeddings = list(old_media_embs)
+        while len(media_embeddings) < len(final_paths):
+            media_embeddings.append(None)
+        if raw and raw.get("embedding") and not media_embeddings[0]:
+            media_embeddings[0] = raw["embedding"]
+        embedding = media_embeddings[0] or (raw.get("embedding") if raw else None)
         rerank_embedding = raw.get("rerank_embedding") if raw else None
-        embedding_model = raw.get("embedding_model") if raw else None
+        embedding_model = (
+            (raw.get("embedding_model") if raw else None) or embedding_service.model_tag
+        )
         rerank_embedding_model = raw.get("rerank_embedding_model") if raw else None
         if embedding is None:
             primary_bytes = await local_storage_service.get_image(new_primary_path)
             embedding = await embedding_service.get_embedding(primary_bytes)
+            media_embeddings[0] = embedding
             embedding_model = embedding_service.model_tag
+    else:
+        media_embeddings = []
+        for path in final_paths:
+            if path in path_to_emb:
+                media_embeddings.append(path_to_emb[path])
+            elif path in new_path_bytes:
+                media_embeddings.append(
+                    await embedding_service.get_embedding(new_path_bytes[path])
+                )
+            else:
+                media_bytes = await local_storage_service.get_image(path)
+                media_embeddings.append(
+                    await embedding_service.get_embedding(media_bytes)
+                )
+
+        embedding = media_embeddings[0]
+        if new_primary_path != existing.image_path:
+            rerank_embedding = None
+            if settings.rerank_enabled and rerank_embedding_service.health_check():
+                primary_bytes = (
+                    new_path_bytes.get(new_primary_path)
+                    or await local_storage_service.get_image(new_primary_path)
+                )
+                rerank_embedding = await rerank_embedding_service.get_embedding(
+                    primary_bytes
+                )
+            embedding_model = embedding_service.model_tag
+            rerank_embedding_model = (
+                rerank_embedding_service.model_tag
+                if rerank_embedding is not None
+                else None
+            )
+        else:
+            rerank_embedding = raw.get("rerank_embedding") if raw else None
+            embedding_model = (
+                (raw.get("embedding_model") if raw else None)
+                or embedding_service.model_tag
+            )
+            rerank_embedding_model = (
+                raw.get("rerank_embedding_model") if raw else None
+            )
 
     updated = Image(
         id=existing.id,
@@ -684,6 +743,7 @@ async def update_library_entry(
         rerank_embedding,
         embedding_model=embedding_model,
         rerank_embedding_model=rerank_embedding_model,
+        media_embeddings=media_embeddings,
     )
 
     await event_log_service.log_event(

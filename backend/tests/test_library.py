@@ -265,6 +265,10 @@ class TestUpdateLibraryEntry:
             patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
         ):
             mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value={
+                "embedding": [0.1, 0.2, 0.3],
+                "media_embeddings": [[0.1, 0.2, 0.3], [0.4, 0.5, 0.6]],
+            })
             mock_store.upsert_image = AsyncMock(return_value=existing)
             mock_local.delete_image = AsyncMock()
             mock_local.upload_image = AsyncMock()
@@ -288,16 +292,17 @@ class TestUpdateLibraryEntry:
             assert response.status_code == 200
             # Old primary removed, new primary embedded fresh
             mock_local.delete_image.assert_called_once_with("library/old_primary.jpg")
-            mock_embed.get_embedding.assert_called_once_with(b"new-primary-bytes")
+            # Surviving extra keeps its stored media embedding; only the new
+            # upload is embedded (from upload bytes, not a re-fetch).
+            mock_embed.get_embedding.assert_called_once_with(b"fake-bytes")
             call = mock_store.upsert_image.call_args
-            assert call.args[1] == new_embedding
+            assert call.args[1] == [0.4, 0.5, 0.6]  # promoted extra's vector
             updated_image = call.args[0]
             # Surviving extra.jpg is promoted to primary position... no —
             # remove_media=0 removes the primary, so surviving=[extra.jpg],
             # then the new upload is appended: final = [extra.jpg, new upload]
             assert updated_image.image_path == "library/extra.jpg"
             assert updated_image.additional_image_paths[0].startswith("library/")
-
 
 class TestUploadLibraryEntry:
     def _valid_data(self, **overrides):

@@ -42,7 +42,7 @@ class TestSearchSimilar:
             patch("app.api.v1.endpoints.search.file_store_service") as mock_store,
         ):
             mock_embed.get_embedding_with_cache_status = AsyncMock(return_value=([0.1] * 512, False))
-            mock_store.search = AsyncMock(return_value=[(mock_image, 0.95)])
+            mock_store.search = AsyncMock(return_value=[(mock_image, 0.95, None)])
             mock_store.get_net_votes = AsyncMock(return_value={})
 
             client = TestClient(app)
@@ -137,7 +137,7 @@ class TestSearchSimilarWithRerank:
             mock_embed.get_embedding_with_cache_status = AsyncMock(return_value=([1.0, 0.0], False))
             # Primary search ranks A above B...
             mock_store.search = AsyncMock(
-                return_value=[(image_a, 0.9), (image_b, 0.8)]
+                return_value=[(image_a, 0.9, None), (image_b, 0.8, None)]
             )
             mock_store.get_net_votes = AsyncMock(return_value={})
             # ...but the rerank model's stored vectors flip that ordering.

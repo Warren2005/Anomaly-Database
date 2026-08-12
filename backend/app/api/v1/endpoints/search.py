@@ -65,13 +65,29 @@ async def search_similar(
     embedding, cache_hit = await embedding_service.get_embedding_with_cache_status(image_bytes)
     embed_time = (time.time() - embed_start) * 1000
 
+    scoped_panel = panel_tag.strip() if panel_tag else None
+    if scoped_panel:
+        # Legacy entries only stored a primary embedding — backfill the
+        # tagged panel's media vector so we compare against that image.
+        await file_store_service.ensure_panel_media_embeddings(
+            scoped_panel,
+            embedding_service.get_embedding,
+        )
+
     # Brute-force cosine search against the file store. When re-ranking is
     # on, fetch a wider shortlist so the heavier model has real candidates
     # to re-score, then trim back to `limit` after re-ranking.
+    # Panel-scoped search skips re-rank: stored rerank vectors are primary-
+    # image only and would undo panel-specific scoring.
     search_start = time.time()
+    use_rerank = (
+        not scoped_panel
+        and settings.rerank_enabled
+        and rerank_embedding_service.health_check()
+    )
     coarse_limit = (
         max(limit, settings.rerank_candidates)
-        if settings.rerank_enabled and rerank_embedding_service.health_check()
+        if use_rerank
         else limit
     )
     matches = await file_store_service.search(
@@ -81,34 +97,43 @@ async def search_similar(
         tissue_type=tissue_type,
         benign_malignant=benign_malignant,
         embedding_model=embedding_service.model_tag,
-        panel_tag=panel_tag.strip() if panel_tag else None,
+        panel_tag=scoped_panel,
     )
     search_time = (time.time() - search_start) * 1000
 
     # Re-rank the shortlist with the heavier model, if enabled and loaded
     rerank_time = None
-    if settings.rerank_enabled and rerank_embedding_service.health_check() and matches:
+    if use_rerank and matches:
         rerank_start = time.time()
         rerank_query_vector = await rerank_embedding_service.get_embedding(image_bytes)
-        matches = await rerank(matches, rerank_query_vector, rerank_embedding_service.model_tag)
+        # Drop media_index for the re-ranker; restore None after.
+        primary_pairs = [(image, score) for image, score, _ in matches]
+        primary_pairs = await rerank(
+            primary_pairs, rerank_query_vector, rerank_embedding_service.model_tag
+        )
+        matches = [(image, score, None) for image, score in primary_pairs]
         rerank_time = (time.time() - rerank_start) * 1000
     matches = matches[:limit]
 
     # Feedback-adjusted scores
-    image_ids = [image.id for image, _ in matches]
+    image_ids = [image.id for image, _, _ in matches]
     feedback_scores = await file_store_service.get_net_votes(image_ids)
 
     FEEDBACK_WEIGHT = 0.02
     results = []
-    for image, score in matches:
+    for image, score, media_idx in matches:
         net_vote = feedback_scores.get(image.id, 0)
         adjusted_score = score + (net_vote * FEEDBACK_WEIGHT)
         adjusted_score = max(0.0, min(1.0, adjusted_score))
+        if media_idx is not None:
+            image_url = f"/api/v1/images/{image.id}/media/{media_idx}"
+        else:
+            image_url = f"/api/v1/images/{image.id}/file"
         results.append(
             SearchResult(
                 image=ImageResponse.model_validate(image),
                 similarity_score=round(adjusted_score, 6),
-                image_url=f"/api/v1/images/{image.id}/file",
+                image_url=image_url,
                 orientation_image_url=(
                     f"/api/v1/images/{image.id}/orientation"
                     if image.orientation_image_path

@@ -63,4 +63,5 @@ class LibraryUploadResponse(BaseModel):
     image: ImageResponse
     image_url: str
     media_urls: list[str] = []
+    orientation_image_url: Optional[str] = None
     message: str

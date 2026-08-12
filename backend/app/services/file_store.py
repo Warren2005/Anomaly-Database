@@ -63,7 +63,6 @@ def _image_to_record(
     rerank_embedding: Optional[list[float]] = None,
     embedding_model: Optional[str] = None,
     rerank_embedding_model: Optional[str] = None,
-    media_embeddings: Optional[list] = None,
 ) -> dict:
     record = asdict(image)
     record["id"] = str(image.id)
@@ -78,14 +77,6 @@ def _image_to_record(
     # don't, even at matching dimensionality.
     record["embedding_model"] = embedding_model
     record["rerank_embedding_model"] = rerank_embedding_model
-    # One CLIP vector per media slot, aligned with
-    # [image_path, *additional_image_paths] and panel_tags. Panel-scoped
-    # search uses these so Beamforming queries compare to Beamforming
-    # screenshots, not the primary Image Panel.
-    if media_embeddings is not None:
-        record["media_embeddings"] = media_embeddings
-    elif embedding is not None:
-        record["media_embeddings"] = [embedding]
     return record
 
 
@@ -94,28 +85,7 @@ _NON_IMAGE_FIELDS = {
     "rerank_embedding",
     "embedding_model",
     "rerank_embedding_model",
-    "media_embeddings",
 }
-
-
-def _media_paths_from_record(record: dict) -> list[str]:
-    return [record["image_path"], *(record.get("additional_image_paths") or [])]
-
-
-def _embedding_for_panel(record: dict, panel_tag: str) -> Optional[tuple[list[float], int]]:
-    """Return (embedding, media_index) for the first media tagged with panel_tag."""
-    needle = panel_tag.strip()
-    tags = record.get("panel_tags") or []
-    media_embs = record.get("media_embeddings") or []
-    for i, tag in enumerate(tags):
-        if tag != needle:
-            continue
-        if i < len(media_embs) and media_embs[i]:
-            return media_embs[i], i
-        # Legacy: only the primary vector was stored.
-        if i == 0 and record.get("embedding"):
-            return record["embedding"], 0
-    return None
 
 
 def _record_to_image(record: dict) -> Image:
@@ -244,19 +214,13 @@ class FileStoreService:
         rerank_embedding: Optional[list[float]] = None,
         embedding_model: Optional[str] = None,
         rerank_embedding_model: Optional[str] = None,
-        media_embeddings: Optional[list] = None,
     ) -> Image:
         with self._locked():
             records = self._read_json(self._images_file)
             records = [r for r in records if r["id"] != str(image.id)]
             records.append(
                 _image_to_record(
-                    image,
-                    embedding,
-                    rerank_embedding,
-                    embedding_model,
-                    rerank_embedding_model,
-                    media_embeddings,
+                    image, embedding, rerank_embedding, embedding_model, rerank_embedding_model
                 )
             )
             self._write_json(self._images_file, records)
@@ -269,7 +233,6 @@ class FileStoreService:
         rerank_embedding: Optional[list[float]] = None,
         embedding_model: Optional[str] = None,
         rerank_embedding_model: Optional[str] = None,
-        media_embeddings: Optional[list] = None,
     ) -> Image:
         return await asyncio.to_thread(
             self._upsert_image_sync,
@@ -278,7 +241,6 @@ class FileStoreService:
             rerank_embedding,
             embedding_model,
             rerank_embedding_model,
-            media_embeddings,
         )
 
     def _delete_image_sync(self, image_id: UUID) -> Optional[Image]:
@@ -378,7 +340,7 @@ class FileStoreService:
         benign_malignant: Optional[str],
         embedding_model: Optional[str] = None,
         panel_tag: Optional[str] = None,
-    ) -> list[tuple[Image, float, Optional[int]]]:
+    ) -> list[tuple[Image, float]]:
         records = self._read_json(self._images_file)
         if diagnosis:
             records = [r for r in records if r.get("diagnosis") == diagnosis]
@@ -412,34 +374,15 @@ class FileStoreService:
         if not records:
             return []
 
-        query = np.array(vector, dtype=np.float32)
-
-        if panel_tag:
-            # Compare the query only to the media file tagged with this panel
-            # (not the entry's primary image). Keep the best-scoring panel
-            # media per anomaly when an entry has multiple of the same tag.
-            scored: list[tuple[Image, float, int]] = []
-            for r in records:
-                matched = _embedding_for_panel(r, panel_tag)
-                if matched is None:
-                    continue
-                emb, media_idx = matched
-                score = float(np.dot(np.array(emb, dtype=np.float32), query))
-                scored.append((_record_to_image(r), score, media_idx))
-            scored.sort(key=lambda t: t[1], reverse=True)
-            return scored[: min(limit, len(scored))]
-
         embeddings = np.array([r["embedding"] for r in records], dtype=np.float32)
+        query = np.array(vector, dtype=np.float32)
         scores = embeddings @ query
 
         top_n = min(limit, len(records))
         top_idx = np.argpartition(-scores, top_n - 1)[:top_n]
         top_idx = top_idx[np.argsort(-scores[top_idx])]
 
-        return [
-            (_record_to_image(records[i]), float(scores[i]), None)
-            for i in top_idx
-        ]
+        return [(_record_to_image(records[i]), float(scores[i])) for i in top_idx]
 
     async def search(
         self,
@@ -450,7 +393,7 @@ class FileStoreService:
         benign_malignant: Optional[str] = None,
         embedding_model: Optional[str] = None,
         panel_tag: Optional[str] = None,
-    ) -> list[tuple[Image, float, Optional[int]]]:
+    ) -> list[tuple[Image, float]]:
         return await asyncio.to_thread(
             self._search_sync,
             vector,
@@ -460,103 +403,6 @@ class FileStoreService:
             benign_malignant,
             embedding_model,
             panel_tag,
-        )
-
-    def _ensure_panel_media_embeddings_sync(
-        self,
-        panel_tag: str,
-        path_bytes: dict[str, bytes],
-        embeddings_by_path: dict[str, list[float]],
-    ) -> int:
-        """Fill missing media_embeddings for slots tagged with panel_tag.
-
-        `path_bytes` / `embeddings_by_path` are prepared by the async wrapper
-        (I/O + CLIP live outside the file lock). Returns how many slots were
-        newly filled.
-        """
-        needle = panel_tag.strip()
-        filled = 0
-        with self._locked():
-            records = self._read_json(self._images_file)
-            changed = False
-            for r in records:
-                tags = r.get("panel_tags") or []
-                if needle not in tags:
-                    continue
-                paths = _media_paths_from_record(r)
-                media_embs = list(r.get("media_embeddings") or [])
-                while len(media_embs) < len(paths):
-                    media_embs.append(None)
-                for i, tag in enumerate(tags):
-                    if i >= len(paths) or tag != needle:
-                        continue
-                    if media_embs[i]:
-                        continue
-                    if i == 0 and r.get("embedding"):
-                        media_embs[i] = r["embedding"]
-                        filled += 1
-                        changed = True
-                        continue
-                    path = paths[i]
-                    if path in embeddings_by_path:
-                        media_embs[i] = embeddings_by_path[path]
-                        filled += 1
-                        changed = True
-                r["media_embeddings"] = media_embs
-                # Keep primary embedding in sync when slot 0 was filled.
-                if media_embs and media_embs[0] and not r.get("embedding"):
-                    r["embedding"] = media_embs[0]
-            if changed:
-                self._write_json(self._images_file, records)
-        return filled
-
-    async def ensure_panel_media_embeddings(
-        self,
-        panel_tag: str,
-        embed_bytes,
-    ) -> int:
-        """Backfill per-media embeddings for a panel tag (legacy entries).
-
-        `embed_bytes` is an async callable: bytes -> list[float].
-        """
-        needle = panel_tag.strip()
-        records = await asyncio.to_thread(self._read_json, self._images_file)
-        need_paths: list[str] = []
-        for r in records:
-            tags = r.get("panel_tags") or []
-            if needle not in tags:
-                continue
-            paths = _media_paths_from_record(r)
-            media_embs = r.get("media_embeddings") or []
-            for i, tag in enumerate(tags):
-                if i >= len(paths) or tag != needle:
-                    continue
-                if i < len(media_embs) and media_embs[i]:
-                    continue
-                if i == 0 and r.get("embedding"):
-                    continue
-                need_paths.append(paths[i])
-
-        if not need_paths:
-            # Still run the sync pass so primary-embedding copies into media_embeddings.
-            return await asyncio.to_thread(
-                self._ensure_panel_media_embeddings_sync, needle, {}, {}
-            )
-
-        from app.services.local_storage import local_storage_service
-
-        embeddings_by_path: dict[str, list[float]] = {}
-        path_bytes: dict[str, bytes] = {}
-        for path in dict.fromkeys(need_paths):
-            data = await local_storage_service.get_image(path)
-            path_bytes[path] = data
-            embeddings_by_path[path] = await embed_bytes(data)
-
-        return await asyncio.to_thread(
-            self._ensure_panel_media_embeddings_sync,
-            needle,
-            path_bytes,
-            embeddings_by_path,
         )
 
     # --- Feedback -----------------------------------------------------------

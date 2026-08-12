@@ -67,47 +67,6 @@ async def test_file_store_search_ranks_by_similarity():
 
 
 @pytest.mark.asyncio
-async def test_file_store_panel_search_uses_matching_media_embedding():
-    """Panel-scoped search must score the tagged media vector, not primary."""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        store = FileStoreService(tmpdir)
-        store.connect()
-        # Primary looks like the query; Beamforming does not.
-        await store.upsert_image(
-            Image(
-                id=uuid4(),
-                image_path="primary.jpg",
-                additional_image_paths=["beam.jpg"],
-                panel_tags=["Image Panel", "Beamforming Panel"],
-            ),
-            embedding=[1.0, 0.0],
-            media_embeddings=[[1.0, 0.0], [0.0, 1.0]],
-        )
-        # Only Beamforming; vector matches the query.
-        await store.upsert_image(
-            Image(
-                id=uuid4(),
-                image_path="only-beam.jpg",
-                panel_tags=["Beamforming Panel"],
-            ),
-            embedding=[0.0, 1.0],
-            media_embeddings=[[0.0, 1.0]],
-        )
-
-        results = await store.search(
-            vector=[0.0, 1.0], limit=10, panel_tag="Beamforming Panel"
-        )
-
-        assert len(results) == 2
-        # Best match should be the Beamforming-only entry (exact), and the
-        # mixed entry should be scored on its beam vector (index 1), not primary.
-        assert results[0][1] >= results[1][1]
-        mixed = next(r for r in results if (r[0].additional_image_paths or []))
-        assert mixed[2] == 1
-        assert abs(mixed[1] - 1.0) < 1e-6
-
-
-@pytest.mark.asyncio
 async def test_file_store_search_applies_diagnosis_filter():
     with tempfile.TemporaryDirectory() as tmpdir:
         store = FileStoreService(tmpdir)

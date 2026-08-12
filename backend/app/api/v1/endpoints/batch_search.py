@@ -131,7 +131,7 @@ async def _process_batch(
                 "diagnosis": image.diagnosis,
                 "similarity_score": score,
             }
-            for image, score, _ in matches
+            for image, score in matches
         ]
 
         return {

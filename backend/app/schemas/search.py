@@ -11,6 +11,12 @@ class SearchResult(BaseModel):
     image: ImageResponse
     similarity_score: float
     image_url: str
+    # Index into image.panel_tags (and [image_path, *additional_image_paths])
+    # of the media that image_url actually points to. Set only for
+    # panel-scoped searches, where image_url may be a non-primary media
+    # file — the frontend needs this to label the shown image with its
+    # real panel tag instead of assuming index 0.
+    media_index: Optional[int] = None
     orientation_image_url: Optional[str] = None
 
 

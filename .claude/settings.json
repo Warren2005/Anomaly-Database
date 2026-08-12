@@ -113,7 +113,16 @@
       "Bash(curl -s http://localhost:8001/api/v1/images/690b2569-a709-44da-81c3-fa4d36e75d74)",
       "Bash(curl -s \"http://localhost:8001/api/v1/library/browse?query=%22Second+Editor%22\" -G --data-urlencode \"q=Second Editor\")",
       "Bash(curl -s -X DELETE http://localhost:8001/api/v1/library/690b2569-a709-44da-81c3-fa4d36e75d74 -H 'X-Delete-Passkey: admin123' -w '\\\\nstatus:%{http_code}\\\\n')",
-      "Bash(curl -s http://localhost:8001/api/v1/images/690b2569-a709-44da-81c3-fa4d36e75d74 -w '\\\\nstatus:%{http_code}\\\\n')"
+      "Bash(curl -s http://localhost:8001/api/v1/images/690b2569-a709-44da-81c3-fa4d36e75d74 -w '\\\\nstatus:%{http_code}\\\\n')",
+      "Bash(git restore *)",
+      "Bash(git checkout *)",
+      "Bash(git pull *)",
+      "Bash(taskkill //PID 23172 //F)",
+      "Bash(curl -s -o 'C:\\\\Users\\\\warred2\\\\Coop Project\\\\medical-microscopy\\\\scratch_beamforming_query.png' http://localhost:8001/api/v1/images/c8b98af2-79e7-4101-aaea-1509dcb1c05a/media/1 -w 'download status:%{http_code}\\\\n')",
+      "Bash(curl -s -X POST 'http://localhost:8001/api/v1/search/similar?panel_tag=Beamforming%20Panel&limit=10' -F 'file=@scratch_beamforming_query.png;type=image/png')",
+      "Bash(taskkill //PID 40224 //F)",
+      "Bash(taskkill //PID 45032 //F)",
+      "Bash(curl -s -X POST 'http://localhost:8001/api/v1/search/similar?panel_tag=Beamforming%20Panel&limit=5' -F 'file=@scratch_beamforming_query.png;type=image/png')"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

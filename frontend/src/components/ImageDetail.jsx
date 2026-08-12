@@ -16,7 +16,7 @@ export default function ImageDetail({
   onPrev = null,
   onNext = null,
 }) {
-  const { image, similarity_score, image_url, media_urls, orientation_image_url } = result;
+  const { image, similarity_score, image_url, media_urls, media_index, orientation_image_url } = result;
   const media = (media_urls && media_urls.length ? media_urls : [image_url]).filter(Boolean);
   const [mediaIdx, setMediaIdx] = useState(0);
   const [heatmapUrl, setHeatmapUrl] = useState(null);
@@ -34,6 +34,12 @@ export default function ImageDetail({
   const hasNext = canNavigate && currentIndex < totalCount - 1 && typeof onNext === "function";
   const panelTags = Array.isArray(image.panel_tags) ? image.panel_tags : [];
   const tags = Array.isArray(image.tags) ? image.tags : [];
+  // Panel-scoped search results carry a single image_url (possibly a
+  // non-primary media file) plus media_index saying which panel_tags slot
+  // it actually is — falls back to mediaIdx for the browse/detail flow,
+  // where media_urls holds every image in panel_tags order already.
+  const currentPanelTag =
+    panelTags[typeof media_index === "number" ? media_index : mediaIdx];
 
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
@@ -233,7 +239,7 @@ export default function ImageDetail({
               </button>
               <span>
                 {mediaIdx + 1} / {media.length}
-                {panelTags[mediaIdx] ? ` · ${panelTags[mediaIdx]}` : ""}
+                {currentPanelTag ? ` · ${currentPanelTag}` : ""}
               </span>
               <button
                 className="btn btn-secondary"
@@ -244,9 +250,9 @@ export default function ImageDetail({
               </button>
             </div>
           )}
-          {panelTags[mediaIdx] && !showOrientation && (
+          {currentPanelTag && !showOrientation && (
             <div className="panel-tag-row current-panel-tag">
-              <span className="badge badge-panel">{panelTags[mediaIdx]}</span>
+              <span className="badge badge-panel">{currentPanelTag}</span>
             </div>
           )}
           {media.length > 1 && !showHeatmap && !showOrientation && (

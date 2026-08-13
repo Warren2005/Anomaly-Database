@@ -2550,9 +2550,9 @@ body {
 }
 
 /* ============================================================
-   HEATMAP CONTROLS
+   DETAIL VIEW CONTROLS
    ============================================================ */
-.heatmap-controls {
+.detail-controls {
   display: flex;
   align-items: center;
   gap: 12px;
@@ -2560,7 +2560,7 @@ body {
   border-top: 1px solid var(--border);
 }
 
-.heatmap-error {
+.detail-error {
   font-size: 12px;
   color: var(--danger);
 }

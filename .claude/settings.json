@@ -137,7 +137,11 @@
       "Bash(curl -s -X POST http://localhost:8001/api/v1/feedback -H \"Content-Type: application/json\" -d '{\"result_image_id\":\"00000000-0000-0000-0000-000000000000\",\"vote\":1}' -w \"\\\\nstatus:%{http_code}\\\\n\")",
       "Bash(curl -s http://localhost:8001/api/v1/feedback/stats -w \"\\\\nstatus:%{http_code}\\\\n\")",
       "Bash(curl -s http://localhost:8001/openapi.json)",
-      "Bash(grep -n \"^\\\\.form-input,$\" \"C:\\\\Users\\\\warred2\\\\Coop Project\\\\medical-microscopy\\\\frontend\\\\src\\\\styles\\\\App.css\")"
+      "Bash(grep -n \"^\\\\.form-input,$\" \"C:\\\\Users\\\\warred2\\\\Coop Project\\\\medical-microscopy\\\\frontend\\\\src\\\\styles\\\\App.css\")",
+      "Bash(sed -i 's/heatmap-error/detail-error/g' \"C:\\\\Users\\\\warred2\\\\Coop Project\\\\medical-microscopy\\\\frontend\\\\src\\\\components\\\\ImageDetail.jsx\")",
+      "Bash(taskkill //PID 17892 //F)",
+      "Bash(taskkill //PID 28108 //F)",
+      "Bash(curl -s -X POST \"http://localhost:8001/api/v1/explain?image_id=00000000-0000-0000-0000-000000000000\" -w \"\\\\nstatus:%{http_code}\\\\n\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

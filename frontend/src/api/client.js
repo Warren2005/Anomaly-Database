@@ -213,15 +213,6 @@ export async function checkHealth() {
   return response.json();
 }
 
-export async function getExplainability(imageId) {
-  const response = await fetch(`${BASE_URL}/explain?image_id=${imageId}`, {
-    method: "POST",
-  });
-  if (!response.ok) throw new Error(`Explain failed: ${response.status}`);
-  const blob = await response.blob();
-  return URL.createObjectURL(blob);
-}
-
 export async function uploadToLibrary(files, metadata, orientationImage) {
   const form = new FormData();
   const list = Array.isArray(files) ? files : [files];

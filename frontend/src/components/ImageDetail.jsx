@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { deleteLibraryEntry, getExplainability, resolveImageUrl } from "../api/client";
+import { deleteLibraryEntry, resolveImageUrl } from "../api/client";
 import { STATUS_COLORS } from "../lib/iliConstants";
 import ZoomableImage from "./ZoomableImage";
 
@@ -22,11 +22,7 @@ export default function ImageDetail({
   const { image, similarity_score, image_url, media_urls, media_index, orientation_image_url } = result;
   const media = (media_urls && media_urls.length ? media_urls : [image_url]).filter(Boolean);
   const [mediaIdx, setMediaIdx] = useState(0);
-  const [heatmapUrl, setHeatmapUrl] = useState(null);
-  const [showHeatmap, setShowHeatmap] = useState(false);
   const [showOrientation, setShowOrientation] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -49,10 +45,7 @@ export default function ImageDetail({
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
     setMediaIdx(0);
-    setHeatmapUrl(null);
-    setShowHeatmap(false);
     setShowOrientation(false);
-    setError(null);
     setConfirmDelete(false);
     setDeleteError(null);
     setUnlockInput("");
@@ -86,32 +79,8 @@ export default function ImageDetail({
 
   const statusColor = STATUS_COLORS[image.classification_status];
 
-  const handleToggleHeatmap = async () => {
-    if (showHeatmap) {
-      setShowHeatmap(false);
-      return;
-    }
-    setShowOrientation(false);
-    if (heatmapUrl) {
-      setShowHeatmap(true);
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      const url = await getExplainability(image.id);
-      setHeatmapUrl(url);
-      setShowHeatmap(true);
-    } catch (err) {
-      setError("Failed to generate attention map");
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleToggleOrientation = () => {
     setShowOrientation((prev) => !prev);
-    setShowHeatmap(false);
   };
 
   const handleDelete = async () => {
@@ -147,8 +116,6 @@ export default function ImageDetail({
   const currentSrc =
     showOrientation && orientation_image_url
       ? resolveImageUrl(orientation_image_url)
-      : showHeatmap && heatmapUrl
-      ? heatmapUrl
       : resolveImageUrl(media[mediaIdx] || image_url);
   const currentAlt = showOrientation ? "Orientation reference" : title;
 
@@ -204,7 +171,7 @@ export default function ImageDetail({
             >
               {unlocking ? "Checking…" : "Unlock"}
             </button>
-            {unlockError && <span className="heatmap-error delete-error">{unlockError}</span>}
+            {unlockError && <span className="detail-error delete-error">{unlockError}</span>}
           </form>
         )}
         {allowEdit && adminPasskey && !confirmDelete && (
@@ -247,7 +214,7 @@ export default function ImageDetail({
             >
               Cancel
             </button>
-            {deleteError && <span className="heatmap-error delete-error">{deleteError}</span>}
+            {deleteError && <span className="detail-error delete-error">{deleteError}</span>}
           </form>
         )}
       </div>
@@ -260,7 +227,7 @@ export default function ImageDetail({
               <span>Orientation Image (reference only)</span>
             </div>
           )}
-          {media.length > 1 && !showHeatmap && !showOrientation && (
+          {media.length > 1 && !showOrientation && (
             <div className="media-nav">
               <button
                 className="btn btn-secondary"
@@ -287,7 +254,7 @@ export default function ImageDetail({
               <span className="badge badge-panel">{currentPanelTag}</span>
             </div>
           )}
-          {media.length > 1 && !showHeatmap && !showOrientation && (
+          {media.length > 1 && !showOrientation && (
             <div className="media-thumbs">
               {media.map((url, i) => (
                 <button
@@ -305,24 +272,16 @@ export default function ImageDetail({
               ))}
             </div>
           )}
-          <div className="heatmap-controls">
-            <button
-              className={`btn ${showHeatmap ? "btn-primary" : "btn-secondary"}`}
-              onClick={handleToggleHeatmap}
-              disabled={loading}
-            >
-              {loading ? "Generating..." : showHeatmap ? "Show Original" : "Show Attention Map"}
-            </button>
-            {orientation_image_url && (
+          {orientation_image_url && (
+            <div className="detail-controls">
               <button
                 className={`btn ${showOrientation ? "btn-primary" : "btn-secondary"}`}
                 onClick={handleToggleOrientation}
               >
                 {showOrientation ? "Show Original" : "View Orientation Image"}
               </button>
-            )}
-            {error && <span className="heatmap-error">{error}</span>}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="detail-metadata">

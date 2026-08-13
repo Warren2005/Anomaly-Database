@@ -4,7 +4,7 @@ A content-based image retrieval system: search a library of industrial inspectio
 
 ## How it works
 
-A FastAPI backend embeds images and text into a shared 512-dimensional vector space using OpenAI's CLIP (ViT-B/32), stores those vectors in Qdrant for fast similarity search, keeps structured metadata in PostgreSQL, and serves image files from MinIO. A React (Vite) frontend — servable in the browser or wrapped in Electron as a desktop app — handles search, results browsing, an "attention map" explainability view, and adding new images to the library with inspection metadata (anomaly type, wall location, signed revision history, etc.).
+A FastAPI backend embeds images and text into a shared 512-dimensional vector space using OpenAI's CLIP (ViT-B/32), stores those vectors in Qdrant for fast similarity search, keeps structured metadata in PostgreSQL, and serves image files from MinIO. A React (Vite) frontend — servable in the browser or wrapped in Electron as a desktop app — handles search, results browsing, and adding new images to the library with inspection metadata (anomaly type, wall location, signed revision history, etc.).
 
 ```
 React (Vite) SPA ──HTTP/WS──> Nginx :3000 ──proxy──> FastAPI (Gunicorn+Uvicorn) :8000

@@ -790,9 +790,14 @@ export default function LibraryUpload({
                 value={form.identification}
                 onChange={(e) => handleFormChange("identification", e.target.value)}
               >
-                {identificationSelectOptions.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
+                {identificationSelectOptions.map((opt) => {
+                  const isDefault = IDENTIFICATION_DEFAULTS[form.anomaly_type] === opt;
+                  return (
+                    <option key={opt} value={opt}>
+                      {isDefault ? `${opt} — most common` : opt}
+                    </option>
+                  );
+                })}
               </select>
             ) : (
               <select

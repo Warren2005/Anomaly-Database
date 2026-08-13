@@ -4,7 +4,6 @@ import ImageDetail from "./ImageDetail";
 import LibraryUpload from "./LibraryUpload";
 import ReferenceCard from "./ReferenceCard";
 import {
-  ALL_IDENTIFICATIONS,
   ANOMALY_TYPES,
   CLASSIFICATION_STATUS_OPTIONS,
   IDENTIFICATION_BY_TYPE,
@@ -105,12 +104,13 @@ export default function LibraryBrowser() {
     setOpenSections((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const identificationOptions = useMemo(() => {
-    if (!filters.anomaly_types.length) return ALL_IDENTIFICATIONS;
-    const scoped = filters.anomaly_types.flatMap(
-      (type) => IDENTIFICATION_BY_TYPE[type] || []
-    );
-    return [...new Set(scoped)];
+  const identificationClusters = useMemo(() => {
+    const types = filters.anomaly_types.length
+      ? ANOMALY_TYPES.filter((type) => filters.anomaly_types.includes(type))
+      : ANOMALY_TYPES;
+    return types
+      .map((type) => ({ type, options: IDENTIFICATION_BY_TYPE[type] || [] }))
+      .filter((cluster) => cluster.options.length > 0);
   }, [filters.anomaly_types]);
 
   const activeFilterCount = useMemo(() => {
@@ -239,18 +239,25 @@ export default function LibraryBrowser() {
           onToggle={toggleSection}
           count={filters.identifications.length}
         >
-          <div className="chips-wrap">
-            {identificationOptions.map((idOpt) => (
-              <button
-                key={idOpt}
-                type="button"
-                className={`chip ${filters.identifications.includes(idOpt) ? "chip-active" : ""}`}
-                onClick={() =>
-                  setFilter("identifications", toggleType(filters.identifications, idOpt))
-                }
-              >
-                {idOpt}
-              </button>
+          <div className="id-clusters">
+            {identificationClusters.map((cluster) => (
+              <div key={cluster.type} className="id-cluster">
+                <div className="id-cluster-label">{cluster.type}</div>
+                <div className="chips-wrap">
+                  {cluster.options.map((idOpt) => (
+                    <button
+                      key={idOpt}
+                      type="button"
+                      className={`chip ${filters.identifications.includes(idOpt) ? "chip-active" : ""}`}
+                      onClick={() =>
+                        setFilter("identifications", toggleType(filters.identifications, idOpt))
+                      }
+                    >
+                      {idOpt}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
           </div>
         </FilterSection>

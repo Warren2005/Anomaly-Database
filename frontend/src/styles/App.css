@@ -317,10 +317,11 @@ body {
 
 .app-main {
   flex: 1;
-  padding: 24px;
+  padding: 24px 28px 32px;
   display: flex;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
+  width: 100%;
 }
 
 /* ============================================================
@@ -850,17 +851,18 @@ body {
 /* Catalog-style reference cards (library + search) */
 .ref-grid {
   max-width: none;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Keep cards from getting tiny on wide screens; fewer columns = each card grows */
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 16px;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 700px) {
   .ref-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
   }
 }
 
-@media (max-width: 560px) {
+@media (max-width: 520px) {
   .ref-grid {
     grid-template-columns: 1fr;
   }
@@ -1394,8 +1396,8 @@ body {
   --lib-card-title: 15px;
   --lib-score: 20px;
   width: 100%;
-  max-width: 1280px;
-  margin-top: 24px;
+  max-width: none;
+  margin-top: 8px;
   display: flex;
   flex-direction: row;
   align-items: flex-start;
@@ -1465,7 +1467,7 @@ body {
 
 .browse-filter-sidebar {
   display: flex;
-  width: 280px;
+  width: 320px;
   flex-shrink: 0;
   align-self: flex-start;
   height: auto;
@@ -1767,6 +1769,26 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.id-clusters {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.id-cluster + .id-cluster {
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.id-cluster-label {
+  margin-bottom: 6px;
+  font-size: var(--lib-meta, 12px);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
 }
 
 .chip,

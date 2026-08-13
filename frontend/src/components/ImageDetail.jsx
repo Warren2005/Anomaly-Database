@@ -1,7 +1,15 @@
-import React, { useEffect, useState } from "react";
+﻿import React, { useEffect, useMemo, useState } from "react";
 import { deleteLibraryEntry, resolveImageUrl } from "../api/client";
-import { STATUS_COLORS } from "../lib/iliConstants";
+import { PANEL_TAG_OPTIONS, STATUS_COLORS } from "../lib/iliConstants";
 import ZoomableImage from "./ZoomableImage";
+
+const VIEW_FOCUS = "focus";
+const VIEW_PANELS = "panels";
+const VIEW_SPLIT = "split";
+
+function shortPanelLabel(tag) {
+  return (tag || "Panel").replace(/ Panel$/i, "");
+}
 
 export default function ImageDetail({
   result,
@@ -29,6 +37,7 @@ export default function ImageDetail({
   const [unlockInput, setUnlockInput] = useState("");
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState(null);
+  const [viewMode, setViewMode] = useState(VIEW_FOCUS);
 
   const canNavigate = typeof currentIndex === "number" && totalCount > 0 && (onPrev || onNext);
   const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
@@ -42,16 +51,45 @@ export default function ImageDetail({
   const currentPanelTag =
     panelTags[typeof media_index === "number" ? media_index : mediaIdx];
 
+  const panelSlots = useMemo(() => {
+    const slots = media.map((url, i) => ({
+      url,
+      index: i,
+      tag: panelTags[i] || `Image ${i + 1}`,
+    }));
+    // Prefer canonical panel order when tags are known.
+    const rank = (tag) => {
+      const idx = PANEL_TAG_OPTIONS.indexOf(tag);
+      return idx >= 0 ? idx : PANEL_TAG_OPTIONS.length + 1;
+    };
+    return [...slots].sort((a, b) => rank(a.tag) - rank(b.tag) || a.index - b.index);
+  }, [media, panelTags]);
+
+  const canUsePanels = media.length > 1;
+  const canUseSplit = Boolean(orientation_image_url);
+
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
     setMediaIdx(0);
     setShowOrientation(false);
+    setViewMode(VIEW_FOCUS);
     setConfirmDelete(false);
     setDeleteError(null);
     setUnlockInput("");
     setUnlocking(false);
     setUnlockError(null);
   }, [image.id]);
+
+  useEffect(() => {
+    if (viewMode === VIEW_PANELS && !canUsePanels) setViewMode(VIEW_FOCUS);
+    if (viewMode === VIEW_SPLIT && !canUseSplit) setViewMode(VIEW_FOCUS);
+  }, [viewMode, canUsePanels, canUseSplit]);
+
+  useEffect(() => {
+    if (viewMode !== VIEW_FOCUS) {
+      setShowOrientation(false);
+    }
+  }, [viewMode]);
 
   useEffect(() => {
     if (!canNavigate) return undefined;
@@ -122,11 +160,13 @@ export default function ImageDetail({
   return (
     <div className="image-detail">
       <div className="detail-toolbar">
-        <button className="btn btn-secondary" onClick={onBack}>
-          {backLabel}
-        </button>
+        <div className="detail-toolbar-left">
+          <button className="btn btn-secondary" onClick={onBack}>
+            {backLabel}
+          </button>
+        </div>
 
-        {canNavigate && (
+        {canNavigate ? (
           <div className="result-nav" role="navigation" aria-label="Library entries">
             <button
               type="button"
@@ -152,136 +192,230 @@ export default function ImageDetail({
               ›
             </button>
           </div>
+        ) : (
+          <div className="result-nav result-nav-spacer" aria-hidden="true" />
         )}
 
-        {(allowEdit || allowDelete) && !adminPasskey && !confirmDelete && (
-          <form className="delete-confirm detail-unlock-form" onSubmit={handleUnlockSubmit}>
-            <input
-              type="password"
-              className="form-input delete-passkey-input detail-unlock-input"
-              placeholder="Passkey to edit/delete"
-              value={unlockInput}
-              onChange={(e) => setUnlockInput(e.target.value)}
-              autoComplete="off"
-            />
-            <button
-              type="submit"
-              className="btn btn-secondary"
-              disabled={unlocking || !unlockInput}
-            >
-              {unlocking ? "Checking…" : "Unlock"}
+        <div className="detail-toolbar-right">
+          {(allowEdit || allowDelete) && !adminPasskey && !confirmDelete && (
+            <form className="delete-confirm detail-unlock-form" onSubmit={handleUnlockSubmit}>
+              <input
+                type="password"
+                className="form-input delete-passkey-input detail-unlock-input"
+                placeholder="Passkey to edit/delete"
+                value={unlockInput}
+                onChange={(e) => setUnlockInput(e.target.value)}
+                autoComplete="off"
+              />
+              <button
+                type="submit"
+                className="btn btn-secondary"
+                disabled={unlocking || !unlockInput}
+              >
+                {unlocking ? "Checking…" : "Unlock"}
+              </button>
+              {unlockError && <span className="detail-error delete-error">{unlockError}</span>}
+            </form>
+          )}
+          {allowEdit && adminPasskey && !confirmDelete && (
+            <button className="btn btn-secondary" onClick={() => onEdit?.(result)}>
+              Edit Entry
             </button>
-            {unlockError && <span className="detail-error delete-error">{unlockError}</span>}
-          </form>
-        )}
-        {allowEdit && adminPasskey && !confirmDelete && (
-          <button className="btn btn-secondary" onClick={() => onEdit?.(result)}>
-            Edit Entry
-          </button>
-        )}
-        {allowDelete && adminPasskey && !confirmDelete && (
-          <button
-            className="btn btn-danger"
-            onClick={() => { setConfirmDelete(true); setDeleteError(null); }}
-          >
-            Delete Entry
-          </button>
-        )}
-        {allowDelete && adminPasskey && confirmDelete && (
-          <form
-            className="delete-confirm"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (!deleting) handleDelete();
-            }}
-          >
-            <span>Delete this entry permanently?</span>
-            <strong className="delete-warning">DELETION CANNOT BE UNDONE</strong>
+          )}
+          {allowDelete && adminPasskey && !confirmDelete && (
             <button
-              type="submit"
               className="btn btn-danger"
-              disabled={deleting}
+              onClick={() => { setConfirmDelete(true); setDeleteError(null); }}
             >
-              {deleting ? "Deleting…" : "Confirm"}
+              Delete Entry
             </button>
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                setConfirmDelete(false);
-                setDeleteError(null);
+          )}
+          {allowDelete && adminPasskey && confirmDelete && (
+            <form
+              className="delete-confirm"
+              onSubmit={(e) => {
+                e.preventDefault();
+                if (!deleting) handleDelete();
               }}
             >
-              Cancel
-            </button>
-            {deleteError && <span className="detail-error delete-error">{deleteError}</span>}
-          </form>
-        )}
+              <span>Delete this entry permanently?</span>
+              <strong className="delete-warning">DELETION CANNOT BE UNDONE</strong>
+              <button
+                type="submit"
+                className="btn btn-danger"
+                disabled={deleting}
+              >
+                {deleting ? "Deleting…" : "Confirm"}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  setConfirmDelete(false);
+                  setDeleteError(null);
+                }}
+              >
+                Cancel
+              </button>
+              {deleteError && <span className="detail-error delete-error">{deleteError}</span>}
+            </form>
+          )}
+        </div>
       </div>
 
-      <div className="detail-content">
+      <div className={`detail-content${viewMode !== VIEW_FOCUS ? " detail-content-wide" : ""}`}>
         <div className="detail-image-container">
-          <ZoomableImage src={currentSrc} alt={currentAlt} />
-          {showOrientation && (
-            <div className="media-nav">
-              <span>Orientation Image (reference only)</span>
-            </div>
-          )}
-          {media.length > 1 && !showOrientation && (
-            <div className="media-nav">
+          {(canUsePanels || canUseSplit) && (
+            <div className="detail-view-toggle" role="group" aria-label="Image layout">
               <button
-                className="btn btn-secondary"
-                disabled={mediaIdx === 0}
-                onClick={() => setMediaIdx((i) => i - 1)}
+                type="button"
+                className={`btn ${viewMode === VIEW_FOCUS ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setViewMode(VIEW_FOCUS)}
               >
-                ‹
+                Focus
               </button>
-              <span>
-                {mediaIdx + 1} / {media.length}
-                {currentPanelTag ? ` · ${currentPanelTag}` : ""}
-              </span>
-              <button
-                className="btn btn-secondary"
-                disabled={mediaIdx === media.length - 1}
-                onClick={() => setMediaIdx((i) => i + 1)}
-              >
-                ›
-              </button>
-            </div>
-          )}
-          {currentPanelTag && !showOrientation && (
-            <div className="panel-tag-row current-panel-tag">
-              <span className="badge badge-panel">{currentPanelTag}</span>
-            </div>
-          )}
-          {media.length > 1 && !showOrientation && (
-            <div className="media-thumbs">
-              {media.map((url, i) => (
+              {canUsePanels && (
                 <button
-                  key={url}
                   type="button"
-                  className={`media-thumb${i === mediaIdx ? " active" : ""}`}
-                  onClick={() => setMediaIdx(i)}
-                  title={panelTags[i] || `Image ${i + 1}`}
+                  className={`btn ${viewMode === VIEW_PANELS ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setViewMode(VIEW_PANELS)}
                 >
-                  <img src={resolveImageUrl(url)} alt="" />
-                  {panelTags[i] && (
-                    <span className="media-thumb-tag">{panelTags[i].replace(/ Panel$/, "")}</span>
-                  )}
+                  Panels
+                </button>
+              )}
+              {canUseSplit && (
+                <button
+                  type="button"
+                  className={`btn ${viewMode === VIEW_SPLIT ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setViewMode(VIEW_SPLIT)}
+                >
+                  Side view
+                </button>
+              )}
+            </div>
+          )}
+
+          {viewMode === VIEW_PANELS ? (
+            <div className="panel-mosaic">
+              {panelSlots.map((slot) => (
+                <button
+                  type="button"
+                  key={`${slot.index}-${slot.tag}`}
+                  className={`panel-slot${slot.index === mediaIdx ? " is-active" : ""}`}
+                  onClick={() => {
+                    setMediaIdx(slot.index);
+                    setViewMode(VIEW_FOCUS);
+                  }}
+                  title={`Open ${slot.tag} in focus view`}
+                >
+                  <div className="panel-slot-label">{shortPanelLabel(slot.tag)}</div>
+                  <div className="panel-slot-frame">
+                    <img src={resolveImageUrl(slot.url)} alt={slot.tag} />
+                  </div>
                 </button>
               ))}
             </div>
+          ) : viewMode === VIEW_SPLIT ? (
+            <div className="detail-split-view">
+              <div className="detail-split-pane">
+                <div className="detail-split-label">
+                  {currentPanelTag ? shortPanelLabel(currentPanelTag) : "Primary"}
+                </div>
+                <ZoomableImage
+                  src={resolveImageUrl(media[mediaIdx] || image_url)}
+                  alt={title}
+                />
+              </div>
+              <div className="detail-split-pane">
+                <div className="detail-split-label">Orientation</div>
+                <ZoomableImage
+                  src={resolveImageUrl(orientation_image_url)}
+                  alt="Orientation reference"
+                />
+              </div>
+            </div>
+          ) : (
+            <>
+              <ZoomableImage src={currentSrc} alt={currentAlt} />
+              {showOrientation && (
+                <div className="media-nav">
+                  <span>Orientation Image (reference only)</span>
+                </div>
+              )}
+              {media.length > 1 && !showOrientation && (
+                <div className="media-nav">
+                  <button
+                    className="btn btn-secondary"
+                    disabled={mediaIdx === 0}
+                    onClick={() => setMediaIdx((i) => i - 1)}
+                  >
+                    ‹
+                  </button>
+                  <span>
+                    {mediaIdx + 1} / {media.length}
+                    {currentPanelTag ? ` · ${currentPanelTag}` : ""}
+                  </span>
+                  <button
+                    className="btn btn-secondary"
+                    disabled={mediaIdx === media.length - 1}
+                    onClick={() => setMediaIdx((i) => i + 1)}
+                  >
+                    ›
+                  </button>
+                </div>
+              )}
+              {media.length > 1 && !showOrientation && (
+                <div className="media-thumbs">
+                  {media.map((url, i) => (
+                    <button
+                      key={url}
+                      type="button"
+                      className={`media-thumb${i === mediaIdx ? " active" : ""}`}
+                      onClick={() => setMediaIdx(i)}
+                      title={panelTags[i] || `Image ${i + 1}`}
+                    >
+                      <img src={resolveImageUrl(url)} alt="" />
+                      {panelTags[i] && (
+                        <span className="media-thumb-tag">{shortPanelLabel(panelTags[i])}</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
-          {orientation_image_url && (
-            <div className="detail-controls">
+
+          <div className="detail-controls">
+            {viewMode === VIEW_FOCUS && orientation_image_url && (
               <button
                 className={`btn ${showOrientation ? "btn-primary" : "btn-secondary"}`}
                 onClick={handleToggleOrientation}
               >
                 {showOrientation ? "Show Original" : "View Orientation Image"}
               </button>
-            </div>
-          )}
+            )}
+            {viewMode === VIEW_PANELS && (
+              <span className="detail-view-hint">Click a panel to open it in Focus</span>
+            )}
+            {viewMode === VIEW_SPLIT && media.length > 1 && (
+              <div className="media-thumbs media-thumbs-inline">
+                {media.map((url, i) => (
+                  <button
+                    key={url}
+                    type="button"
+                    className={`media-thumb${i === mediaIdx ? " active" : ""}`}
+                    onClick={() => setMediaIdx(i)}
+                    title={panelTags[i] || `Image ${i + 1}`}
+                  >
+                    <img src={resolveImageUrl(url)} alt="" />
+                    {panelTags[i] && (
+                      <span className="media-thumb-tag">{shortPanelLabel(panelTags[i])}</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="detail-metadata">
@@ -318,13 +452,19 @@ export default function ImageDetail({
             </div>
           )}
 
-          {(panelTags.length > 1 || tags.length > 0) && (
+          {(panelTags.length > 0 || tags.length > 0) && (
             <div className="detail-meta-block">
-              {panelTags.length > 1 && (
+              {panelTags.length > 0 && (
                 <div className="panel-tag-row">
                   {panelTags.map((tag, i) => (
-                    <span key={`${tag}-${i}`} className="badge badge-panel">
-                      {i + 1}. {tag}
+                    <span
+                      key={`${tag}-${i}`}
+                      className={`badge badge-panel${
+                        i === mediaIdx && !showOrientation ? " badge-panel-current" : ""
+                      }`}
+                    >
+                      {panelTags.length > 1 ? `${i + 1}. ` : ""}
+                      {tag}
                     </span>
                   ))}
                 </div>
@@ -344,8 +484,9 @@ export default function ImageDetail({
               <span className="orientation-detail-label">Orientation</span>
               <button
                 type="button"
-                onClick={handleToggleOrientation}
+                onClick={() => setViewMode(VIEW_SPLIT)}
                 className="orientation-detail-thumb"
+                title="Open side-by-side with orientation"
               >
                 <img src={resolveImageUrl(orientation_image_url)} alt="Orientation reference" />
               </button>
@@ -357,7 +498,7 @@ export default function ImageDetail({
             <dl className="detail-dl">
               <DetailItem label="Identification" value={image.identification} />
               <DetailItem label="Wall Location" value={image.wall_location} />
-              <DetailItem label="Image Angles" value={image.crack_image_angles} />
+              <DetailItem label="Crack Angle" value={image.crack_image_angles} />
               <DetailItem
                 label="Interacting features"
                 value={

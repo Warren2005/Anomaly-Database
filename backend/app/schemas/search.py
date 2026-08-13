@@ -46,6 +46,7 @@ class FiltersResponse(BaseModel):
     classification_statuses: list[str] = []
     identifications: list[str] = []
     tags: list[str] = []
+    wall_locations: list[str] = []
 
 
 class LibraryBrowseResponse(BaseModel):

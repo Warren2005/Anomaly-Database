@@ -109,6 +109,7 @@ export default function LibraryUpload({
   const [files, setFiles] = useState([]);
   const [filePanelTags, setFilePanelTags] = useState([]);
   const [previews, setPreviews] = useState([]);
+  const [primaryIndex, setPrimaryIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [form, setForm] = useState(initialForm);
   const [existingMedia, setExistingMedia] = useState(() => existingMediaFromDetail(editingImage));
@@ -138,6 +139,7 @@ export default function LibraryUpload({
   const [addTagPasskey, setAddTagPasskey] = useState("");
   const [addingTag, setAddingTag] = useState(false);
   const [addTagError, setAddTagError] = useState(null);
+  const [previewLightbox, setPreviewLightbox] = useState(null);
   const fileInputRef = useRef(null);
 
   const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
@@ -170,6 +172,20 @@ export default function LibraryUpload({
   }, [isDirty, onDirtyChange]);
 
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
+
+  useEffect(() => {
+    if (!previewLightbox) return undefined;
+    const onKey = (e) => {
+      if (e.key === "Escape") setPreviewLightbox(null);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [previewLightbox]);
+
+  const openPreviewLightbox = useCallback((src, label = "") => {
+    if (!src) return;
+    setPreviewLightbox({ src, label });
+  }, []);
 
   const refreshRuns = useCallback(async () => {
     try {
@@ -318,9 +334,16 @@ export default function LibraryUpload({
   }, []);
 
   const removeFile = (idx) => {
+    const existingCount = existingMedia.filter((m) => !m.removed).length;
+    const combinedIdx = existingCount + idx;
     setFiles((prev) => prev.filter((_, i) => i !== idx));
     setFilePanelTags((prev) => prev.filter((_, i) => i !== idx));
     setPreviews((prev) => prev.filter((_, i) => i !== idx));
+    setPrimaryIndex((prev) => {
+      if (prev === combinedIdx) return 0;
+      if (prev > combinedIdx) return prev - 1;
+      return prev;
+    });
     setFieldErrors((prev) => {
       const next = { ...prev };
       delete next[`panel_${idx}`];
@@ -334,9 +357,18 @@ export default function LibraryUpload({
   };
 
   const removeExistingMedia = (originalIndex) => {
+    const before = existingMedia.filter((m) => !m.removed);
+    const removedPos = before.findIndex((m) => m.originalIndex === originalIndex);
     setExistingMedia((prev) =>
       prev.map((m) => (m.originalIndex === originalIndex ? { ...m, removed: true } : m))
     );
+    if (removedPos >= 0) {
+      setPrimaryIndex((prev) => {
+        if (prev === removedPos) return 0;
+        if (prev > removedPos) return prev - 1;
+        return prev;
+      });
+    }
     setFieldErrors((prev) => ({ ...prev, file: undefined }));
   };
 
@@ -348,9 +380,25 @@ export default function LibraryUpload({
   };
 
   const survivingExisting = existingMedia.filter((m) => !m.removed);
-  const isExistingPrimary = (m) =>
-    survivingExisting.length > 0 && survivingExisting[0].originalIndex === m.originalIndex;
-  const isNewFilePrimary = (i) => survivingExisting.length === 0 && i === 0;
+  const mediaCount = survivingExisting.length + files.length;
+
+  useEffect(() => {
+    if (mediaCount === 0) {
+      setPrimaryIndex(0);
+      return;
+    }
+    if (primaryIndex >= mediaCount) {
+      setPrimaryIndex(0);
+    }
+  }, [mediaCount, primaryIndex]);
+
+  const isPrimaryAt = (combinedIndex) =>
+    mediaCount > 0 && combinedIndex === primaryIndex;
+
+  const setPrimaryAt = (combinedIndex) => {
+    if (combinedIndex < 0 || combinedIndex >= mediaCount) return;
+    setPrimaryIndex(combinedIndex);
+  };
 
   const handleDragOver = useCallback((e) => { e.preventDefault(); setIsDragging(true); }, []);
   const handleDragLeave = useCallback((e) => { e.preventDefault(); setIsDragging(false); }, []);
@@ -550,6 +598,7 @@ export default function LibraryUpload({
             newFiles: files,
             panelTags,
             removeIndices,
+            primaryIndex,
             newOrientationImage: orientationFile,
             removeOrientationImage: orientationRemoved,
           },
@@ -561,8 +610,9 @@ export default function LibraryUpload({
         // itself the confirmation that the save worked.
         if (onSuccess) onSuccess(result);
       } else {
-        // Ordered 1:1 with uploaded files (primary first, then extras)
+        // Ordered 1:1 with uploaded files; primary_index nominates CLIP primary.
         payload.panel_tags = filePanelTags.join(",");
+        payload.primary_index = String(primaryIndex);
         const result = await uploadToLibrary(files, payload, orientationFile);
         setSuccess(result);
         if (onSuccess) onSuccess();
@@ -582,9 +632,9 @@ export default function LibraryUpload({
     setFiles([]);
     setFilePanelTags([]);
     setPreviews([]);
+    setPrimaryIndex(0);
     setForm(EMPTY_FORM);
     setSelectedTags([]);
-    setTagInput("");
     setOrientationFile(null);
     setOrientationPreview(null);
     setOrientationRemoved(false);
@@ -659,17 +709,41 @@ export default function LibraryUpload({
           {isEditMode && survivingExisting.length > 0 && (
             <div className="media-preview-section">
               <p className="form-hint media-preview-hint">
-                Existing images — remove any, or change a panel tag. At least one image must remain.
+                Existing images — remove any, change a panel tag, or set which is Primary (CLIP search).
               </p>
               <div className="media-preview-grid">
-                {survivingExisting.map((m) => (
+                {survivingExisting.map((m, survivingIdx) => (
                   <div
                     key={m.originalIndex}
-                    className={`preview-card${fieldErrors[`existing_${m.originalIndex}`] ? " preview-card-error" : ""}`}
+                    className={`preview-card${fieldErrors[`existing_${m.originalIndex}`] ? " preview-card-error" : ""}${
+                      isPrimaryAt(survivingIdx) ? " preview-card-primary" : ""
+                    }`}
                   >
                     <div className="preview-thumb">
-                      <img src={resolveImageUrl(m.url)} alt="" />
-                      {isExistingPrimary(m) && <span className="preview-primary">Primary</span>}
+                      <button
+                        type="button"
+                        className="preview-thumb-open"
+                        onClick={() =>
+                          openPreviewLightbox(
+                            resolveImageUrl(m.url),
+                            m.panelTag || `Existing image ${m.originalIndex + 1}`
+                          )
+                        }
+                        aria-label="View image larger"
+                      >
+                        <img src={resolveImageUrl(m.url)} alt="" />
+                      </button>
+                      {isPrimaryAt(survivingIdx) ? (
+                        <span className="preview-primary">Primary</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="preview-make-primary"
+                          onClick={() => setPrimaryAt(survivingIdx)}
+                        >
+                          Make primary
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="remove-img"
@@ -705,18 +779,52 @@ export default function LibraryUpload({
                 {previews.length === 1
                   ? "1 new image — choose which panel it is"
                   : `${previews.length} new images — choose a panel tag for each`}
-                {survivingExisting.length === 0 && ". First image is used for CLIP search (Primary)."}
+                {mediaCount > 1
+                  ? ". Click Make primary to choose the CLIP search image."
+                  : survivingExisting.length === 0
+                  ? ". This image is used for CLIP search (Primary)."
+                  : ""}
               </p>
               <div className="media-preview-grid">
-                {previews.map((p, i) => (
+                {previews.map((p, i) => {
+                  const combinedIdx = survivingExisting.length + i;
+                  return (
                   <div
                     key={`${p.name}-${i}`}
-                    className={`preview-card${fieldErrors[`panel_${i}`] ? " preview-card-error" : ""}`}
+                    className={`preview-card${fieldErrors[`panel_${i}`] ? " preview-card-error" : ""}${
+                      isPrimaryAt(combinedIdx) ? " preview-card-primary" : ""
+                    }`}
                   >
                     <div className="preview-thumb">
-                      <img src={p.url} alt={p.name} />
-                      {isNewFilePrimary(i) && <span className="preview-primary">Primary</span>}
-                      <button type="button" className="remove-img" onClick={() => removeFile(i)}>✕</button>
+                      <button
+                        type="button"
+                        className="preview-thumb-open"
+                        onClick={() =>
+                          openPreviewLightbox(p.url, filePanelTags[i] || p.name || `New image ${i + 1}`)
+                        }
+                        aria-label={`View ${p.name || "image"} larger`}
+                      >
+                        <img src={p.url} alt={p.name} />
+                      </button>
+                      {isPrimaryAt(combinedIdx) ? (
+                        <span className="preview-primary">Primary</span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="preview-make-primary"
+                          onClick={() => setPrimaryAt(combinedIdx)}
+                        >
+                          Make primary
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="remove-img"
+                        onClick={() => removeFile(i)}
+                        aria-label="Remove this image"
+                      >
+                        ✕
+                      </button>
                     </div>
                     <label className="form-label preview-panel-label">
                       Panel <span className="req">*</span>
@@ -733,7 +841,8 @@ export default function LibraryUpload({
                       ))}
                     </select>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
@@ -917,7 +1026,7 @@ export default function LibraryUpload({
           </div>
         </div>
 
-        <div className="form-row segment-controls-row">
+        <div className="segment-controls-row">
           <div className="form-field form-field-grow">
             <label className="form-label">Wall Location <span className="req">*</span></label>
             <div
@@ -947,42 +1056,47 @@ export default function LibraryUpload({
             )}
           </div>
 
-          {form.anomaly_type === CRACK_TYPE && (
-            <div className="form-field form-field-angles">
-              <label className="form-label">Image Angles <span className="req">*</span></label>
-              <div
-                className={`segment-box segment-box-angles${
-                  fieldErrors.crack_image_angles ? " has-error-input" : ""
-                }`}
-                role="listbox"
-                aria-label="Crack image angles"
-              >
-                {CRACK_IMAGE_ANGLE_OPTIONS.map((opt, idx) => (
-                  <React.Fragment key={opt}>
-                    {idx > 0 && <span className="segment-divider" aria-hidden="true" />}
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={form.crack_image_angles === opt}
-                      className={`segment-option${
-                        form.crack_image_angles === opt ? " is-selected" : ""
-                      }`}
-                      onClick={() => handleFormChange("crack_image_angles", opt)}
-                    >
-                      {opt}
-                    </button>
-                  </React.Fragment>
-                ))}
-              </div>
-              {fieldErrors.crack_image_angles && (
-                <p className="add-run-error">{fieldErrors.crack_image_angles}</p>
-              )}
+          <div className={`form-field form-field-angles${form.anomaly_type === CRACK_TYPE ? "" : " is-disabled"}`}>
+            <label className="form-label">
+              Crack Angle
+              {form.anomaly_type === CRACK_TYPE
+                ? <span className="req"> *</span>
+                : <span className="opt"> Crack-like only</span>}
+            </label>
+            <div
+              className={`segment-box segment-box-angles${
+                fieldErrors.crack_image_angles ? " has-error-input" : ""
+              }`}
+              role="listbox"
+              aria-label="Crack angle"
+              aria-disabled={form.anomaly_type !== CRACK_TYPE}
+            >
+              {CRACK_IMAGE_ANGLE_OPTIONS.map((opt, idx) => (
+                <React.Fragment key={opt}>
+                  {idx > 0 && <span className="segment-divider" aria-hidden="true" />}
+                  <button
+                    type="button"
+                    role="option"
+                    disabled={form.anomaly_type !== CRACK_TYPE}
+                    aria-selected={form.crack_image_angles === opt}
+                    className={`segment-option${
+                      opt === "+" || opt === "-" ? " segment-option-symbol" : ""
+                    }${form.crack_image_angles === opt ? " is-selected" : ""}`}
+                    onClick={() => handleFormChange("crack_image_angles", opt)}
+                  >
+                    {opt}
+                  </button>
+                </React.Fragment>
+              ))}
             </div>
-          )}
+            {fieldErrors.crack_image_angles && (
+              <p className="add-run-error">{fieldErrors.crack_image_angles}</p>
+            )}
+          </div>
 
           <div className="form-field form-field-interact">
             <label className="form-label">
-              Interacting with other features? <span className="req">*</span>
+              Interacting? <span className="req">*</span>
             </label>
             <div
               className={`segment-box segment-box-yesno${
@@ -1271,7 +1385,22 @@ export default function LibraryUpload({
             </label>
             {(orientationPreview || existingOrientationUrl) ? (
               <div className="orientation-preview">
-                <img src={orientationPreview || resolveImageUrl(existingOrientationUrl)} alt="Orientation reference" />
+                <button
+                  type="button"
+                  className="orientation-preview-open"
+                  onClick={() =>
+                    openPreviewLightbox(
+                      orientationPreview || resolveImageUrl(existingOrientationUrl),
+                      "Orientation reference"
+                    )
+                  }
+                  aria-label="View orientation image larger"
+                >
+                  <img
+                    src={orientationPreview || resolveImageUrl(existingOrientationUrl)}
+                    alt="Orientation reference"
+                  />
+                </button>
                 <button
                   type="button"
                   className="remove-img"
@@ -1325,6 +1454,36 @@ export default function LibraryUpload({
         </button>
       </form>
       </div>
+
+      {previewLightbox && (
+        <div
+          className="image-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label={previewLightbox.label || "Image preview"}
+          onClick={() => setPreviewLightbox(null)}
+        >
+          <button
+            type="button"
+            className="image-lightbox-close"
+            onClick={() => setPreviewLightbox(null)}
+            aria-label="Close image preview"
+          >
+            ✕
+          </button>
+          <div className="image-lightbox-stage">
+            <img
+              src={previewLightbox.src}
+              alt={previewLightbox.label || "Uploaded image"}
+              className="image-lightbox-image"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          {previewLightbox.label && (
+            <span className="image-lightbox-hint">{previewLightbox.label}</span>
+          )}
+        </div>
+      )}
     </div>
   );
 }

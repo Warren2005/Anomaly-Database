@@ -118,6 +118,7 @@ async def upload_to_library(
     notes: Optional[str] = Form(None),
     panel_tags: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
+    primary_index: Optional[int] = Form(0),
     interacts_with_other_features: Optional[bool] = Form(None),
     interaction_related_items: Optional[str] = Form(None),
     zero_angle_frame_index: Optional[int] = Form(None),
@@ -160,6 +161,21 @@ async def upload_to_library(
             if t.strip()
         ]
     # Ordered 1:1 with media files when provided that way (primary, then extras).
+    # Caller may nominate a different primary via primary_index; rotate so that
+    # file becomes files[0] (and its panel tag stays aligned).
+    files_list = list(files)
+    tag_list = list(parsed_tags) if panel_tags else []
+    idx = primary_index if primary_index is not None else 0
+    if idx < 0 or idx >= len(files_list):
+        idx = 0
+    if idx != 0:
+        files_list = [files_list[idx], *files_list[:idx], *files_list[idx + 1 :]]
+        if tag_list:
+            while len(tag_list) < len(files_list):
+                tag_list.append("")
+            tag_list = [tag_list[idx], *tag_list[:idx], *tag_list[idx + 1 :]]
+            parsed_tags = tag_list[: len(files_list)]
+    files = files_list
 
     parsed_anomaly_tags = _parse_tag_list(tags)
 
@@ -277,6 +293,7 @@ async def browse_library(
     classification_status: Optional[str] = None,
     panel_tags: Optional[str] = None,
     identifications: Optional[str] = None,
+    wall_locations: Optional[str] = None,
     interacts_with_other_features: Optional[bool] = None,
     q: Optional[str] = None,
     depth_min: Optional[float] = None,
@@ -305,6 +322,10 @@ async def browse_library(
             t.strip() for t in identifications.split(",") if t.strip()
         )
 
+    wall_set = set()
+    if wall_locations:
+        wall_set.update(t.strip() for t in wall_locations.split(",") if t.strip())
+
     def in_range(value: Optional[float], lo: Optional[float], hi: Optional[float]) -> bool:
         if value is None:
             return lo is None and hi is None
@@ -322,6 +343,8 @@ async def browse_library(
             if not panel_set.intersection(tags):
                 return False
         if identification_set and img.identification not in identification_set:
+            return False
+        if wall_set and (img.wall_location or "") not in wall_set:
             return False
         if run_number and img.run_number != run_number:
             return False
@@ -355,7 +378,12 @@ async def browse_library(
                         img.identification,
                         img.analysis_comment,
                         img.notes,
-                        " ".join(e.get("name", "") for e in (img.revision_history or [])),
+                        img.wall_location,
+                        img.crack_image_angles,
+                        " ".join(
+                            f"{e.get('name', '')} {e.get('comment') or ''}"
+                            for e in (img.revision_history or [])
+                        ),
                         img.run_number,
                         img.anomaly_type,
                         img.qc_decision_rationale,
@@ -559,6 +587,7 @@ async def update_library_entry(
     interaction_related_items: Optional[str] = Form(None),
     zero_angle_frame_index: Optional[str] = Form(None),
     track: Optional[str] = Form(None),
+    primary_index: Optional[int] = Form(None),
     x_delete_passkey: Optional[str] = Header(default=None),
 ):
     """Edit an existing library entry's fields and/or its images.
@@ -683,6 +712,15 @@ async def update_library_entry(
     if len(final_tags) < len(final_paths):
         final_tags += [""] * (len(final_paths) - len(final_tags))
     final_tags = final_tags[: len(final_paths)]
+
+    # Promote a chosen media slot to primary (index 0) when requested.
+    if primary_index is not None and final_paths:
+        pidx = primary_index
+        if pidx < 0 or pidx >= len(final_paths):
+            pidx = 0
+        if pidx != 0:
+            final_paths = [final_paths[pidx], *final_paths[:pidx], *final_paths[pidx + 1 :]]
+            final_tags = [final_tags[pidx], *final_tags[:pidx], *final_tags[pidx + 1 :]]
 
     # Now that we know the edit is going through, remove the files that
     # dropped out (do this after storing new uploads, so a mid-request

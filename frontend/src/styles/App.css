@@ -767,12 +767,20 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Detail view: prev / next similar results */
+/* Detail view: prev / next similar results — stays centered in the toolbar */
 .result-nav {
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
-  margin-left: auto;
+  grid-column: 2;
+  justify-self: center;
+}
+
+.result-nav-spacer {
+  visibility: hidden;
+  pointer-events: none;
+  min-height: 1px;
 }
 
 .result-nav-btn {
@@ -853,13 +861,14 @@ body {
   max-width: none;
   gap: 18px;
   /*
-   * Full-screen 5-up size is the floor: tracks stay at least that wide, so a
-   * narrower window drops columns instead of shrinking cards. Cap at 5 columns
-   * on ultra-wide so leftover space grows cards rather than adding a 6th.
+   * Floor card width stays ~360px — cards never shrink below that.
+   * Zooming out (wider CSS viewport) packs more than 5 per row.
+   * Zooming in naturally lands around 2 per row before dropping to 1
+   * on very narrow widths.
    */
   grid-template-columns: repeat(
     auto-fill,
-    minmax(min(100%, max(360px, calc((100% - 72px) / 5))), 1fr)
+    minmax(min(100%, 360px), 1fr)
   );
 }
 
@@ -1152,9 +1161,9 @@ body {
   display: flex;
   align-items: stretch;
   width: 100%;
-  min-height: 42px;
+  min-height: 38px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--bg-surface);
   overflow: hidden;
 }
@@ -1163,21 +1172,13 @@ body {
   border-color: var(--danger, #c44);
 }
 
-.segment-box-yesno {
-  max-width: 220px;
-}
-
-.segment-box-angles {
-  max-width: 260px;
-}
-
 .segment-option {
   flex: 1;
   border: none;
   background: transparent;
   color: var(--text-secondary);
-  padding: 10px 12px;
-  font-size: var(--lib-meta, 13px);
+  padding: 8px 6px;
+  font-size: 12px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
@@ -1185,14 +1186,19 @@ body {
   transition: background 0.15s ease, color 0.15s ease;
 }
 
-.segment-option:hover {
+.segment-option:hover:not(:disabled) {
   color: var(--text-primary);
   background: color-mix(in srgb, var(--bg-elevated) 80%, transparent);
 }
 
-.segment-option.is-selected {
+.segment-option.is-selected:not(:disabled) {
   background: var(--accent-dim);
   color: var(--accent);
+}
+
+.segment-option:disabled {
+  cursor: not-allowed;
+  color: var(--text-muted);
 }
 
 .segment-divider {
@@ -1202,29 +1208,50 @@ body {
   background: var(--border);
 }
 
-.segment-controls-row > .form-field-grow {
-  flex: 1.4 1 0;
+.segment-controls-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(0, 0.9fr) minmax(0, 0.75fr);
+  gap: 10px;
+  align-items: start;
+  width: 100%;
+}
+
+.segment-controls-row > .form-field {
   min-width: 0;
+  width: 100%;
 }
 
-.segment-controls-row > .form-field-angles {
-  flex: 0.9 1 0;
-  min-width: 180px;
-}
-
+.segment-controls-row > .form-field-grow,
+.segment-controls-row > .form-field-angles,
 .segment-controls-row > .form-field-interact {
-  flex: 0.7 1 0;
-  min-width: 160px;
+  flex: unset;
 }
 
-@media (max-width: 900px) {
-  .segment-controls-row {
-    flex-direction: column;
-  }
+.segment-option-symbol {
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1;
+}
 
-  .segment-box-yesno,
-  .segment-box-angles {
-    max-width: none;
+.form-field-angles.is-disabled .form-label,
+.form-field-angles.is-disabled .opt {
+  color: var(--text-muted);
+}
+
+.form-field-angles.is-disabled .segment-box {
+  opacity: 0.48;
+  background: color-mix(in srgb, var(--bg-surface) 70%, var(--border));
+  border-color: color-mix(in srgb, var(--border) 80%, transparent);
+}
+
+.form-field-angles.is-disabled .segment-option.is-selected {
+  background: transparent;
+  color: var(--text-muted);
+}
+
+@media (max-width: 720px) {
+  .segment-controls-row {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -1445,9 +1472,19 @@ body {
 }
 
 .badge-panel {
-  background: rgba(251, 191, 36, 0.14);
+  background: #3a2f12;
   color: #fbbf24;
-  border-color: rgba(251, 191, 36, 0.35);
+  border: 1px solid rgba(251, 191, 36, 0.45);
+}
+
+[data-theme="light"] .badge-panel {
+  background: #fff6df;
+  color: #9a6b00;
+  border-color: rgba(154, 107, 0, 0.28);
+}
+
+.badge-panel-current {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
 .badge-status {
@@ -1983,10 +2020,49 @@ body {
   border: 1px solid var(--border);
 }
 
+.preview-thumb-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+
+.preview-thumb-open:hover,
+.preview-thumb-open:focus-visible {
+  outline: none;
+}
+
+.preview-thumb:has(.preview-thumb-open:hover),
+.preview-thumb:has(.preview-thumb-open:focus-visible) {
+  border-color: var(--accent);
+}
+
 .preview-thumb img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  pointer-events: none;
+}
+
+.orientation-preview-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: zoom-in;
+}
+
+.orientation-preview-open img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  pointer-events: none;
 }
 
 .orientation-field {
@@ -2020,10 +2096,42 @@ body {
   left: 4px;
   bottom: 4px;
   font-size: 10px;
+  font-weight: 700;
   background: var(--accent);
   color: var(--on-accent);
-  padding: 2px 5px;
+  padding: 2px 6px;
   border-radius: 4px;
+  z-index: 1;
+  pointer-events: none;
+}
+
+.preview-make-primary {
+  position: absolute;
+  left: 4px;
+  bottom: 4px;
+  z-index: 1;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: inherit;
+  padding: 3px 6px;
+  cursor: pointer;
+}
+
+.preview-make-primary:hover,
+.preview-make-primary:focus-visible {
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  outline: none;
+}
+
+.preview-card-primary {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
 .remove-img {
@@ -2038,14 +2146,33 @@ body {
   color: #fff;
   cursor: pointer;
   font-size: 11px;
+  z-index: 1;
 }
 
 .detail-toolbar {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
   gap: 10px;
   align-items: center;
-  flex-wrap: wrap;
   margin-bottom: 12px;
+}
+
+.detail-toolbar-left {
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.detail-toolbar-right {
+  justify-self: end;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 
 .btn-danger {
@@ -2083,11 +2210,10 @@ body {
   flex-basis: 100%;
 }
 
-/* The unlock prompt sits in the same toolbar row as "Back to Library" (left-
-   aligned); push it flush right so it lines up with the image's right edge
-   below, instead of trailing directly after the back button. */
+/* Unlock sits in the right toolbar column (no margin-left:auto — that
+   used to shove the centered pager sideways when Edit/Delete appeared). */
 .detail-unlock-form {
-  margin-left: auto;
+  margin-left: 0;
 }
 
 /* Compound selector (not just .detail-unlock-input) so this reliably beats
@@ -2229,15 +2355,137 @@ body {
   margin-top: 16px;
 }
 
+.detail-content-wide {
+  grid-template-columns: minmax(0, 1.85fr) minmax(280px, 0.55fr);
+}
+
+.detail-view-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.detail-view-hint {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.panel-mosaic {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  padding: 12px;
+  background: #0c0c10;
+}
+
+.panel-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  background: #141418;
+  overflow: hidden;
+  cursor: zoom-in;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.panel-slot:hover,
+.panel-slot:focus-visible,
+.panel-slot.is-active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 40%, transparent);
+  outline: none;
+}
+
+.panel-slot-label {
+  padding: 8px 10px 0;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #fbbf24;
+}
+
+.panel-slot-frame {
+  aspect-ratio: 4 / 3;
+  background: #000;
+  overflow: hidden;
+}
+
+.panel-slot-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.detail-split-view {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 10px;
+}
+
+.detail-split-pane {
+  min-width: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+}
+
+.detail-split-label {
+  padding: 8px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: #141418;
+}
+
+.detail-split-pane .zoomable-image {
+  max-height: min(52vh, 560px);
+}
+
+.media-thumbs-inline {
+  margin-top: 0;
+  margin-left: auto;
+}
+
+@media (max-width: 900px) {
+  .detail-split-view {
+    grid-template-columns: 1fr;
+  }
+
+  .panel-mosaic {
+    grid-template-columns: 1fr;
+  }
+
+  .detail-content-wide {
+    grid-template-columns: 1fr;
+  }
+}
+
 .detail-image-container {
-  background: var(--bg-surface);
-  backdrop-filter: blur(var(--glass-blur));
-  -webkit-backdrop-filter: blur(var(--glass-blur));
+  background: #0c0c10;
   border-radius: 16px;
   overflow: hidden;
   border: 1px solid var(--border);
   box-shadow: var(--shadow-card);
   min-width: 0;
+}
+
+[data-theme="light"] .detail-image-container {
+  background: #111114;
 }
 
 .detail-image {
@@ -2985,16 +3233,18 @@ body {
   align-items: center;
   justify-content: center;
   padding: 20px;
-  background: rgba(0, 0, 0, 0.55);
+  background: rgba(0, 0, 0, 0.62);
 }
 
 .leave-confirm-modal {
   width: min(420px, 100%);
   padding: 22px 24px;
   border-radius: 12px;
-  border: 1px solid var(--border);
-  background: var(--surface);
-  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border-strong);
+  /* Opaque panel — do not use glass/surface tokens here (they're translucent). */
+  background: var(--select-bg);
+  color: var(--text-primary);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.45);
 }
 
 .leave-confirm-modal h3 {

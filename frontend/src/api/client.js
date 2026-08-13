@@ -65,6 +65,9 @@ export async function browseLibrary(filters = {}) {
   if (Array.isArray(filters.identifications) && filters.identifications.length) {
     params.set("identifications", filters.identifications.join(","));
   }
+  if (Array.isArray(filters.wall_locations) && filters.wall_locations.length) {
+    params.set("wall_locations", filters.wall_locations.join(","));
+  }
   if (filters.interacts_with_other_features === true || filters.interacts_with_other_features === false) {
     params.set("interacts_with_other_features", String(filters.interacts_with_other_features));
   }
@@ -242,6 +245,7 @@ export async function updateLibraryEntry(
     newFiles = [],
     panelTags = [],
     removeIndices = [],
+    primaryIndex = 0,
     newOrientationImage = null,
     removeOrientationImage = false,
   } = {},
@@ -252,6 +256,7 @@ export async function updateLibraryEntry(
   newFiles.forEach((f) => form.append("new_files", f));
   if (panelTags.length) form.append("panel_tags", panelTags.join(","));
   if (removeIndices.length) form.append("remove_media", removeIndices.join(","));
+  form.append("primary_index", String(primaryIndex ?? 0));
   if (newOrientationImage) form.append("new_orientation_image", newOrientationImage);
   if (removeOrientationImage) form.append("remove_orientation_image", "true");
   // Unlike upload, every field is sent even when blank — an edit form

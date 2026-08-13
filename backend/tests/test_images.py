@@ -69,6 +69,7 @@ class TestGetFilters:
                     ["Approved"],                   # anomaly_status
                     ["Confirmed", "Edge Case"],     # classification_status
                     ["Corrosion", "Grinding"],      # identification
+                    ["External", "N/A"],             # wall_location
                 ]
             )
             mock_store.get_distinct_list_field = AsyncMock(return_value=["ili", "demo"])
@@ -90,6 +91,7 @@ class TestGetFilters:
             assert "Corrosion" in data["identifications"]
             assert "ili" in data["tags"]
             assert "Catalog Tag" in data["tags"]
+            assert "External" in data["wall_locations"]
 
 class TestGetImageMedia:
     def test_get_image_includes_media_urls(self):

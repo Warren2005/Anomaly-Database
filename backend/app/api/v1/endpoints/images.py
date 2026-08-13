@@ -38,6 +38,7 @@ async def get_filters():
     # own as people fill in new ones; no separate admin "add" step needed
     # (unlike the Run catalog, which is more deliberately curated).
     identifications = await file_store_service.get_distinct("identification")
+    wall_locations = await file_store_service.get_distinct("wall_location")
     used_tags = await file_store_service.get_distinct_list_field("tags")
     catalog_tags = await tag_catalog_service.list_tags()
     seen: set[str] = set()
@@ -60,6 +61,7 @@ async def get_filters():
         classification_statuses=classification_statuses,
         identifications=identifications,
         tags=tags,
+        wall_locations=wall_locations,
     )
 
 

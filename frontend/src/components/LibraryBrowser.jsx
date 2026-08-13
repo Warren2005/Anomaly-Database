@@ -8,6 +8,7 @@ import {
   CLASSIFICATION_STATUS_OPTIONS,
   IDENTIFICATION_BY_TYPE,
   PANEL_TAG_OPTIONS,
+  WALL_LOCATION_OPTIONS,
 } from "../lib/iliConstants";
 
 const EMPTY_FILTERS = {
@@ -15,6 +16,7 @@ const EMPTY_FILTERS = {
   anomaly_types: [],
   identifications: [],
   panel_tags: [],
+  wall_locations: [],
   run_number: "",
   classification_status: "",
   interacts_with_other_features: null,
@@ -69,6 +71,7 @@ export default function LibraryBrowser() {
     type: true,
     identification: true,
     panel: true,
+    wall: true,
   });
 
   useEffect(() => {
@@ -120,6 +123,7 @@ export default function LibraryBrowser() {
     n += filters.anomaly_types.length;
     n += filters.identifications.length;
     n += filters.panel_tags.length;
+    n += filters.wall_locations.length;
     if (filters.run_number) n += 1;
     if (filters.classification_status) n += 1;
     if (filters.interacts_with_other_features === true || filters.interacts_with_other_features === false) {
@@ -225,7 +229,7 @@ export default function LibraryBrowser() {
             id="browse-filter-q"
             className="form-input"
             type="search"
-            placeholder="Detection signature, Anomaly ID, identification…"
+            placeholder="Comments, detection signature, Anomaly ID…"
             value={filters.q}
             onChange={(e) => setFilter("q", e.target.value)}
           />
@@ -301,6 +305,28 @@ export default function LibraryBrowser() {
                 onClick={() => setFilter("panel_tags", toggleType(filters.panel_tags, tag))}
               >
                 {tag}
+              </button>
+            ))}
+          </div>
+        </FilterSection>
+
+        <FilterSection
+          id="wall"
+          label="Wall Location"
+          open={!!openSections.wall}
+          onToggle={toggleSection}
+          count={filters.wall_locations.length}
+        >
+          <div className="chips-wrap">
+            {WALL_LOCATION_OPTIONS.map((loc) => (
+              <button
+                key={loc}
+                type="button"
+                className={`chip ${filters.wall_locations.includes(loc) ? "chip-active" : ""}`}
+                aria-pressed={filters.wall_locations.includes(loc)}
+                onClick={() => setFilter("wall_locations", toggleType(filters.wall_locations, loc))}
+              >
+                {loc}
               </button>
             ))}
           </div>

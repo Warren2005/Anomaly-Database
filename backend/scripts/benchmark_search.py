@@ -61,7 +61,6 @@ def build_synthetic_corpus(data_dir: Path, n: int) -> None:
             "rerank_embedding_model": None,
         })
     (data_dir / "metadata.json").write_text(json.dumps(records))
-    (data_dir / "feedback.json").write_text("[]")
     (data_dir / "embedding_cache.json").write_text("{}")
 
 

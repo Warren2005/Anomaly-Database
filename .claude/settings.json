@@ -131,7 +131,13 @@
       "Bash(curl -s http://localhost:8001/ -w \"\\\\nstatus:%{http_code}\\\\n\")",
       "Bash(curl -s -X POST http://localhost:8001/api/v1/library/verify-passkey -H \"Content-Type: application/json\" -d '{\"passkey\":\"wrong\"}' -w \"\\\\nstatus:%{http_code}\\\\n\")",
       "Bash(curl -s -X POST http://localhost:8001/api/v1/library/verify-passkey -H \"Content-Type: application/json\" -d '{\"passkey\":\"admin123\"}' -w \"\\\\nstatus:%{http_code}\\\\n\")",
-      "Bash(curl -s http://localhost:8001/api/v1/health -w \"\\\\nstatus:%{http_code}\\\\n\" --max-time 3)"
+      "Bash(curl -s http://localhost:8001/api/v1/health -w \"\\\\nstatus:%{http_code}\\\\n\" --max-time 3)",
+      "Bash(taskkill //PID 26672 //F)",
+      "Bash(taskkill //PID 39440 //F)",
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/feedback -H \"Content-Type: application/json\" -d '{\"result_image_id\":\"00000000-0000-0000-0000-000000000000\",\"vote\":1}' -w \"\\\\nstatus:%{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:8001/api/v1/feedback/stats -w \"\\\\nstatus:%{http_code}\\\\n\")",
+      "Bash(curl -s http://localhost:8001/openapi.json)",
+      "Bash(grep -n \"^\\\\.form-input,$\" \"C:\\\\Users\\\\warred2\\\\Coop Project\\\\medical-microscopy\\\\frontend\\\\src\\\\styles\\\\App.css\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

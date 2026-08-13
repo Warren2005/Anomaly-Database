@@ -2,7 +2,7 @@
 Health check endpoint.
 
 Checks connectivity to all backend services:
-- Local file store (metadata.json / feedback.json)
+- Local file store (metadata.json)
 - Local image storage
 - CLIP model
 """

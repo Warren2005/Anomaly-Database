@@ -91,7 +91,7 @@ def main():
 
     errors = by_type.get("error", [])
     request_events = sum(
-        len(by_type.get(t, [])) for t in ("search", "batch_search", "feedback", "upload")
+        len(by_type.get(t, [])) for t in ("search", "batch_search", "upload")
     )
     total_requests = request_events + len(errors)
     if total_requests:

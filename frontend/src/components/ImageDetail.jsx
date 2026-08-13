@@ -188,10 +188,10 @@ export default function ImageDetail({
         )}
 
         {(allowEdit || allowDelete) && !adminPasskey && !confirmDelete && (
-          <form className="delete-confirm" onSubmit={handleUnlockSubmit}>
+          <form className="delete-confirm detail-unlock-form" onSubmit={handleUnlockSubmit}>
             <input
               type="password"
-              className="form-input delete-passkey-input"
+              className="form-input delete-passkey-input detail-unlock-input"
               placeholder="Passkey to edit/delete"
               value={unlockInput}
               onChange={(e) => setUnlockInput(e.target.value)}

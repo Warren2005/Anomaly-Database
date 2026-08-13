@@ -13,7 +13,6 @@ from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
 
-from app.models.feedback import Feedback
 from app.models.image import Image
 from app.services.cache import CacheService
 from app.services.event_log import EventLogService
@@ -343,32 +342,6 @@ async def test_file_store_get_distinct_list_field_flattens_and_dedupes():
 
 
 @pytest.mark.asyncio
-async def test_file_store_feedback_net_votes():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        store = FileStoreService(tmpdir)
-        store.connect()
-        result_id = uuid4()
-        await store.add_feedback(Feedback(id=uuid4(), result_image_id=result_id, vote=1))
-        await store.add_feedback(Feedback(id=uuid4(), result_image_id=result_id, vote=1))
-        await store.add_feedback(Feedback(id=uuid4(), result_image_id=result_id, vote=-1))
-
-        votes = await store.get_net_votes([result_id])
-        assert votes[result_id] == 1
-
-
-@pytest.mark.asyncio
-async def test_file_store_feedback_stats():
-    with tempfile.TemporaryDirectory() as tmpdir:
-        store = FileStoreService(tmpdir)
-        store.connect()
-        await store.add_feedback(Feedback(id=uuid4(), result_image_id=uuid4(), vote=1))
-        await store.add_feedback(Feedback(id=uuid4(), result_image_id=uuid4(), vote=-1))
-
-        stats = await store.get_feedback_stats()
-        assert stats == {"total": 2, "upvotes": 1, "downvotes": 1}
-
-
-@pytest.mark.asyncio
 async def test_local_storage_roundtrip():
     with tempfile.TemporaryDirectory() as tmpdir:
         storage = LocalStorageService(tmpdir)
@@ -459,12 +432,12 @@ async def test_event_log_appends_multiple_events_in_order():
         log = EventLogService(tmpdir)
         log.connect()
         await log.log_event("search", result_count=1)
-        await log.log_event("feedback", vote=1)
+        await log.log_event("delete", image_id="xyz")
         await log.log_event("upload", image_id="abc")
 
         lines = (Path(tmpdir) / "logs" / "events.jsonl").read_text().strip().splitlines()
         events = [json.loads(l)["event"] for l in lines]
-        assert events == ["search", "feedback", "upload"]
+        assert events == ["search", "delete", "upload"]
 
 
 def test_health_endpoint_reports_all_services():

@@ -67,7 +67,6 @@ export default function App() {
   const [filters] = useState({});
   const [health, setHealth] = useState(null);
   const [error, setError] = useState(null);
-  const [queryFile, setQueryFile] = useState(null);
   const [searchPanelTag, setSearchPanelTag] = useState("");
   const [activeSearchPanelTag, setActiveSearchPanelTag] = useState("");
   const [isDark, setIsDark] = useState(
@@ -153,7 +152,6 @@ export default function App() {
   const handleSearch = useCallback(
     async (file, panelTag) => {
       const panel = (panelTag || "").trim();
-      setQueryFile(file);
       setActiveSearchPanelTag(panel);
       setMode("search");
       setState("searching");
@@ -249,7 +247,6 @@ export default function App() {
     setState("idle");
     setResults(null);
     setSelectedResult(null);
-    setQueryFile(null);
     setActiveSearchPanelTag("");
     setMinSimilarity(0);
     setMaxSimilarity(100);
@@ -418,7 +415,6 @@ export default function App() {
                   <ResultsGrid
                     results={filteredResults}
                     onResultClick={handleResultClick}
-                    queryImageId={queryFile ? null : null}
                   />
                 </div>
               </div>

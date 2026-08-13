@@ -4,7 +4,6 @@ from dataclasses import fields
 from uuid import uuid4
 
 from app.models.image import Image
-from app.models.feedback import Feedback
 
 
 def test_image_model_fields():
@@ -46,17 +45,3 @@ def test_image_model_timestamps_auto_set():
     image = Image(id=uuid4(), image_path="test.jpg")
     assert image.created_at is not None
     assert image.updated_at is not None
-
-
-def test_feedback_model_fields():
-    """Feedback dataclass has all expected fields."""
-    field_names = {f.name for f in fields(Feedback)}
-    assert field_names == {
-        "id", "result_image_id", "vote", "query_image_id", "created_at",
-    }
-
-
-def test_feedback_query_image_id_optional():
-    """query_image_id defaults to None (text-search feedback has no query image)."""
-    fb = Feedback(id=uuid4(), result_image_id=uuid4(), vote=1)
-    assert fb.query_image_id is None

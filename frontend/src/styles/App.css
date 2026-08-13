@@ -1043,14 +1043,6 @@ body {
   font-size: var(--lib-body, 13px);
 }
 
-.ref-card-feedback {
-  display: flex;
-  gap: 6px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--border);
-}
-
 .result-card {
   position: relative;
   background: var(--bg-surface);
@@ -1977,6 +1969,22 @@ body {
   flex-basis: 100%;
 }
 
+/* The unlock prompt sits in the same toolbar row as "Back to Library" (left-
+   aligned); push it flush right so it lines up with the image's right edge
+   below, instead of trailing directly after the back button. */
+.detail-unlock-form {
+  margin-left: auto;
+}
+
+/* Compound selector (not just .detail-unlock-input) so this reliably beats
+   the shared ".form-input, .form-select, .form-textarea { width: 100% }"
+   rule regardless of stylesheet order — otherwise the 100% rule wins on
+   specificity ties and the input silently ignores this width. */
+.form-input.detail-unlock-input {
+  width: 140px;
+  flex: none;
+}
+
 .add-run-panel {
   display: flex;
   flex-direction: column;
@@ -2074,53 +2082,11 @@ body {
   }
 }
 
-
-
-/* ============================================================
-   FEEDBACK BUTTONS
-   ============================================================ */
 .result-info-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-top: 4px;
-}
-
-.feedback-buttons {
-  display: flex;
-  gap: 4px;
-  margin-left: auto;
-}
-
-.feedback-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: var(--bg-elevated);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.feedback-btn:hover {
-  border-color: var(--border-strong);
-  color: var(--text-secondary);
-}
-
-.feedback-btn-active-up {
-  background: var(--success-dim);
-  border-color: var(--success);
-  color: var(--success);
-}
-
-.feedback-btn-active-down {
-  background: var(--danger-dim);
-  border-color: var(--danger);
-  color: var(--danger);
 }
 
 /* ============================================================

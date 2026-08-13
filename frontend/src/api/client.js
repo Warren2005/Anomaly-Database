@@ -159,20 +159,6 @@ export async function searchByText(query, filters = {}) {
   return response.json();
 }
 
-export async function submitFeedback(queryImageId, resultImageId, vote) {
-  const response = await fetch(`${BASE_URL}/feedback`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      query_image_id: queryImageId,
-      result_image_id: resultImageId,
-      vote,
-    }),
-  });
-  if (!response.ok) throw new Error(`Feedback failed: ${response.status}`);
-  return response.json();
-}
-
 export function createSearchWebSocket(onMessage, onError) {
   const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const wsHost = isElectron ? "localhost:8000" : window.location.host;

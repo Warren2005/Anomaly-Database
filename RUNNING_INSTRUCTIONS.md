@@ -46,13 +46,13 @@ Stop it with Ctrl+C (or find and kill the `python -m uvicorn ...` process).
 
 ## Where the data lives (read this before setting LIBRARY_DATA_DIR)
 
-There is no database to install. `backend/app/services/file_store.py` stores everything — image metadata, embeddings, feedback votes, the embedding cache, and the `events.jsonl` observability log — as plain files under whatever directory `LIBRARY_DATA_DIR` points at.
+There is no database to install. `backend/app/services/file_store.py` stores everything — image metadata, embeddings, the embedding cache, and the `events.jsonl` observability log — as plain files under whatever directory `LIBRARY_DATA_DIR` points at.
 
 **This project currently uses the team's shared Dropbox as that directory**, specifically so the data gets Dropbox's automatic version history and delete-recovery as a backup mechanism, with zero custom backup code (see "Backups" below). That means:
 
 - `LIBRARY_DATA_DIR` must point at **your own local machine's copy** of that same shared Dropbox folder (e.g. its path on your machine might be `C:\Users\<you>\DarkVision Dropbox\Analysis-ILI\Defect Library\ILI DA Co-op Project - Anomaly Search`, not necessarily the same drive letter as anyone else's machine). This is exactly why the path lives in the gitignored `.env` and not in code — it's genuinely different per machine.
 - Make sure Dropbox is set to keep that folder fully downloaded locally (not "online-only"/Smart Sync) — the backend reads these files directly off disk on every request.
-- **Only run one backend instance at a time against this shared folder.** The file-locking that makes concurrent requests safe (`portalocker`, atomic writes — see `file_store.py`) only protects multiple processes on the *same machine*; it does not coordinate across two different machines' Dropbox clients both syncing the same folder. If two people ran their own backend simultaneously, both pointed at the same synced folder, a genuine race is possible — one person's upload or feedback vote getting silently overwritten by the other's, or Dropbox creating a "conflicted copy" file our code never reads. Pulling this repo and starting your own backend to independently verify it works is completely fine; just don't leave two instances running live against the same Dropbox data at the same time. Whoever is "the shared server" at any given moment should be the only live instance.
+- **Only run one backend instance at a time against this shared folder.** The file-locking that makes concurrent requests safe (`portalocker`, atomic writes — see `file_store.py`) only protects multiple processes on the *same machine*; it does not coordinate across two different machines' Dropbox clients both syncing the same folder. If two people ran their own backend simultaneously, both pointed at the same synced folder, a genuine race is possible — one person's upload getting silently overwritten by the other's, or Dropbox creating a "conflicted copy" file our code never reads. Pulling this repo and starting your own backend to independently verify it works is completely fine; just don't leave two instances running live against the same Dropbox data at the same time. Whoever is "the shared server" at any given moment should be the only live instance.
 - If you'd rather test against your own throwaway data instead of the real shared corpus, just point `LIBRARY_DATA_DIR` at any local folder (e.g. the default `./data/library`) instead — it'll start empty and won't touch the shared Dropbox data at all.
 
 ---
@@ -85,7 +85,7 @@ This same approach — pointing `LIBRARY_DATA_DIR` at any always-synced cloud fo
 
 ## Observability
 
-Every search, feedback vote, library upload, and handled/unhandled error appends one JSON line to `LIBRARY_DATA_DIR/logs/events.jsonl` (see `app/services/event_log.py`) — e.g. `{"ts": "...", "event": "search", "embed_ms": 43.2, "rerank_ms": 79.1, "result_count": 30, "cache_hit": false}`. Because it lives under `LIBRARY_DATA_DIR`, it inherits the same backup story above for free.
+Every search, library upload, and handled/unhandled error appends one JSON line to `LIBRARY_DATA_DIR/logs/events.jsonl` (see `app/services/event_log.py`) — e.g. `{"ts": "...", "event": "search", "embed_ms": 43.2, "rerank_ms": 79.1, "result_count": 30, "cache_hit": false}`. Because it lives under `LIBRARY_DATA_DIR`, it inherits the same backup story above for free.
 
 To see a summary (p50/p95 search latency, error rate, embedding cache hit rate) over a time window:
 

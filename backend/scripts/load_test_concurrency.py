@@ -1,8 +1,8 @@
 """
-Concurrency load test — fires ~20 simultaneous requests at a running
-backend, mixing reads (search) and writes (feedback, library upload) to
-exercise the file-store locking fix and the new shared cache under real
-concurrent load. Not part of the app or the pytest suite — a manual tool.
+Concurrency load test — fires ~16 simultaneous requests at a running
+backend, mixing reads (search) and writes (library upload) to exercise
+the file-store locking fix and the new shared cache under real concurrent
+load. Not part of the app or the pytest suite — a manual tool.
 
 Usage (backend must already be running):
     python -m scripts.load_test_concurrency --base-url http://localhost:8001
@@ -17,8 +17,6 @@ from pathlib import Path
 
 import httpx
 from PIL import Image
-
-DATA_DIR = Path("./data/DV_Data")
 
 
 def make_test_image(seed: int) -> bytes:
@@ -45,19 +43,6 @@ async def repeat_search_task(client: httpx.AsyncClient, base_url: str, seed: int
     return await search_task(client, base_url, seed)
 
 
-async def feedback_task(client: httpx.AsyncClient, base_url: str, image_id: str, vote: int) -> dict:
-    start = time.time()
-    try:
-        r = await client.post(
-            f"{base_url}/api/v1/feedback",
-            json={"result_image_id": image_id, "vote": vote},
-            timeout=30,
-        )
-        return {"kind": "feedback", "status": r.status_code, "ms": (time.time() - start) * 1000}
-    except Exception as e:
-        return {"kind": "feedback", "status": "error", "error": str(e), "ms": (time.time() - start) * 1000}
-
-
 async def upload_task(client: httpx.AsyncClient, base_url: str, seed: int) -> dict:
     files = {"file": (f"upload_{seed}.jpg", make_test_image(seed + 1000), "image/jpeg")}
     data = {"anomaly_type": "Weld", "contributor_name": f"load-test-{seed}"}
@@ -76,33 +61,15 @@ async def main():
     args = parser.parse_args()
 
     async with httpx.AsyncClient() as client:
-        # Get a real image ID to vote on
-        r = await client.get(f"{args.base_url}/api/v1/images/filters")
-        r.raise_for_status()
-
-        r = await client.post(
-            f"{args.base_url}/api/v1/search/similar",
-            files={"file": ("probe.png", (DATA_DIR / "GirthweldBF.png").read_bytes(), "image/png")},
-        )
-        r.raise_for_status()
-        probe_results = r.json()["results"]
-        if not probe_results:
-            print("No images in the corpus to vote on — ingest some data first.")
-            return
-        target_image_id = probe_results[0]["image"]["id"]
-
-        # Build 20 concurrent tasks: 8 distinct-image searches, 4 repeated
+        # Build 16 concurrent tasks: 8 distinct-image searches, 4 repeated
         # (same seed as one of the first 8, to exercise cache hits across
-        # "different users"), 4 feedback votes on the same image (the real
-        # concurrency risk — simultaneous writes to feedback.json), 4 library
-        # uploads (simultaneous writes to metadata.json).
+        # "different users"), 4 library uploads (the real concurrency risk —
+        # simultaneous writes to metadata.json).
         tasks = []
         for seed in range(8):
             tasks.append(search_task(client, args.base_url, seed))
         for seed in range(4):
             tasks.append(repeat_search_task(client, args.base_url, seed))  # cache-hit candidates
-        for i in range(4):
-            tasks.append(feedback_task(client, args.base_url, target_image_id, 1 if i % 2 == 0 else -1))
         for seed in range(4):
             tasks.append(upload_task(client, args.base_url, seed))
 
@@ -132,7 +99,7 @@ async def main():
         # Validate the JSON files are intact (not corrupted by concurrent writes)
         print("\n=== Post-storm file integrity check ===")
         data_dir = Path(args.data_dir)
-        for fname in ("metadata.json", "feedback.json", "embedding_cache.json"):
+        for fname in ("metadata.json", "embedding_cache.json"):
             path = data_dir / fname
             try:
                 data = json.loads(path.read_text())

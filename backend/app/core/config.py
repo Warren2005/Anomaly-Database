@@ -30,8 +30,8 @@ class Settings(BaseSettings):
     api_port: int = 8000
 
     # Local file-based storage — replaces Postgres + Qdrant + MinIO + Redis.
-    # library_data_dir holds metadata.json, feedback.json, and an images/
-    # subdirectory of raw image files. See app/services/file_store.py and
+    # library_data_dir holds metadata.json and an images/ subdirectory of
+    # raw image files. See app/services/file_store.py and
     # app/services/local_storage.py.
     library_data_dir: str = "./data/library"
 

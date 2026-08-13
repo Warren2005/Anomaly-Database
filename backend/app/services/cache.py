@@ -3,7 +3,7 @@ Shared embedding cache — file-backed, not in-process.
 
 Replaces both Redis and the earlier in-process dict. Delegates to
 file_store_service's embedding_cache.json (locked + atomic writes, same
-pattern as metadata.json/feedback.json), so a cache hit from one worker
+pattern as metadata.json), so a cache hit from one worker
 process or one user benefits every other one, and the cache survives a
 backend restart. The `store` constructor param exists so tests can inject
 an isolated FileStoreService instead of the real global one.

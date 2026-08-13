@@ -1,16 +1,15 @@
 """
-File-based store for image metadata + embeddings + feedback + the shared
-embedding cache.
+File-based store for image metadata + embeddings + the shared embedding
+cache.
 
-Replaces PostgreSQL (metadata/feedback tables), Qdrant (vector search), and
-Redis (embedding cache) together. Three JSON files under `library_data_dir`
-are the entire "database":
+Replaces PostgreSQL (metadata table), Qdrant (vector search), and Redis
+(embedding cache) together. Two JSON files under `library_data_dir` are the
+entire "database":
 
 - metadata.json — one record per image, including its CLIP embedding(s) as
   plain fields (a flat JSON record per image — the kind of thing that
   survives living in a synced cloud folder, e.g. a SharePoint List column
   or, as currently configured, a shared Dropbox folder).
-- feedback.json — one record per up/down vote.
 - embedding_cache.json — SHA-256(image bytes) -> embedding, shared across
   every worker process and persisted across restarts (unlike an in-process
   dict). Entries older than Settings.cache_ttl_days are pruned on write.
@@ -53,7 +52,6 @@ import portalocker
 
 from app.core.config import settings
 from app.core.logging_config import logger
-from app.models.feedback import Feedback
 from app.models.image import Image
 
 
@@ -132,38 +130,25 @@ def _record_to_image(record: dict) -> Image:
     return Image(**fields)
 
 
-def _feedback_to_record(feedback: Feedback) -> dict:
-    record = asdict(feedback)
-    record["id"] = str(feedback.id)
-    record["result_image_id"] = str(feedback.result_image_id)
-    record["query_image_id"] = (
-        str(feedback.query_image_id) if feedback.query_image_id else None
-    )
-    record["created_at"] = feedback.created_at.isoformat()
-    return record
-
-
 class FileStoreService:
     def __init__(self, data_dir: str, cache_ttl_days: int = 7):
         self._data_dir = Path(data_dir)
         self._images_file = self._data_dir / "metadata.json"
-        self._feedback_file = self._data_dir / "feedback.json"
         self._cache_file = self._data_dir / "embedding_cache.json"
         self._lock_file = self._data_dir / ".lock"
         self._cache_ttl_days = cache_ttl_days
 
     def connect(self):
         self._data_dir.mkdir(parents=True, exist_ok=True)
-        for f in (self._images_file, self._feedback_file):
-            if not f.exists():
-                f.write_text("[]")
+        if not self._images_file.exists():
+            self._images_file.write_text("[]")
         if not self._cache_file.exists():
             self._cache_file.write_text("{}")
         self._lock_file.touch(exist_ok=True)
         logger.info("File store ready", extra={"data_dir": str(self._data_dir)})
 
     def health_check(self) -> bool:
-        return self._images_file.exists() and self._feedback_file.exists()
+        return self._images_file.exists()
 
     @contextmanager
     def _locked(self):
@@ -558,41 +543,6 @@ class FileStoreService:
             path_bytes,
             embeddings_by_path,
         )
-
-    # --- Feedback -----------------------------------------------------------
-
-    def _add_feedback_sync(self, feedback: Feedback) -> Feedback:
-        with self._locked():
-            records = self._read_json(self._feedback_file)
-            records.append(_feedback_to_record(feedback))
-            self._write_json(self._feedback_file, records)
-        return feedback
-
-    async def add_feedback(self, feedback: Feedback) -> Feedback:
-        return await asyncio.to_thread(self._add_feedback_sync, feedback)
-
-    def _get_net_votes_sync(self, image_ids: list[UUID]) -> dict[UUID, int]:
-        wanted = {str(i) for i in image_ids}
-        totals: dict[UUID, int] = {}
-        for r in self._read_json(self._feedback_file):
-            if r["result_image_id"] in wanted:
-                key = UUID(r["result_image_id"])
-                totals[key] = totals.get(key, 0) + r["vote"]
-        return totals
-
-    async def get_net_votes(self, image_ids: list[UUID]) -> dict[UUID, int]:
-        return await asyncio.to_thread(self._get_net_votes_sync, image_ids)
-
-    def _get_feedback_stats_sync(self) -> dict:
-        records = self._read_json(self._feedback_file)
-        return {
-            "total": len(records),
-            "upvotes": sum(1 for r in records if r["vote"] == 1),
-            "downvotes": sum(1 for r in records if r["vote"] == -1),
-        }
-
-    async def get_feedback_stats(self) -> dict:
-        return await asyncio.to_thread(self._get_feedback_stats_sync)
 
     # --- Embedding cache (shared across processes, persists across restarts) ---
 

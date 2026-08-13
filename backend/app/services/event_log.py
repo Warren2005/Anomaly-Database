@@ -1,7 +1,7 @@
 """
 Lightweight, dependency-free observability.
 
-Appends one JSON line per meaningful action (search, feedback, upload,
+Appends one JSON line per meaningful action (search, upload, delete,
 error) to <library_data_dir>/logs/events.jsonl. Deliberately not a new
 service to run: the log lives under the same directory as metadata.json,
 so because that directory is a synced cloud folder — currently the team's

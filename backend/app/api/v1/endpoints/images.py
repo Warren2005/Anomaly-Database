@@ -18,6 +18,7 @@ from app.schemas.image import ImageResponse
 from app.schemas.search import FiltersResponse, ImageDetailResponse
 from app.services.file_store import file_store_service
 from app.services.local_storage import local_storage_service
+from app.services.tag_catalog import tag_catalog_service
 
 router = APIRouter()
 
@@ -37,8 +38,17 @@ async def get_filters():
     # own as people fill in new ones; no separate admin "add" step needed
     # (unlike the Run catalog, which is more deliberately curated).
     identifications = await file_store_service.get_distinct("identification")
-    # Same growing-catalog idea, but tags are multi-valued per entry.
-    tags = await file_store_service.get_distinct_list_field("tags")
+    used_tags = await file_store_service.get_distinct_list_field("tags")
+    catalog_tags = await tag_catalog_service.list_tags()
+    seen: set[str] = set()
+    tags: list[str] = []
+    for tag in [*catalog_tags, *used_tags]:
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        tags.append(tag)
+    tags.sort(key=lambda t: t.lower())
 
     return FiltersResponse(
         diagnoses=diagnoses,

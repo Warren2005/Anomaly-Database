@@ -55,7 +55,10 @@ class TestGetImage:
 class TestGetFilters:
     def test_get_filters(self):
         """GET /images/filters returns distinct filter values."""
-        with patch("app.api.v1.endpoints.images.file_store_service") as mock_store:
+        with (
+            patch("app.api.v1.endpoints.images.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.images.tag_catalog_service") as mock_tags,
+        ):
             mock_store.get_distinct = AsyncMock(
                 side_effect=[
                     ["melanoma", "nevus"],          # diagnosis
@@ -69,6 +72,7 @@ class TestGetFilters:
                 ]
             )
             mock_store.get_distinct_list_field = AsyncMock(return_value=["ili", "demo"])
+            mock_tags.list_tags = AsyncMock(return_value=["Catalog Tag"])
 
             client = TestClient(app)
             response = client.get("/api/v1/images/filters")
@@ -85,6 +89,7 @@ class TestGetFilters:
             assert "Confirmed" in data["classification_statuses"]
             assert "Corrosion" in data["identifications"]
             assert "ili" in data["tags"]
+            assert "Catalog Tag" in data["tags"]
 
 class TestGetImageMedia:
     def test_get_image_includes_media_urls(self):

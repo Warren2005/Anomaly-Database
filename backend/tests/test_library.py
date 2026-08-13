@@ -1061,3 +1061,50 @@ class TestInteractionFields:
             body = response.json()["image"]
             assert body["interacts_with_other_features"] is False
             assert body["interaction_related_items"] == []
+
+
+class TestTagCatalogEndpoints:
+    def test_list_tags_merges_catalog_and_used(self):
+        with (
+            patch("app.api.v1.endpoints.library.tag_catalog_service") as mock_catalog,
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+        ):
+            mock_catalog.list_tags = AsyncMock(return_value=["Catalog Tag"])
+            mock_store.get_distinct_list_field = AsyncMock(
+                return_value=["Used Tag", "catalog tag"]
+            )
+
+            client = TestClient(app)
+            response = client.get("/api/v1/library/tags")
+
+            assert response.status_code == 200
+            tags = response.json()["tags"]
+            assert tags == ["Catalog Tag", "Used Tag"]
+
+    def test_add_tag_requires_passkey(self):
+        with patch("app.api.v1.endpoints.library.tag_catalog_service") as mock_catalog:
+            mock_catalog.add_tag = AsyncMock(return_value="New Tag")
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/tags",
+                json={"tag": "New Tag"},
+            )
+
+            assert response.status_code == 403
+            mock_catalog.add_tag.assert_not_called()
+
+    def test_add_tag_with_passkey_succeeds(self):
+        with patch("app.api.v1.endpoints.library.tag_catalog_service") as mock_catalog:
+            mock_catalog.add_tag = AsyncMock(return_value="New Tag")
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/tags",
+                json={"tag": "New Tag"},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            assert response.json() == {"tag": "New Tag"}
+            mock_catalog.add_tag.assert_awaited_once_with("New Tag")

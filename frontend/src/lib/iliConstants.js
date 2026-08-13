@@ -32,6 +32,16 @@ export const CLASSIFICATION_STATUS_OPTIONS = [
   "Under Discussion",
 ];
 
+export const WALL_LOCATION_OPTIONS = [
+  "External",
+  "Internal",
+  "Mid Wall",
+  "N/A",
+];
+
+/** Crack-like only: which image angle(s) are present */
+export const CRACK_IMAGE_ANGLE_OPTIONS = ["+", "-", "Both"];
+
 export const DIMENSION_REQUIREMENTS = {
   "Metal Loss": ["depth", "width", "length"],
   Weld: ["depth", "width", "length"],

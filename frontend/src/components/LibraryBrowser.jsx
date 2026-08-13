@@ -17,6 +17,7 @@ const EMPTY_FILTERS = {
   panel_tags: [],
   run_number: "",
   classification_status: "",
+  interacts_with_other_features: null,
 };
 
 function toggleType(arr, type) {
@@ -121,8 +122,22 @@ export default function LibraryBrowser() {
     n += filters.panel_tags.length;
     if (filters.run_number) n += 1;
     if (filters.classification_status) n += 1;
+    if (filters.interacts_with_other_features === true || filters.interacts_with_other_features === false) {
+      n += 1;
+    }
     return n;
   }, [filters]);
+
+  const selectedIndex = useMemo(() => {
+    if (!selected?.image?.id) return -1;
+    return items.findIndex((item) => item.image.id === selected.image.id);
+  }, [items, selected]);
+
+  const goToBrowseItem = useCallback((index) => {
+    if (index < 0 || index >= items.length) return;
+    lockAdmin();
+    setSelected(items[index]);
+  }, [items, lockAdmin]);
 
   if (editingItem) {
     return (
@@ -154,6 +169,7 @@ export default function LibraryBrowser() {
   if (selected) {
     return (
       <ImageDetail
+        key={selected.image.id}
         result={{
           image: selected.image,
           image_url: selected.image_url,
@@ -180,6 +196,10 @@ export default function LibraryBrowser() {
         adminPasskey={adminPasskey}
         onUnlock={handleUnlock}
         onAuthError={lockAdmin}
+        currentIndex={selectedIndex >= 0 ? selectedIndex : 0}
+        totalCount={items.length}
+        onPrev={() => goToBrowseItem(selectedIndex - 1)}
+        onNext={() => goToBrowseItem(selectedIndex + 1)}
       />
     );
   }
@@ -224,6 +244,7 @@ export default function LibraryBrowser() {
                 key={type}
                 type="button"
                 className={`chip ${filters.anomaly_types.includes(type) ? "chip-active" : ""}`}
+                aria-pressed={filters.anomaly_types.includes(type)}
                 onClick={() => setFilter("anomaly_types", toggleType(filters.anomaly_types, type))}
               >
                 {type}
@@ -249,6 +270,7 @@ export default function LibraryBrowser() {
                       key={idOpt}
                       type="button"
                       className={`chip ${filters.identifications.includes(idOpt) ? "chip-active" : ""}`}
+                      aria-pressed={filters.identifications.includes(idOpt)}
                       onClick={() =>
                         setFilter("identifications", toggleType(filters.identifications, idOpt))
                       }
@@ -275,6 +297,7 @@ export default function LibraryBrowser() {
                 key={tag}
                 type="button"
                 className={`chip ${filters.panel_tags.includes(tag) ? "chip-active" : ""}`}
+                aria-pressed={filters.panel_tags.includes(tag)}
                 onClick={() => setFilter("panel_tags", toggleType(filters.panel_tags, tag))}
               >
                 {tag}
@@ -319,6 +342,33 @@ export default function LibraryBrowser() {
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
+        </FilterSection>
+
+        <FilterSection
+          id="other"
+          label="Other"
+          open={!!openSections.other}
+          onToggle={toggleSection}
+          count={
+            filters.interacts_with_other_features === true
+            || filters.interacts_with_other_features === false
+              ? 1
+              : 0
+          }
+        >
+          <label className="checkbox-label browse-filter-check">
+            <input
+              type="checkbox"
+              checked={filters.interacts_with_other_features === true}
+              onChange={(e) =>
+                setFilter(
+                  "interacts_with_other_features",
+                  e.target.checked ? true : null
+                )
+              }
+            />
+            Interacting with other features
+          </label>
         </FilterSection>
       </aside>
 

@@ -5,6 +5,8 @@ POST   /api/v1/library/upload
 GET    /api/v1/library/browse
 GET    /api/v1/library/runs
 POST   /api/v1/library/runs
+GET    /api/v1/library/tags
+POST   /api/v1/library/tags
 PUT    /api/v1/library/{image_id}
 DELETE /api/v1/library/{image_id}
 """
@@ -26,6 +28,7 @@ from app.services.event_log import event_log_service
 from app.services.file_store import file_store_service
 from app.services.local_storage import local_storage_service
 from app.services.run_catalog import run_catalog_service
+from app.services.tag_catalog import tag_catalog_service
 
 router = APIRouter()
 
@@ -96,6 +99,7 @@ async def upload_to_library(
     identification: Optional[str] = Form(None),
     anomaly_id: Optional[str] = Form(None),
     wall_location: Optional[str] = Form(None),
+    crack_image_angles: Optional[str] = Form(None),
     run_number: Optional[str] = Form(None),
     analysis_comment: Optional[str] = Form(None),
     contributor_name: Optional[str] = Form(None),
@@ -208,6 +212,7 @@ async def upload_to_library(
         identification=identification,
         anomaly_id=anomaly_id,
         wall_location=wall_location,
+        crack_image_angles=crack_image_angles,
         run_number=run_number,
         analysis_comment=analysis_comment,
         revision_history=[_build_revision_entry(1, contributor_name, contributor_comment)],
@@ -272,6 +277,7 @@ async def browse_library(
     classification_status: Optional[str] = None,
     panel_tags: Optional[str] = None,
     identifications: Optional[str] = None,
+    interacts_with_other_features: Optional[bool] = None,
     q: Optional[str] = None,
     depth_min: Optional[float] = None,
     depth_max: Optional[float] = None,
@@ -323,6 +329,9 @@ async def browse_library(
             return False
         if classification_status and img.classification_status != classification_status:
             return False
+        if interacts_with_other_features is not None:
+            if img.interacts_with_other_features is not interacts_with_other_features:
+                return False
         if depth_min is not None or depth_max is not None:
             if img.depth is None or not in_range(img.depth, depth_min, depth_max):
                 return False
@@ -396,6 +405,46 @@ async def add_run(
     except ValueError as exc:
         raise ValidationError(str(exc)) from exc
     return RunEntry(**entry)
+
+
+class TagEntry(BaseModel):
+    tag: str = Field(..., min_length=1, max_length=64)
+
+
+class TagsResponse(BaseModel):
+    tags: list[str]
+
+
+@router.get("/tags", response_model=TagsResponse)
+async def list_tags():
+    """Return reusable tags (catalog + tags already used on entries)."""
+    catalog = await tag_catalog_service.list_tags()
+    used = await file_store_service.get_distinct_list_field("tags")
+    seen: set[str] = set()
+    merged: list[str] = []
+    for tag in [*catalog, *used]:
+        key = tag.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(tag)
+    merged.sort(key=lambda t: t.lower())
+    return TagsResponse(tags=merged)
+
+
+@router.post("/tags", response_model=TagEntry)
+async def add_tag(
+    body: TagEntry,
+    x_delete_passkey: Optional[str] = Header(default=None),
+):
+    """Add a reusable tag. Requires the same admin passkey as delete/runs."""
+    if x_delete_passkey != settings.library_delete_passkey:
+        raise ForbiddenError("Incorrect passkey.")
+    try:
+        tag = await tag_catalog_service.add_tag(body.tag)
+    except ValueError as exc:
+        raise ValidationError(str(exc)) from exc
+    return TagEntry(tag=tag)
 
 
 class VerifyPasskeyRequest(BaseModel):
@@ -488,6 +537,7 @@ async def update_library_entry(
     identification: Optional[str] = Form(None),
     anomaly_id: Optional[str] = Form(None),
     wall_location: Optional[str] = Form(None),
+    crack_image_angles: Optional[str] = Form(None),
     run_number: Optional[str] = Form(None),
     analysis_comment: Optional[str] = Form(None),
     contributor_name: Optional[str] = Form(None),
@@ -728,6 +778,7 @@ async def update_library_entry(
         identification=identification_val,
         anomaly_id=anomaly_id_val,
         wall_location=_resolved(wall_location, existing.wall_location),
+        crack_image_angles=_resolved(crack_image_angles, existing.crack_image_angles),
         run_number=_resolved(run_number, existing.run_number),
         analysis_comment=_resolved(analysis_comment, existing.analysis_comment),
         revision_history=revision_history_val,

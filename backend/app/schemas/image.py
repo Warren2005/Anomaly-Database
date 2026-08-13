@@ -21,6 +21,7 @@ class ImageBase(BaseModel):
     identification: Optional[str] = None
     anomaly_id: Optional[str] = None
     wall_location: Optional[str] = None
+    crack_image_angles: Optional[str] = None
     run_number: Optional[str] = None
     analysis_comment: Optional[str] = None
     revision_history: Optional[list] = None

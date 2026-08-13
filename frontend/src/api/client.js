@@ -65,6 +65,9 @@ export async function browseLibrary(filters = {}) {
   if (Array.isArray(filters.identifications) && filters.identifications.length) {
     params.set("identifications", filters.identifications.join(","));
   }
+  if (filters.interacts_with_other_features === true || filters.interacts_with_other_features === false) {
+    params.set("interacts_with_other_features", String(filters.interacts_with_other_features));
+  }
   if (filters.q) params.set("q", filters.q);
   for (const key of [
     "depth_min", "depth_max", "width_min", "width_max", "length_min", "length_max",
@@ -134,6 +137,35 @@ export async function addRun({ run, run_id }, passkey) {
     const error = await response.json().catch(() => ({}));
     throw new Error(
       error?.error?.message || `Failed to add run: ${response.status}`
+    );
+  }
+  return response.json();
+}
+
+export async function getTags() {
+  const response = await fetch(`${BASE_URL}/library/tags`);
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error?.error?.message || `Failed to load tags: ${response.status}`
+    );
+  }
+  return response.json();
+}
+
+export async function addTag({ tag }, passkey) {
+  const response = await fetch(`${BASE_URL}/library/tags`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Delete-Passkey": passkey ?? "",
+    },
+    body: JSON.stringify({ tag }),
+  });
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({}));
+    throw new Error(
+      error?.error?.message || `Failed to add tag: ${response.status}`
     );
   }
   return response.json();

@@ -37,6 +37,8 @@ class Image:
     # FileStoreService.find_by_anomaly_id().
     anomaly_id: Optional[str] = None
     wall_location: Optional[str] = None
+    # Crack-like only: which image angle polarity is present ("+", "−", "Both").
+    crack_image_angles: Optional[str] = None
     run_number: Optional[str] = None
     analysis_comment: Optional[str] = None
     # Ordered log of who signed off on this entry, oldest first. V1 is

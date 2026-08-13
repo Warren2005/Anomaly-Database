@@ -160,13 +160,13 @@ export default function ImageDetail({
         </button>
 
         {canNavigate && (
-          <div className="result-nav" role="navigation" aria-label="Similar results">
+          <div className="result-nav" role="navigation" aria-label="Library entries">
             <button
               type="button"
               className="btn btn-secondary result-nav-btn"
               onClick={onPrev}
               disabled={!hasPrev}
-              aria-label="Previous similar result"
+              aria-label="Previous entry"
               title="Previous (←)"
             >
               ‹
@@ -179,7 +179,7 @@ export default function ImageDetail({
               className="btn btn-secondary result-nav-btn"
               onClick={onNext}
               disabled={!hasNext}
-              aria-label="Next similar result"
+              aria-label="Next entry"
               title="Next (→)"
             >
               ›
@@ -326,49 +326,29 @@ export default function ImageDetail({
         </div>
 
         <div className="detail-metadata">
-          <h2>{title}</h2>
-          {image.classification_status && (
-            <span
-              className="badge"
-              style={{
-                color: statusColor,
-                borderColor: statusColor,
-                marginBottom: 12,
-                display: "inline-block",
-              }}
-            >
-              {image.classification_status}
-            </span>
-          )}
-
-          {panelTags.length > 1 && (
-            <div className="panel-tag-row">
-              {panelTags.map((tag, i) => (
-                <span key={`${tag}-${i}`} className="badge badge-panel">
-                  {i + 1}. {tag}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {tags.length > 0 && (
-            <div className="panel-tag-row">
-              {tags.map((tag) => (
-                <span key={tag} className="badge">{tag}</span>
-              ))}
-            </div>
-          )}
-
-          {orientation_image_url && (
-            <div className="orientation-detail">
-              <span className="orientation-detail-label">Orientation Image (reference only)</span>
-              <button
-                type="button"
-                onClick={handleToggleOrientation}
-                className="orientation-detail-thumb"
+          <div className="detail-meta-header">
+            <h2>{title}</h2>
+            {image.classification_status && (
+              <span
+                className="badge detail-status-badge"
+                style={{
+                  color: statusColor,
+                  borderColor: statusColor,
+                }}
               >
-                <img src={resolveImageUrl(orientation_image_url)} alt="Orientation reference" />
-              </button>
+                {image.classification_status}
+              </span>
+            )}
+          </div>
+
+          {(image.anomaly_type || image.anomaly_id) && (
+            <div className="detail-meta-chips">
+              {image.anomaly_type && (
+                <span className="ref-card-type">{image.anomaly_type}</span>
+              )}
+              {image.anomaly_id && (
+                <span className="detail-id-chip">{image.anomaly_id}</span>
+              )}
             </div>
           )}
 
@@ -379,14 +359,48 @@ export default function ImageDetail({
             </div>
           )}
 
-          <table className="detail-table">
-            <tbody>
-              <DetailRow label="Anomaly ID" value={image.anomaly_id} />
-              <DetailRow label="Identification" value={image.identification} />
-              <DetailRow label="Pipe Angle" value={image.pipe_angle != null ? `${image.pipe_angle}°` : null} />
-              <DetailRow label="Anomaly Type" value={image.anomaly_type} />
-              <DetailRow
-                label="Interacting with Other Features"
+          {(panelTags.length > 1 || tags.length > 0) && (
+            <div className="detail-meta-block">
+              {panelTags.length > 1 && (
+                <div className="panel-tag-row">
+                  {panelTags.map((tag, i) => (
+                    <span key={`${tag}-${i}`} className="badge badge-panel">
+                      {i + 1}. {tag}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {tags.length > 0 && (
+                <div className="panel-tag-row">
+                  {tags.map((tag) => (
+                    <span key={tag} className="badge">{tag}</span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {orientation_image_url && (
+            <div className="orientation-detail">
+              <span className="orientation-detail-label">Orientation</span>
+              <button
+                type="button"
+                onClick={handleToggleOrientation}
+                className="orientation-detail-thumb"
+              >
+                <img src={resolveImageUrl(orientation_image_url)} alt="Orientation reference" />
+              </button>
+            </div>
+          )}
+
+          <div className="detail-meta-block">
+            <div className="detail-meta-heading">Identity</div>
+            <dl className="detail-dl">
+              <DetailItem label="Identification" value={image.identification} />
+              <DetailItem label="Wall Location" value={image.wall_location} />
+              <DetailItem label="Image Angles" value={image.crack_image_angles} />
+              <DetailItem
+                label="Interacting features"
                 value={
                   image.interacts_with_other_features === true
                     ? "Yes"
@@ -395,81 +409,111 @@ export default function ImageDetail({
                     : null
                 }
               />
-              {image.interacts_with_other_features && (image.interaction_related_items || []).length > 0 && (
-                <tr>
-                  <td colSpan={2}>
-                    <div className="panel-tag-row">
-                      {image.interaction_related_items.map((item) => (
-                        <span key={item} className="badge">{item}</span>
-                      ))}
-                    </div>
-                  </td>
-                </tr>
-              )}
-              <DetailRow label="Run" value={image.run_number} />
-              <DetailRow label="ZeroAngle Frame Index" value={image.zero_angle_frame_index} />
-              <DetailRow label="Run ID" value={image.anomaly_description} />
-              <DetailRow label="Detection signature" value={image.signal_description} />
-              <DetailRow
-                label="Similar anomalies / differential diagnosis"
-                value={image.differential_diagnosis}
-              />
-              <DetailRow
-                label="Limitations / uncertainty"
-                value={image.limitations_uncertainty}
-              />
-              {image.analysis_comment && (
-                <DetailRow label="Comments" value={image.analysis_comment} />
-              )}
-              {image.notes && (
-                <DetailRow label="Notes" value={image.notes} />
-              )}
-              <DetailRow label="Depth (mm)" value={image.depth} />
-              <DetailRow label="Width (mm)" value={image.width} />
-              <DetailRow label="Length (mm)" value={image.length} />
-              {(image.revision_history || []).length > 0 && (
-                <>
-                  <tr>
-                    <td colSpan={2} className="detail-section-divider">Revision History</td>
-                  </tr>
-                  {[...image.revision_history]
-                    .sort((a, b) => a.version - b.version)
-                    .map((rev) => (
-                      <tr key={rev.version}>
-                        <td className="detail-label">V{rev.version}</td>
-                        <td className="detail-value">
-                          {rev.name} — {new Date(rev.timestamp).toLocaleDateString()}
-                          {rev.comment && <div className="revision-comment">{rev.comment}</div>}
-                        </td>
-                      </tr>
-                    ))}
-                </>
-              )}
-              {image.is_qc_flag && (
-                <>
-                  <tr>
-                    <td colSpan={2} className="detail-section-divider">QC Feedback</td>
-                  </tr>
-                  <DetailRow label="QC Raised By" value={image.qc_raised_by} />
-                  <DetailRow label="QC Reviewer" value={image.qc_reviewer} />
-                  <DetailRow label="Decision & Rationale" value={image.qc_decision_rationale} />
-                </>
-              )}
-              <DetailRow label="Image ID" value={image.id} />
-            </tbody>
-          </table>
+              <DetailItem label="Pipe Angle" value={image.pipe_angle != null ? `${image.pipe_angle}°` : null} />
+            </dl>
+            {image.interacts_with_other_features && (image.interaction_related_items || []).length > 0 && (
+              <div className="panel-tag-row">
+                {image.interaction_related_items.map((item) => (
+                  <span key={item} className="badge">{item}</span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="detail-meta-block">
+            <div className="detail-meta-heading">Run</div>
+            <dl className="detail-dl">
+              <DetailItem label="Run" value={image.run_number} />
+              <DetailItem label="Run ID" value={image.anomaly_description} />
+              <DetailItem label="ZeroAngle Frame" value={image.zero_angle_frame_index} />
+            </dl>
+          </div>
+
+          {(image.signal_description || image.differential_diagnosis || image.limitations_uncertainty || image.analysis_comment || image.notes) && (
+            <div className="detail-meta-block">
+              <div className="detail-meta-heading">Analysis</div>
+              <dl className="detail-dl detail-dl-stack">
+                <DetailItem label="Detection signature" value={image.signal_description} />
+                <DetailItem label="Differential diagnosis" value={image.differential_diagnosis} />
+                <DetailItem label="Limitations / uncertainty" value={image.limitations_uncertainty} />
+                <DetailItem label="Comments" value={image.analysis_comment} />
+                <DetailItem label="Notes" value={image.notes} />
+              </dl>
+            </div>
+          )}
+
+          {(image.depth != null && image.depth !== "") || (image.width != null && image.width !== "") || (image.length != null && image.length !== "") ? (
+            <div className="detail-meta-block">
+              <div className="detail-meta-heading">Dimensions</div>
+              <div className="detail-dim-row">
+                {image.depth != null && image.depth !== "" && (
+                  <div className="detail-dim">
+                    <span className="detail-dim-label">Depth</span>
+                    <span className="detail-dim-value">{image.depth}<span>mm</span></span>
+                  </div>
+                )}
+                {image.width != null && image.width !== "" && (
+                  <div className="detail-dim">
+                    <span className="detail-dim-label">Width</span>
+                    <span className="detail-dim-value">{image.width}<span>mm</span></span>
+                  </div>
+                )}
+                {image.length != null && image.length !== "" && (
+                  <div className="detail-dim">
+                    <span className="detail-dim-label">Length</span>
+                    <span className="detail-dim-value">{image.length}<span>mm</span></span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : null}
+
+          {(image.revision_history || []).length > 0 && (
+            <div className="detail-meta-block">
+              <div className="detail-meta-heading">Revision history</div>
+              <ul className="detail-revision-list">
+                {[...image.revision_history]
+                  .sort((a, b) => a.version - b.version)
+                  .map((rev) => (
+                    <li key={rev.version}>
+                      <span className="detail-revision-ver">V{rev.version}</span>
+                      <span className="detail-revision-body">
+                        {rev.name} — {new Date(rev.timestamp).toLocaleDateString()}
+                        {rev.comment && <div className="revision-comment">{rev.comment}</div>}
+                      </span>
+                    </li>
+                  ))}
+              </ul>
+            </div>
+          )}
+
+          {image.is_qc_flag && (
+            <div className="detail-meta-block">
+              <div className="detail-meta-heading">QC feedback</div>
+              <dl className="detail-dl">
+                <DetailItem label="Raised by" value={image.qc_raised_by} />
+                <DetailItem label="Reviewer" value={image.qc_reviewer} />
+                <DetailItem label="Decision" value={image.qc_decision_rationale} />
+              </dl>
+            </div>
+          )}
+
+          <div className="detail-meta-footer">
+            <span className="detail-meta-footer-label">Image ID</span>
+            <span className="detail-meta-footer-value">{image.id}</span>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function DetailRow({ label, value }) {
+function DetailItem({ label, value }) {
   if (value === null || value === undefined || value === "") return null;
   return (
-    <tr>
-      <td className="detail-label">{label}</td>
-      <td className="detail-value">{String(value)}</td>
-    </tr>
+    <div className="detail-item">
+      <dt>{label}</dt>
+      <dd>{String(value)}</dd>
+    </div>
   );
 }

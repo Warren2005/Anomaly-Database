@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useRef, useEffect } from "react";
-import { uploadToLibrary, updateLibraryEntry, getRuns, addRun, getFilters, resolveImageUrl } from "../api/client";
+import { uploadToLibrary, updateLibraryEntry, getRuns, addRun, getTags, addTag, resolveImageUrl } from "../api/client";
 import {
   ANOMALY_TYPES,
   CLASSIFICATION_STATUS_OPTIONS,
@@ -11,9 +11,13 @@ import {
   RUN_OPTIONS,
   RUN_DESCRIPTIONS,
   INTERACTION_OPTIONS,
+  WALL_LOCATION_OPTIONS,
+  CRACK_IMAGE_ANGLE_OPTIONS,
 } from "../lib/iliConstants";
 
 const ADD_NEW_RUN = "__add_new__";
+const ADD_NEW_TAG = "__add_new_tag__";
+const CRACK_TYPE = "Crack-like";
 
 const FALLBACK_RUNS = RUN_OPTIONS.map((run) => ({
   run,
@@ -30,6 +34,8 @@ const EMPTY_FORM = {
   classification_status: "",
   anomaly_type: "",
   run_number: "",
+  wall_location: "N/A",
+  crack_image_angles: "",
   depth: "",
   width: "",
   length: "",
@@ -42,7 +48,7 @@ const EMPTY_FORM = {
   qc_raised_by: "",
   qc_reviewer: "",
   qc_decision_rationale: "",
-  interacts_with_other_features: "",
+  interacts_with_other_features: "no",
 };
 
 function formFromImage(image) {
@@ -57,6 +63,8 @@ function formFromImage(image) {
     classification_status: image.classification_status || "",
     anomaly_type: image.anomaly_type || "",
     run_number: image.run_number || "",
+    wall_location: image.wall_location || "N/A",
+    crack_image_angles: image.crack_image_angles || "",
     depth: image.depth ?? "",
     width: image.width ?? "",
     length: image.length ?? "",
@@ -72,9 +80,7 @@ function formFromImage(image) {
     interacts_with_other_features:
       image.interacts_with_other_features === true
         ? "yes"
-        : image.interacts_with_other_features === false
-        ? "no"
-        : "",
+        : "no",
   };
 }
 
@@ -113,7 +119,7 @@ export default function LibraryUpload({
   const [runs, setRuns] = useState(FALLBACK_RUNS);
   const [tagOptions, setTagOptions] = useState([]);
   const [selectedTags, setSelectedTags] = useState(() => editingImage?.image?.tags || []);
-  const [tagInput, setTagInput] = useState("");
+  const [tagSelectValue, setTagSelectValue] = useState("");
   const [selectedInteractionItems, setSelectedInteractionItems] = useState(
     () => editingImage?.image?.interaction_related_items || []
   );
@@ -127,6 +133,11 @@ export default function LibraryUpload({
   const [addRunPasskey, setAddRunPasskey] = useState("");
   const [addingRun, setAddingRun] = useState(false);
   const [addRunError, setAddRunError] = useState(null);
+  const [showAddTag, setShowAddTag] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [addTagPasskey, setAddTagPasskey] = useState("");
+  const [addingTag, setAddingTag] = useState(false);
+  const [addTagError, setAddTagError] = useState(null);
   const fileInputRef = useRef(null);
 
   const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
@@ -145,6 +156,7 @@ export default function LibraryUpload({
     files.length > 0
     || filePanelTags.some(Boolean)
     || showAddRun
+    || showAddTag
     || existingMedia.some((m) => m.removed)
     || selectedTags.length !== initialTags.length
     || selectedTags.some((t) => !initialTags.includes(t))
@@ -170,18 +182,24 @@ export default function LibraryUpload({
     }
   }, []);
 
+  const refreshTags = useCallback(async () => {
+    try {
+      const data = await getTags();
+      if (Array.isArray(data.tags)) {
+        setTagOptions(data.tags);
+      }
+    } catch {
+      // Keep empty catalog if API is unavailable
+    }
+  }, []);
+
   useEffect(() => {
     refreshRuns();
   }, [refreshRuns]);
 
   useEffect(() => {
-    // Growing catalog for Tags — typing a new one here adds it for next time.
-    getFilters()
-      .then((data) => {
-        setTagOptions(data.tags || []);
-      })
-      .catch(() => {});
-  }, []);
+    refreshTags();
+  }, [refreshTags]);
 
   const commitTag = useCallback((raw) => {
     const tag = raw.trim();
@@ -189,17 +207,54 @@ export default function LibraryUpload({
     setSelectedTags((prev) =>
       prev.some((t) => t.toLowerCase() === tag.toLowerCase()) ? prev : [...prev, tag]
     );
-    setTagOptions((prev) =>
-      prev.some((t) => t.toLowerCase() === tag.toLowerCase())
-        ? prev
-        : [...prev, tag].sort((a, b) => a.localeCompare(b))
-    );
-    setTagInput("");
   }, []);
 
   const removeTag = useCallback((tag) => {
     setSelectedTags((prev) => prev.filter((t) => t !== tag));
   }, []);
+
+  const handleTagSelect = (value) => {
+    if (value === ADD_NEW_TAG) {
+      setTagSelectValue("");
+      setShowAddTag(true);
+      setAddTagError(null);
+      return;
+    }
+    setTagSelectValue("");
+    if (value) commitTag(value);
+  };
+
+  const resetAddTagForm = () => {
+    setShowAddTag(false);
+    setNewTagName("");
+    setAddTagPasskey("");
+    setAddTagError(null);
+  };
+
+  const handleAddTag = async (e) => {
+    e.preventDefault();
+    const tag = newTagName.trim();
+    if (!tag) {
+      setAddTagError("Tag is required.");
+      return;
+    }
+    if (!addTagPasskey) {
+      setAddTagError("Admin passkey required.");
+      return;
+    }
+    setAddingTag(true);
+    setAddTagError(null);
+    try {
+      const entry = await addTag({ tag }, addTagPasskey);
+      await refreshTags();
+      commitTag(entry.tag);
+      resetAddTagForm();
+    } catch (err) {
+      setAddTagError(err.message || "Failed to add tag.");
+    } finally {
+      setAddingTag(false);
+    }
+  };
 
   const toggleInteractionItem = useCallback((item) => {
     setSelectedInteractionItems((prev) =>
@@ -326,12 +381,18 @@ export default function LibraryUpload({
           // Leaving a typed dropdown — clear so free-text types start blank
           next.identification = "";
         }
+        if (value !== CRACK_TYPE) {
+          next.crack_image_angles = "";
+        }
       }
       return next;
     });
     setFieldErrors((prev) => {
       const cleared = { ...prev, [field]: undefined };
-      if (field === "anomaly_type") cleared.identification = undefined;
+      if (field === "anomaly_type") {
+        cleared.identification = undefined;
+        cleared.crack_image_angles = undefined;
+      }
       return cleared;
     });
   };
@@ -391,6 +452,10 @@ export default function LibraryUpload({
     if (!form.identification.trim()) errs.identification = "Required";
     if (!form.anomaly_id.trim()) errs.anomaly_id = "Required";
     if (!form.classification_status) errs.classification_status = "Required";
+    if (!form.wall_location) errs.wall_location = "Required";
+    if (form.anomaly_type === CRACK_TYPE && !form.crack_image_angles) {
+      errs.crack_image_angles = "Required for Crack-like";
+    }
     if (!form.contributor_name.trim()) errs.contributor_name = "Required";
     if (!form.signal_description.trim()) errs.signal_description = "Required";
     if (!form.differential_diagnosis.trim()) errs.differential_diagnosis = "Required";
@@ -463,6 +528,8 @@ export default function LibraryUpload({
         interacts_with_other_features: form.interacts_with_other_features === "yes" ? "true" : "false",
         interaction_related_items:
           form.interacts_with_other_features === "yes" ? selectedInteractionItems.join(",") : "",
+        crack_image_angles:
+          form.anomaly_type === CRACK_TYPE ? form.crack_image_angles : "",
       };
       delete payload.track;
       delete payload.analysis_comment;
@@ -561,124 +628,127 @@ export default function LibraryUpload({
         )}
       </div>
 
-      <div
-        className={`dropzone${isDragging ? " dropzone-active" : ""}${fieldErrors.file ? " has-error" : ""}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <p className="dropzone-text">
-          {isEditMode ? "Drop more panel images or click to browse" : "Drop multiple panel images or click to browse"}
-        </p>
-        <p className="dropzone-formats">
-          JPEG, PNG, TIFF, GIF, WebP · tag each image with its panel type below
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/tiff,image/gif,image/webp"
-          multiple
-          style={{ display: "none" }}
-          onChange={(e) => {
-            addFiles(e.target.files);
-            e.target.value = "";
-          }}
-        />
-      </div>
+      <div className="upload-landscape">
+        <div className="upload-media-col">
+          <div
+            className={`dropzone${isDragging ? " dropzone-active" : ""}${fieldErrors.file ? " has-error" : ""}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <p className="dropzone-text">
+              {isEditMode ? "Drop more panel images or click to browse" : "Drop multiple panel images or click to browse"}
+            </p>
+            <p className="dropzone-formats">
+              JPEG, PNG, TIFF, GIF, WebP · tag each image with its panel type below
+            </p>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/tiff,image/gif,image/webp"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => {
+                addFiles(e.target.files);
+                e.target.value = "";
+              }}
+            />
+          </div>
 
-      {isEditMode && survivingExisting.length > 0 && (
-        <div className="media-preview-section">
-          <p className="form-hint media-preview-hint">
-            Existing images — remove any, or change a panel tag. At least one image must remain.
-          </p>
-          <div className="media-preview-grid">
-            {survivingExisting.map((m) => (
-              <div
-                key={m.originalIndex}
-                className={`preview-card${fieldErrors[`existing_${m.originalIndex}`] ? " preview-card-error" : ""}`}
-              >
-                <div className="preview-thumb">
-                  <img src={resolveImageUrl(m.url)} alt="" />
-                  {isExistingPrimary(m) && <span className="preview-primary">Primary</span>}
-                  <button
-                    type="button"
-                    className="remove-img"
-                    onClick={() => removeExistingMedia(m.originalIndex)}
-                    aria-label="Remove this image"
+          {isEditMode && survivingExisting.length > 0 && (
+            <div className="media-preview-section">
+              <p className="form-hint media-preview-hint">
+                Existing images — remove any, or change a panel tag. At least one image must remain.
+              </p>
+              <div className="media-preview-grid">
+                {survivingExisting.map((m) => (
+                  <div
+                    key={m.originalIndex}
+                    className={`preview-card${fieldErrors[`existing_${m.originalIndex}`] ? " preview-card-error" : ""}`}
                   >
-                    ✕
-                  </button>
-                </div>
-                <label className="form-label preview-panel-label">
-                  Panel <span className="req">*</span>
-                </label>
-                <select
-                  className={`form-select${fieldErrors[`existing_${m.originalIndex}`] ? " has-error-input" : ""}`}
-                  value={m.panelTag || ""}
-                  onChange={(e) => setExistingPanelTag(m.originalIndex, e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <option value="">— Select panel —</option>
-                  {PANEL_TAG_OPTIONS.map((tag) => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
+                    <div className="preview-thumb">
+                      <img src={resolveImageUrl(m.url)} alt="" />
+                      {isExistingPrimary(m) && <span className="preview-primary">Primary</span>}
+                      <button
+                        type="button"
+                        className="remove-img"
+                        onClick={() => removeExistingMedia(m.originalIndex)}
+                        aria-label="Remove this image"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <label className="form-label preview-panel-label">
+                      Panel <span className="req">*</span>
+                    </label>
+                    <select
+                      className={`form-select${fieldErrors[`existing_${m.originalIndex}`] ? " has-error-input" : ""}`}
+                      value={m.panelTag || ""}
+                      onChange={(e) => setExistingPanelTag(m.originalIndex, e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <option value="">— Select panel —</option>
+                      {PANEL_TAG_OPTIONS.map((tag) => (
+                        <option key={tag} value={tag}>{tag}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
+          )}
 
-      {previews.length > 0 && (
-        <div className="media-preview-section">
-          <p className="form-hint media-preview-hint">
-            {previews.length === 1
-              ? "1 new image — choose which panel it is"
-              : `${previews.length} new images — choose a panel tag for each`}
-            {survivingExisting.length === 0 && ". First image is used for CLIP search (Primary)."}
-          </p>
-          <div className="media-preview-grid">
-            {previews.map((p, i) => (
-              <div
-                key={`${p.name}-${i}`}
-                className={`preview-card${fieldErrors[`panel_${i}`] ? " preview-card-error" : ""}`}
-              >
-                <div className="preview-thumb">
-                  <img src={p.url} alt={p.name} />
-                  {isNewFilePrimary(i) && <span className="preview-primary">Primary</span>}
-                  <button type="button" className="remove-img" onClick={() => removeFile(i)}>✕</button>
-                </div>
-                <label className="form-label preview-panel-label">
-                  Panel <span className="req">*</span>
-                </label>
-                <select
-                  className={`form-select${fieldErrors[`panel_${i}`] ? " has-error-input" : ""}`}
-                  value={filePanelTags[i] || ""}
-                  onChange={(e) => setFilePanelTag(i, e.target.value)}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <option value="">— Select panel —</option>
-                  {PANEL_TAG_OPTIONS.map((tag) => (
-                    <option key={tag} value={tag}>{tag}</option>
-                  ))}
-                </select>
+          {previews.length > 0 && (
+            <div className="media-preview-section">
+              <p className="form-hint media-preview-hint">
+                {previews.length === 1
+                  ? "1 new image — choose which panel it is"
+                  : `${previews.length} new images — choose a panel tag for each`}
+                {survivingExisting.length === 0 && ". First image is used for CLIP search (Primary)."}
+              </p>
+              <div className="media-preview-grid">
+                {previews.map((p, i) => (
+                  <div
+                    key={`${p.name}-${i}`}
+                    className={`preview-card${fieldErrors[`panel_${i}`] ? " preview-card-error" : ""}`}
+                  >
+                    <div className="preview-thumb">
+                      <img src={p.url} alt={p.name} />
+                      {isNewFilePrimary(i) && <span className="preview-primary">Primary</span>}
+                      <button type="button" className="remove-img" onClick={() => removeFile(i)}>✕</button>
+                    </div>
+                    <label className="form-label preview-panel-label">
+                      Panel <span className="req">*</span>
+                    </label>
+                    <select
+                      className={`form-select${fieldErrors[`panel_${i}`] ? " has-error-input" : ""}`}
+                      value={filePanelTags[i] || ""}
+                      onChange={(e) => setFilePanelTag(i, e.target.value)}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <option value="">— Select panel —</option>
+                      {PANEL_TAG_OPTIONS.map((tag) => (
+                        <option key={tag} value={tag}>{tag}</option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      )}
+            </div>
+          )}
 
-      {fieldErrors.file && (
-        <p className="add-run-error" style={{ marginTop: "-8px" }}>{fieldErrors.file}</p>
-      )}
+          {fieldErrors.file && (
+            <p className="add-run-error">{fieldErrors.file}</p>
+          )}
 
-      {error && (
-        <div className="error-banner">
-          <span>{error}</span>
-          <button onClick={() => setError(null)}>Dismiss</button>
+          {error && (
+            <div className="error-banner">
+              <span>{error}</span>
+              <button onClick={() => setError(null)}>Dismiss</button>
+            </div>
+          )}
         </div>
-      )}
 
       <form className="upload-form" onSubmit={handleSubmit}>
         <div className="form-row">
@@ -718,7 +788,6 @@ export default function LibraryUpload({
                 <input
                   className="form-input"
                   type="text"
-                  placeholder="e.g. ILIT0017"
                   value={newRunName}
                   onChange={(e) => setNewRunName(e.target.value)}
                   autoFocus
@@ -729,7 +798,6 @@ export default function LibraryUpload({
                 <input
                   className="form-input"
                   type="text"
-                  placeholder="e.g. 0AXXXXXXX"
                   value={newRunId}
                   onChange={(e) => setNewRunId(e.target.value)}
                 />
@@ -741,7 +809,6 @@ export default function LibraryUpload({
                 <input
                   className="form-input"
                   type="password"
-                  placeholder="Admin passkey"
                   value={addRunPasskey}
                   onChange={(e) => setAddRunPasskey(e.target.value)}
                   autoComplete="off"
@@ -770,18 +837,17 @@ export default function LibraryUpload({
           </div>
         )}
 
-        <div className="form-field">
-          <label className="form-label">Run ID</label>
-          <input
-            className="form-input"
-            type="text"
-            readOnly
-            placeholder={form.run_number ? "Unique ID pending for this run" : "Select a Run first"}
-            value={form.anomaly_description}
-          />
-        </div>
-
-        <div className="form-row">
+        <div className="form-row form-row-3">
+          <div className="form-field">
+            <label className="form-label">Run ID</label>
+            <input
+              className="form-input"
+              type="text"
+              readOnly
+              placeholder={form.run_number ? "Unique ID pending for this run" : "Select a Run first"}
+              value={form.anomaly_description}
+            />
+          </div>
           <div className="form-field">
             <label className="form-label">Identification <span className="req">*</span></label>
             {identificationSelectOptions ? (
@@ -818,7 +884,6 @@ export default function LibraryUpload({
             <input
               className={`form-input${fieldErrors.anomaly_id ? " has-error-input" : ""}`}
               type="text"
-              placeholder="Unique ID for this anomaly"
               value={form.anomaly_id}
               onChange={(e) => handleFormChange("anomaly_id", e.target.value)}
               autoComplete="off"
@@ -826,130 +891,161 @@ export default function LibraryUpload({
           </div>
         </div>
 
-        <div className="form-field">
-          <label className="form-label">Classification Status <span className="req">*</span></label>
-          <select
-            className={`form-select${fieldErrors.classification_status ? " has-error-input" : ""}`}
-            value={form.classification_status}
-            onChange={(e) => handleFormChange("classification_status", e.target.value)}
-          >
-            <option value="">— Select —</option>
-            {CLASSIFICATION_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-          </select>
+        <div className="form-row">
+          <div className="form-field">
+            <label className="form-label">Classification Status <span className="req">*</span></label>
+            <select
+              className={`form-select${fieldErrors.classification_status ? " has-error-input" : ""}`}
+              value={form.classification_status}
+              onChange={(e) => handleFormChange("classification_status", e.target.value)}
+            >
+              <option value="">— Select —</option>
+              {CLASSIFICATION_STATUS_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+            </select>
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              ZeroAngle Frame Index <span className="opt">optional</span>
+            </label>
+            <input
+              className={`form-input${fieldErrors.zero_angle_frame_index ? " has-error-input" : ""}`}
+              type="text"
+              inputMode="numeric"
+              value={form.zero_angle_frame_index}
+              onChange={(e) => handleFormChange("zero_angle_frame_index", e.target.value)}
+            />
+          </div>
         </div>
 
-        <div className="form-field">
-          <label className="form-label">Tags <span className="opt">optional</span></label>
-          <select
-            className="form-select"
-            value=""
-            onChange={(e) => {
-              if (e.target.value) commitTag(e.target.value);
-            }}
-          >
-            <option value="">— Select existing tag —</option>
-            {tagOptions.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
-          </select>
-          <input
-            className="form-input"
-            type="text"
-            placeholder="Or type a new tag and press Enter"
-            value={tagInput}
-            onChange={(e) => setTagInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                commitTag(tagInput);
-              }
-            }}
-            autoComplete="off"
-          />
-          <p className="form-hint">
-            Pick an existing tag above, or type a new one and press Enter — new tags are added for everyone to reuse
-          </p>
-          {selectedTags.length > 0 && (
-            <div className="tag-chip-row">
-              {selectedTags.map((t) => (
-                <span key={t} className="badge badge-panel tag-chip">
-                  {t}
+        <div className="form-row segment-controls-row">
+          <div className="form-field form-field-grow">
+            <label className="form-label">Wall Location <span className="req">*</span></label>
+            <div
+              className={`segment-box${fieldErrors.wall_location ? " has-error-input" : ""}`}
+              role="listbox"
+              aria-label="Wall location"
+            >
+              {WALL_LOCATION_OPTIONS.map((opt, idx) => (
+                <React.Fragment key={opt}>
+                  {idx > 0 && <span className="segment-divider" aria-hidden="true" />}
                   <button
                     type="button"
-                    className="tag-chip-remove"
-                    onClick={() => removeTag(t)}
-                    aria-label={`Remove tag ${t}`}
+                    role="option"
+                    aria-selected={form.wall_location === opt}
+                    className={`segment-option${
+                      form.wall_location === opt ? " is-selected" : ""
+                    }`}
+                    onClick={() => handleFormChange("wall_location", opt)}
                   >
-                    ✕
+                    {opt}
                   </button>
-                </span>
+                </React.Fragment>
               ))}
             </div>
+            {fieldErrors.wall_location && (
+              <p className="add-run-error">{fieldErrors.wall_location}</p>
+            )}
+          </div>
+
+          {form.anomaly_type === CRACK_TYPE && (
+            <div className="form-field form-field-angles">
+              <label className="form-label">Image Angles <span className="req">*</span></label>
+              <div
+                className={`segment-box segment-box-angles${
+                  fieldErrors.crack_image_angles ? " has-error-input" : ""
+                }`}
+                role="listbox"
+                aria-label="Crack image angles"
+              >
+                {CRACK_IMAGE_ANGLE_OPTIONS.map((opt, idx) => (
+                  <React.Fragment key={opt}>
+                    {idx > 0 && <span className="segment-divider" aria-hidden="true" />}
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={form.crack_image_angles === opt}
+                      className={`segment-option${
+                        form.crack_image_angles === opt ? " is-selected" : ""
+                      }`}
+                      onClick={() => handleFormChange("crack_image_angles", opt)}
+                    >
+                      {opt}
+                    </button>
+                  </React.Fragment>
+                ))}
+              </div>
+              {fieldErrors.crack_image_angles && (
+                <p className="add-run-error">{fieldErrors.crack_image_angles}</p>
+              )}
+            </div>
           )}
-        </div>
 
-        <div className="form-field">
-          <label className="form-label">
-            ZeroAngle Frame Index <span className="opt">optional</span>
-          </label>
-          <input
-            className={`form-input${fieldErrors.zero_angle_frame_index ? " has-error-input" : ""}`}
-            type="text"
-            inputMode="numeric"
-            placeholder="e.g. 1240"
-            value={form.zero_angle_frame_index}
-            onChange={(e) => handleFormChange("zero_angle_frame_index", e.target.value)}
-          />
-        </div>
-
-        <div className="comment-categories">
-          <div className="form-field">
+          <div className="form-field form-field-interact">
             <label className="form-label">
-              Detection signature <span className="req">*</span>
+              Interacting with other features? <span className="req">*</span>
             </label>
-            <p className="form-hint">
-              What the analyst sees in the data; main panels used for identification / sizing
-            </p>
-            <textarea
-              className={`form-textarea${fieldErrors.signal_description ? " has-error-input" : ""}`}
-              placeholder='e.g. Clear metal-loss signature on beamforming + image panels'
-              value={form.signal_description}
-              onChange={(e) => handleFormChange("signal_description", e.target.value)}
-            />
-          </div>
-
-          <div className="form-field">
-            <label className="form-label">
-              Similar anomalies / differential diagnosis <span className="req">*</span>
-            </label>
-            <p className="form-hint">
-              How to distinguish it from other features; main differences
-            </p>
-            <textarea
-              className={`form-textarea${fieldErrors.differential_diagnosis ? " has-error-input" : ""}`}
-              placeholder="e.g. Differs from weld anomaly by axial intermittency and depth response"
-              value={form.differential_diagnosis}
-              onChange={(e) => handleFormChange("differential_diagnosis", e.target.value)}
-            />
-          </div>
-
-          <div className="form-field">
-            <label className="form-label">
-              Limitations / uncertainty <span className="req">*</span>
-            </label>
-            <p className="form-hint">
-              Similarities with other anomalies; uncertainties
-            </p>
-            <textarea
-              className={`form-textarea${fieldErrors.limitations_uncertainty ? " has-error-input" : ""}`}
-              placeholder="e.g. May resemble shallow corrosion near threshold; sizing uncertain without…"
-              value={form.limitations_uncertainty}
-              onChange={(e) => handleFormChange("limitations_uncertainty", e.target.value)}
-            />
+            <div
+              className={`segment-box segment-box-yesno${
+                fieldErrors.interacts_with_other_features ? " has-error-input" : ""
+              }`}
+              role="listbox"
+              aria-label="Interacting with other features"
+            >
+              <button
+                type="button"
+                role="option"
+                aria-selected={form.interacts_with_other_features === "yes"}
+                className={`segment-option${
+                  form.interacts_with_other_features === "yes" ? " is-selected" : ""
+                }`}
+                onClick={() => handleFormChange("interacts_with_other_features", "yes")}
+              >
+                Yes
+              </button>
+              <span className="segment-divider" aria-hidden="true" />
+              <button
+                type="button"
+                role="option"
+                aria-selected={form.interacts_with_other_features === "no"}
+                className={`segment-option${
+                  form.interacts_with_other_features === "no" ? " is-selected" : ""
+                }`}
+                onClick={() => {
+                  handleFormChange("interacts_with_other_features", "no");
+                  setSelectedInteractionItems([]);
+                }}
+              >
+                No
+              </button>
+            </div>
+            {fieldErrors.interacts_with_other_features && (
+              <p className="add-run-error">{fieldErrors.interacts_with_other_features}</p>
+            )}
           </div>
         </div>
 
-        {requiredDims.length > 0 && (
-          <div className="dim-callout">
-            Mandatory dimensions for {form.anomaly_type}: {requiredDims.join(", ")}
+        {form.interacts_with_other_features === "yes" && (
+          <div className="form-field">
+            <label className="form-label">
+              Related Anomaly Types / Components <span className="req">*</span>
+            </label>
+            <div className="tag-chip-row interaction-chip-row">
+              {INTERACTION_OPTIONS.map((item) => (
+                <button
+                  type="button"
+                  key={item}
+                  className={`tag-chip${
+                    selectedInteractionItems.includes(item) ? " tag-chip-active" : ""
+                  }`}
+                  onClick={() => toggleInteractionItem(item)}
+                >
+                  {item}
+                </button>
+              ))}
+            </div>
+            {fieldErrors.interaction_related_items && (
+              <p className="add-run-error">{fieldErrors.interaction_related_items}</p>
+            )}
           </div>
         )}
 
@@ -964,12 +1060,139 @@ export default function LibraryUpload({
                 className={`form-input${fieldErrors[dim] ? " has-error-input" : ""}`}
                 type="text"
                 inputMode="decimal"
-                placeholder="e.g. 12.345"
                 value={form[dim]}
                 onChange={(e) => handleFormChange(dim, e.target.value)}
               />
             </div>
           ))}
+        </div>
+
+        <div className="comment-categories">
+          <div className="form-field">
+            <label className="form-label">
+              Detection signature <span className="req">*</span>
+            </label>
+            <textarea
+              className={`form-textarea${fieldErrors.signal_description ? " has-error-input" : ""}`}
+              value={form.signal_description}
+              onChange={(e) => handleFormChange("signal_description", e.target.value)}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label">
+              Similar anomalies / differential diagnosis <span className="req">*</span>
+            </label>
+            <textarea
+              className={`form-textarea${fieldErrors.differential_diagnosis ? " has-error-input" : ""}`}
+              value={form.differential_diagnosis}
+              onChange={(e) => handleFormChange("differential_diagnosis", e.target.value)}
+            />
+          </div>
+
+          <div className="form-field">
+            <label className="form-label">
+              Limitations / uncertainty <span className="req">*</span>
+            </label>
+            <textarea
+              className={`form-textarea${fieldErrors.limitations_uncertainty ? " has-error-input" : ""}`}
+              value={form.limitations_uncertainty}
+              onChange={(e) => handleFormChange("limitations_uncertainty", e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="form-row">
+          <div className="form-field">
+            <label className="form-label">Tags <span className="opt">optional</span></label>
+            <select
+              className="form-select"
+              value={tagSelectValue}
+              onChange={(e) => handleTagSelect(e.target.value)}
+            >
+              <option value="">— Select existing tag —</option>
+              {tagOptions
+                .filter((opt) => !selectedTags.some((t) => t.toLowerCase() === opt.toLowerCase()))
+                .map((opt) => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              <option value={ADD_NEW_TAG}>+ Add new tag…</option>
+            </select>
+            {showAddTag && (
+              <div className="add-run-panel">
+                <p className="add-run-title">Add a new tag (admin passkey required)</p>
+                <div className="form-row add-run-actions">
+                  <div className="form-field">
+                    <label className="form-label">Tag</label>
+                    <input
+                      className="form-input"
+                      type="text"
+                      value={newTagName}
+                      onChange={(e) => setNewTagName(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="form-field">
+                    <label className="form-label">Passkey</label>
+                    <input
+                      className="form-input"
+                      type="password"
+                      value={addTagPasskey}
+                      onChange={(e) => setAddTagPasskey(e.target.value)}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="add-run-buttons">
+                    <button
+                      type="button"
+                      className="btn btn-primary"
+                      disabled={addingTag}
+                      onClick={handleAddTag}
+                    >
+                      {addingTag ? "Saving…" : "Save tag"}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={resetAddTagForm}
+                      disabled={addingTag}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+                {addTagError && <p className="add-run-error">{addTagError}</p>}
+              </div>
+            )}
+            {selectedTags.length > 0 && (
+              <div className="tag-chip-row">
+                {selectedTags.map((t) => (
+                  <span key={t} className="badge badge-panel tag-chip">
+                    {t}
+                    <button
+                      type="button"
+                      className="tag-chip-remove"
+                      onClick={() => removeTag(t)}
+                      aria-label={`Remove tag ${t}`}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              {isEditMode ? "Sign this revision" : "Your Name"} <span className="req">*</span>
+            </label>
+            <input
+              className={`form-input${fieldErrors.contributor_name ? " has-error-input" : ""}`}
+              type="text"
+              value={form.contributor_name}
+              onChange={(e) => handleFormChange("contributor_name", e.target.value)}
+            />
+          </div>
         </div>
 
         <div className="qc-section">
@@ -1015,46 +1238,6 @@ export default function LibraryUpload({
           )}
         </div>
 
-        <div className="form-field">
-          <label className="form-label">
-            Interacting with other features? <span className="req">*</span>
-          </label>
-          <select
-            className={`form-select${fieldErrors.interacts_with_other_features ? " has-error-input" : ""}`}
-            value={form.interacts_with_other_features}
-            onChange={(e) => handleFormChange("interacts_with_other_features", e.target.value)}
-          >
-            <option value="">— Select —</option>
-            <option value="yes">Yes</option>
-            <option value="no">No</option>
-          </select>
-        </div>
-
-        {form.interacts_with_other_features === "yes" && (
-          <div className="form-field">
-            <label className="form-label">
-              Related Anomaly Types / Components <span className="req">*</span>
-            </label>
-            <div className="tag-chip-row interaction-chip-row">
-              {INTERACTION_OPTIONS.map((item) => (
-                <button
-                  type="button"
-                  key={item}
-                  className={`tag-chip${
-                    selectedInteractionItems.includes(item) ? " tag-chip-active" : ""
-                  }`}
-                  onClick={() => toggleInteractionItem(item)}
-                >
-                  {item}
-                </button>
-              ))}
-            </div>
-            {fieldErrors.interaction_related_items && (
-              <p className="add-run-error">{fieldErrors.interaction_related_items}</p>
-            )}
-          </div>
-        )}
-
         {isEditMode && editingImage?.image?.revision_history?.length > 0 && (
           <div className="form-field revision-history-field">
             <label className="form-label">Revision History</label>
@@ -1072,73 +1255,60 @@ export default function LibraryUpload({
 
         <div className="form-field">
           <label className="form-label">
-            {isEditMode ? "Sign this revision" : "Your Name"} <span className="req">*</span>
-          </label>
-          <input
-            className={`form-input${fieldErrors.contributor_name ? " has-error-input" : ""}`}
-            type="text"
-            placeholder="Your name"
-            value={form.contributor_name}
-            onChange={(e) => handleFormChange("contributor_name", e.target.value)}
-          />
-        </div>
-
-        <div className="form-field">
-          <label className="form-label">
             Comment <span className="opt">optional</span>
           </label>
           <textarea
             className="form-textarea"
-            placeholder={isEditMode ? "What changed and why…" : "e.g. Initial entry"}
             value={form.contributor_comment}
             onChange={(e) => handleFormChange("contributor_comment", e.target.value)}
           />
         </div>
 
-        <div className="form-field orientation-field">
-          <label className="form-label">
-            Orientation Image <span className="opt">optional — reference only, never used in search</span>
-          </label>
-          {(orientationPreview || existingOrientationUrl) ? (
-            <div className="orientation-preview">
-              <img src={orientationPreview || resolveImageUrl(existingOrientationUrl)} alt="Orientation reference" />
+        <div className="form-row">
+          <div className="form-field orientation-field">
+            <label className="form-label">
+              Orientation Image <span className="opt">optional</span>
+            </label>
+            {(orientationPreview || existingOrientationUrl) ? (
+              <div className="orientation-preview">
+                <img src={orientationPreview || resolveImageUrl(existingOrientationUrl)} alt="Orientation reference" />
+                <button
+                  type="button"
+                  className="remove-img"
+                  onClick={clearOrientation}
+                  aria-label="Remove orientation image"
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
               <button
                 type="button"
-                className="remove-img"
-                onClick={clearOrientation}
-                aria-label="Remove orientation image"
+                className="btn btn-secondary"
+                onClick={() => orientationInputRef.current?.click()}
               >
-                ✕
+                Choose orientation image…
               </button>
-            </div>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => orientationInputRef.current?.click()}
-            >
-              Choose orientation image…
-            </button>
-          )}
-          <input
-            ref={orientationInputRef}
-            type="file"
-            accept="image/jpeg,image/png,image/tiff,image/gif,image/webp"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              handleOrientationPick(e.target.files?.[0]);
-              e.target.value = "";
-            }}
-          />
+            )}
+            <input
+              ref={orientationInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/tiff,image/gif,image/webp"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                handleOrientationPick(e.target.files?.[0]);
+                e.target.value = "";
+              }}
+            />
+          </div>
           <div className="form-field pipe-angle-field">
             <label className="form-label">
-              Pipe Angle <span className="opt">optional — degrees</span>
+              Pipe Angle <span className="opt">optional</span>
             </label>
             <input
               className={`form-input${fieldErrors.pipe_angle ? " has-error-input" : ""}`}
               type="text"
               inputMode="decimal"
-              placeholder="e.g. 47.5"
               value={form.pipe_angle}
               onChange={(e) => handleFormChange("pipe_angle", e.target.value)}
             />
@@ -1154,6 +1324,7 @@ export default function LibraryUpload({
           {uploading ? "Saving..." : isEditMode ? "Save Changes" : "Save Entry"}
         </button>
       </form>
+      </div>
     </div>
   );
 }

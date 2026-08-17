@@ -592,6 +592,9 @@ export default function LibraryUpload({
         const removeIndices = existingMedia.filter((m) => m.removed).map((m) => m.originalIndex);
         // Final image order matches the backend: surviving existing first, then new uploads.
         const panelTags = [...survivingExisting.map((m) => m.panelTag), ...filePanelTags];
+        // Lets the backend detect "someone else changed/deleted this since
+        // you opened it" instead of silently overwriting their edit.
+        payload.expected_updated_at = editingImage.image.updated_at;
         const result = await updateLibraryEntry(
           editingImage.image.id,
           {

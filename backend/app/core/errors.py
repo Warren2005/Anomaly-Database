@@ -65,6 +65,23 @@ class NotFoundError(AppException):
         )
 
 
+class ConflictError(AppException):
+    """
+    Raised when a request conflicts with the resource's current state.
+
+    Example: editing a library entry that someone else has since changed
+    or deleted — the client's copy is stale.
+    """
+
+    def __init__(self, message: str, details: Optional[Dict[str, Any]] = None):
+        super().__init__(
+            message=message,
+            error_code="CONFLICT",
+            status_code=409,
+            details=details
+        )
+
+
 class ForbiddenError(AppException):
     """
     Raised when a request is well-formed but not permitted.

@@ -141,7 +141,13 @@
       "Bash(sed -i 's/heatmap-error/detail-error/g' \"C:\\\\Users\\\\warred2\\\\Coop Project\\\\medical-microscopy\\\\frontend\\\\src\\\\components\\\\ImageDetail.jsx\")",
       "Bash(taskkill //PID 17892 //F)",
       "Bash(taskkill //PID 28108 //F)",
-      "Bash(curl -s -X POST \"http://localhost:8001/api/v1/explain?image_id=00000000-0000-0000-0000-000000000000\" -w \"\\\\nstatus:%{http_code}\\\\n\")"
+      "Bash(curl -s -X POST \"http://localhost:8001/api/v1/explain?image_id=00000000-0000-0000-0000-000000000000\" -w \"\\\\nstatus:%{http_code}\\\\n\")",
+      "Bash(taskkill //PID 36640 //F)",
+      "Bash(taskkill //PID 47992 //F)",
+      "Bash(curl -s -X PUT http://localhost:8001/api/v1/library/be69e86d-31ce-4546-b224-b47db59fa2b8 -H 'X-Delete-Passkey: admin123' -F 'contributor_name=Person A' -F 'contributor_comment=First edit' -F expected_updated_at=2026-08-14T16:26:33.253801Z -w '\\\\nstatus:%{http_code}\\\\n')",
+      "Bash(curl -s -X PUT http://localhost:8001/api/v1/library/be69e86d-31ce-4546-b224-b47db59fa2b8 -H 'X-Delete-Passkey: admin123' -F 'contributor_name=Person B' -F 'contributor_comment=Second edit, should be rejected' -F expected_updated_at=2026-08-14T16:26:33.253801Z -w '\\\\nstatus:%{http_code}\\\\n')",
+      "Bash(curl -s -X DELETE http://localhost:8001/api/v1/library/be69e86d-31ce-4546-b224-b47db59fa2b8 -H 'X-Delete-Passkey: admin123' -w '\\\\nstatus:%{http_code}\\\\n')",
+      "Bash(curl -s -X PUT http://localhost:8001/api/v1/library/be69e86d-31ce-4546-b224-b47db59fa2b8 -H 'X-Delete-Passkey: admin123' -F contributor_name=Collaborator -w '\\\\nstatus:%{http_code}\\\\n')"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

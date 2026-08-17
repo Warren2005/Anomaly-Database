@@ -1133,9 +1133,19 @@ body {
   max-width: 92vw;
 }
 
+.zoomable-image-wrap {
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+}
+
 .zoomable-image {
   width: 100%;
-  max-height: min(70vh, 720px);
+  max-height: 100%;
   height: auto;
   object-fit: contain;
   object-position: center center;
@@ -1615,10 +1625,11 @@ button.badge {
   flex-shrink: 0;
   align-self: flex-start;
   position: sticky;
-  top: 24px;
-  height: auto;
-  max-height: none;
-  overflow: visible;
+  top: 108px;
+  max-height: calc(100dvh - 130px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 14px;
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -1627,6 +1638,7 @@ button.badge {
   box-shadow: none;
   flex-direction: column;
   gap: 8px;
+  zoom: 1;
 }
 
 .browse-filter-panel-head {
@@ -1771,6 +1783,9 @@ button.badge {
 
   .browse-filter-sidebar {
     width: 100%;
+    position: static;
+    max-height: min(70vh, 560px);
+    overflow-y: auto;
   }
 }
 
@@ -2027,8 +2042,8 @@ button.badge {
 .preview-card {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  width: 160px;
+  gap: 8px;
+  width: 260px;
 }
 
 .preview-card-error .preview-thumb {
@@ -2037,18 +2052,18 @@ button.badge {
 
 .preview-panel-label {
   margin: 0;
-  font-size: 12px;
+  font-size: 15px;
 }
 
 .preview-card .form-select {
-  font-size: 12px;
-  padding: 6px 8px;
+  font-size: 14px;
+  padding: 10px 12px;
 }
 
 .preview-thumb {
   position: relative;
   width: 100%;
-  height: 110px;
+  height: 200px;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--border);
@@ -2304,6 +2319,9 @@ button.badge {
   margin-top: 10px;
   color: var(--text-secondary);
   font-size: 13px;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .media-thumbs {
@@ -2312,6 +2330,9 @@ button.badge {
   flex-wrap: wrap;
   margin-top: 10px;
   justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  z-index: 2;
 }
 
 .media-thumb {
@@ -2362,12 +2383,12 @@ button.badge {
    IMAGE DETAIL
    ============================================================ */
 .image-detail {
-  --lib-title: 22px;
-  --lib-section: 14px;
-  --lib-body: 14px;
-  --lib-meta: 13px;
-  --lib-card-title: 17px;
-  --lib-score: 22px;
+  --lib-title: 24px;
+  --lib-section: 15px;
+  --lib-body: 15px;
+  --lib-meta: 14px;
+  --lib-card-title: 18px;
+  --lib-score: 24px;
   width: 100%;
   max-width: none;
   animation: pageFadeIn 0.28s ease both;
@@ -2500,23 +2521,34 @@ button.badge {
   align-self: stretch;
 }
 
+.detail-image-viewport {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .detail-image-container .zoomable-image-wrap {
+  width: 100%;
+  height: 100%;
   zoom: var(--window-zoom, 1);
 }
 
 [data-theme="light"] .detail-image-container {
-  background: #eceae6;
+  background: #f7f6f3;
 }
 
 [data-theme="light"] .zoomable-image-wrap,
 [data-theme="light"] .detail-image,
 [data-theme="light"] .panel-slot img {
-  background: #eceae6;
+  background: #f7f6f3;
 }
 
 [data-theme="light"] .panel-slot {
-  background: #f4f3f0;
-  border-color: rgba(0, 0, 0, 0.1);
+  background: #fafaf8;
+  border-color: rgba(0, 0, 0, 0.08);
 }
 
 [data-theme="light"] .zoomable-hint {
@@ -2527,7 +2559,7 @@ button.badge {
 
 .detail-image {
   width: 100%;
-  max-height: min(70vh, 720px);
+  max-height: 100%;
   height: auto;
   object-fit: contain;
   object-position: center;
@@ -2598,6 +2630,14 @@ button.badge {
 .detail-status-badge {
   flex-shrink: 0;
   margin-top: 2px;
+  font-size: 16px;
+  font-weight: 700;
+  padding: 6px 14px;
+  border: 1px solid;
+  border-radius: 8px;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+  background: color-mix(in srgb, currentColor 12%, transparent);
 }
 
 .detail-meta-chips {
@@ -2825,38 +2865,39 @@ button.badge {
   letter-spacing: -0.02em;
 }
 
-.orientation-detail {
-  padding: 12px 0;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 14px;
+.detail-orientation-block {
+  padding-top: 14px;
 }
 
-.orientation-detail-label {
+.detail-orientation-block .orientation-detail-thumb {
   display: block;
-  font-size: var(--lib-section);
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.07em;
-  font-weight: 500;
-  margin-bottom: 8px;
-}
-
-.orientation-detail-thumb {
-  display: block;
-  width: 140px;
-  height: 110px;
+  width: 160px;
+  height: 120px;
   border-radius: 10px;
   overflow: hidden;
   border: 1px solid var(--border);
   padding: 0;
-  background: none;
-  cursor: pointer;
+  background: var(--bg-elevated);
+  cursor: zoom-in;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.orientation-detail-thumb img {
+.detail-orientation-block .orientation-detail-thumb:hover,
+.detail-orientation-block .orientation-detail-thumb:focus-visible {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 35%, transparent);
+  outline: none;
+}
+
+.detail-orientation-block .orientation-detail-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  background: #0c0c10;
+}
+
+[data-theme="light"] .detail-orientation-block .orientation-detail-thumb img {
+  background: #f7f6f3;
 }
 
 .detail-table {
@@ -2898,8 +2939,15 @@ button.badge {
   align-items: center;
   gap: 12px;
   padding: 12px;
-  border-top: 1px solid var(--border);
   flex-wrap: wrap;
+}
+
+.detail-controls {
+  flex-shrink: 0;
+}
+
+.heatmap-controls {
+  border-top: 1px solid var(--border);
 }
 
 .heatmap-error {
@@ -2991,6 +3039,7 @@ button.badge {
   --lib-score: 22px;
   width: 100%;
   max-width: none;
+  min-width: 0;
   margin-top: 8px;
   display: flex;
   flex-direction: column;
@@ -3070,10 +3119,11 @@ button.badge {
 
 .upload-landscape {
   display: grid;
-  grid-template-columns: minmax(420px, 0.95fr) minmax(0, 1.2fr);
+  grid-template-columns: minmax(0, 1fr) minmax(420px, 1.05fr);
   gap: 20px;
   align-items: start;
   width: 100%;
+  min-width: 0;
 }
 
 .upload-media-col {
@@ -3085,11 +3135,16 @@ button.badge {
   max-height: calc(100dvh - 130px);
   overflow: auto;
   zoom: 1;
+  min-width: 0;
 }
 
 .upload-form-col {
   min-width: 0;
-  overflow: auto;
+  position: sticky;
+  top: 108px;
+  max-height: calc(100dvh - 130px);
+  overflow-x: hidden;
+  overflow-y: auto;
 }
 
 .library-upload .dropzone {
@@ -3119,11 +3174,11 @@ button.badge {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  aspect-ratio: 1;
   min-width: 0;
-  padding: 8px 6px;
+  min-height: 76px;
+  padding: 12px 8px;
   border: 1.5px dashed var(--border-strong);
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--bg-surface);
   color: inherit;
   font: inherit;
@@ -3133,7 +3188,7 @@ button.badge {
 }
 
 .panel-shortcut-label {
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
@@ -3143,7 +3198,7 @@ button.badge {
 }
 
 .panel-shortcut-hint {
-  font-size: 10px;
+  font-size: 12px;
   color: var(--text-muted);
   width: 100%;
   white-space: nowrap;
@@ -3171,7 +3226,21 @@ button.badge {
 }
 
 .library-upload .media-preview-grid {
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+}
+
+.library-upload .preview-card {
+  width: 100%;
+  max-width: 280px;
+}
+
+.library-upload .preview-panel-label {
+  font-size: 15px;
+}
+
+.library-upload .preview-card .form-select {
+  font-size: 14px;
+  padding: 10px 12px;
 }
 
 @media (max-width: 1100px) {
@@ -3179,18 +3248,16 @@ button.badge {
     grid-template-columns: 1fr;
   }
 
-  .upload-media-col {
+  .upload-media-col,
+  .upload-form-col {
     position: static;
     max-height: none;
+    overflow: visible;
   }
 
   .library-upload .dropzone {
     min-height: 280px;
     flex: 0 1 auto;
-  }
-
-  .upload-form-col {
-    overflow: visible;
   }
 }
 
@@ -3206,10 +3273,12 @@ button.badge {
   padding: 24px;
   box-shadow: var(--shadow-card);
   min-width: 0;
+  box-sizing: border-box;
   --lib-section: 16px;
   --lib-body: 16px;
   --lib-meta: 14px;
   zoom: var(--window-zoom, 1);
+  width: calc(100% / var(--window-zoom, 1));
 }
 
 .form-field {
@@ -3407,7 +3476,7 @@ button.badge {
 /* ============================================================
    PAGE FADE — detail view entrance
    ============================================================ */
-.image-detail .badge,
+.image-detail .badge:not(.detail-status-badge),
 .image-detail .media-nav,
 .image-detail .detail-view-hint {
   font-size: var(--lib-meta);

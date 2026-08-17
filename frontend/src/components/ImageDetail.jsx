@@ -34,7 +34,6 @@ export default function ImageDetail({
   const { image, similarity_score, image_url, media_urls, media_index, orientation_image_url } = result;
   const media = (media_urls && media_urls.length ? media_urls : [image_url]).filter(Boolean);
   const [mediaIdx, setMediaIdx] = useState(0);
-  const [showOrientation, setShowOrientation] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -99,7 +98,6 @@ export default function ImageDetail({
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
     setMediaIdx(typeof media_index === "number" ? media_index : 0);
-    setShowOrientation(false);
     setViewMode(VIEW_FOCUS);
     setLightbox(null);
     setShowRevisions(true);
@@ -113,10 +111,6 @@ export default function ImageDetail({
   useEffect(() => {
     if (viewMode === VIEW_GRID && !canUsePanels) setViewMode(VIEW_FOCUS);
   }, [viewMode, canUsePanels]);
-
-  useEffect(() => {
-    if (viewMode !== VIEW_FOCUS) setShowOrientation(false);
-  }, [viewMode]);
 
   useEffect(() => {
     if (!canNavigate) return undefined;
@@ -144,10 +138,6 @@ export default function ImageDetail({
     "Image Details";
 
   const statusColor = STATUS_COLORS[image.classification_status];
-
-  const handleToggleOrientation = () => {
-    setShowOrientation((prev) => !prev);
-  };
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -184,11 +174,8 @@ export default function ImageDetail({
     setLightbox({ src, alt: alt || title });
   };
 
-  const currentSrc =
-    showOrientation && orientation_image_url
-      ? resolveImageUrl(orientation_image_url)
-      : resolveImageUrl(media[mediaIdx] || image_url);
-  const currentAlt = showOrientation ? "Orientation reference" : title;
+  const currentSrc = resolveImageUrl(media[mediaIdx] || image_url);
+  const currentAlt = title;
 
   return (
     <div className="image-detail">
@@ -346,17 +333,14 @@ export default function ImageDetail({
             </div>
           ) : (
             <>
-              <ZoomableImage
-                src={currentSrc}
-                alt={currentAlt}
-                onOpen={() => openLightbox(currentSrc, currentAlt)}
-              />
-              {showOrientation && (
-                <div className="media-nav">
-                  <span>Orientation Image (reference only)</span>
-                </div>
-              )}
-              {canStepPanelImage && !showOrientation && (
+              <div className="detail-image-viewport">
+                <ZoomableImage
+                  src={currentSrc}
+                  alt={currentAlt}
+                  onOpen={() => openLightbox(currentSrc, currentAlt)}
+                />
+              </div>
+              {canStepPanelImage && (
                 <div className="media-nav">
                   <button
                     className="btn btn-secondary"
@@ -380,7 +364,7 @@ export default function ImageDetail({
                   </button>
                 </div>
               )}
-              {media.length > 1 && !showOrientation && (
+              {media.length > 1 && (
                 <div className="media-thumbs">
                   {panelGroups.map((group) => (
                     <button
@@ -400,17 +384,6 @@ export default function ImageDetail({
                 </div>
               )}
             </>
-          )}
-
-          {viewMode === VIEW_FOCUS && orientation_image_url && (
-            <div className="detail-controls">
-              <button
-                className={`btn ${showOrientation ? "btn-primary" : "btn-secondary"}`}
-                onClick={handleToggleOrientation}
-              >
-                {showOrientation ? "Show Original" : "View Orientation Image"}
-              </button>
-            </div>
           )}
         </div>
 
@@ -457,14 +430,9 @@ export default function ImageDetail({
                       type="button"
                       key={group.tag}
                       className={`badge badge-panel${
-                        group.indexes.includes(mediaIdx) && !showOrientation
-                          ? " badge-panel-current"
-                          : ""
+                        group.indexes.includes(mediaIdx) ? " badge-panel-current" : ""
                       }`}
-                      onClick={() => {
-                        selectPanel(group.tag);
-                        setShowOrientation(false);
-                      }}
+                      onClick={() => selectPanel(group.tag)}
                     >
                       {group.tag}
                       {group.indexes.length > 1 ? ` (${group.indexes.length})` : ""}
@@ -483,16 +451,19 @@ export default function ImageDetail({
           )}
 
           {orientation_image_url && (
-            <div className="orientation-detail">
-              <span className="orientation-detail-label">Orientation</span>
+            <div className="detail-meta-block detail-orientation-block">
+              <div className="detail-meta-heading">Orientation</div>
               <button
                 type="button"
-                onClick={() => {
-                  setViewMode(VIEW_FOCUS);
-                  handleToggleOrientation();
-                }}
+                onClick={() =>
+                  openLightbox(
+                    resolveImageUrl(orientation_image_url),
+                    "Orientation reference"
+                  )
+                }
                 className="orientation-detail-thumb"
-                title="View orientation image"
+                title="Click to view orientation image"
+                aria-label="View orientation image"
               >
                 <img src={resolveImageUrl(orientation_image_url)} alt="Orientation reference" />
               </button>

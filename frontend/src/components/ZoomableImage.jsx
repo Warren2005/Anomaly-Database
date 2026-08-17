@@ -1,13 +1,22 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * Image area with scroll-to-zoom and double-click reset (no lightbox).
+ * Image area with scroll-to-zoom, drag-to-pan, and double-click reset.
+ * Optional onOpen fires on a click that is not a drag (opens lightbox).
  */
-export default function ZoomableImage({ src, alt, className = "" }) {
+export default function ZoomableImage({
+  src,
+  alt,
+  className = "",
+  onOpen = null,
+  minScale = 1,
+  maxScale = 6,
+}) {
   const wrapRef = useRef(null);
   const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const dragRef = useRef(null);
+  const pointerRef = useRef(null);
 
   const resetView = useCallback(() => {
     setScale(1);
@@ -27,17 +36,18 @@ export default function ZoomableImage({ src, alt, className = "" }) {
       e.stopPropagation();
       const delta = e.deltaY > 0 ? -0.12 : 0.12;
       setScale((s) => {
-        const next = Math.min(6, Math.max(1, +(s + delta).toFixed(2)));
-        if (next === 1) setOffset({ x: 0, y: 0 });
+        const next = Math.min(maxScale, Math.max(minScale, +(s + delta).toFixed(2)));
+        if (next <= 1) setOffset({ x: 0, y: 0 });
         return next;
       });
     };
 
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
-  }, []);
+  }, [minScale, maxScale]);
 
   const onPointerDown = (e) => {
+    pointerRef.current = { x: e.clientX, y: e.clientY, moved: false };
     if (scale <= 1) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     dragRef.current = {
@@ -49,6 +59,11 @@ export default function ZoomableImage({ src, alt, className = "" }) {
   };
 
   const onPointerMove = (e) => {
+    if (pointerRef.current) {
+      const dx = e.clientX - pointerRef.current.x;
+      const dy = e.clientY - pointerRef.current.y;
+      if (Math.hypot(dx, dy) > 6) pointerRef.current.moved = true;
+    }
     if (!dragRef.current) return;
     const dx = e.clientX - dragRef.current.startX;
     const dy = e.clientY - dragRef.current.startY;
@@ -59,6 +74,8 @@ export default function ZoomableImage({ src, alt, className = "" }) {
   };
 
   const onPointerUp = (e) => {
+    const wasClick = pointerRef.current && !pointerRef.current.moved;
+    pointerRef.current = null;
     if (dragRef.current) {
       try {
         e.currentTarget.releasePointerCapture(e.pointerId);
@@ -67,6 +84,9 @@ export default function ZoomableImage({ src, alt, className = "" }) {
       }
     }
     dragRef.current = null;
+    if (wasClick && typeof onOpen === "function") {
+      onOpen();
+    }
   };
 
   return (
@@ -81,7 +101,7 @@ export default function ZoomableImage({ src, alt, className = "" }) {
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
       onPointerCancel={onPointerUp}
-      title="Scroll to zoom · Double-click to reset"
+      title={onOpen ? "Click to open · Scroll to zoom" : "Scroll to zoom · Double-click to reset"}
     >
       <img
         src={src}
@@ -90,7 +110,7 @@ export default function ZoomableImage({ src, alt, className = "" }) {
         draggable={false}
         style={{
           transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
-          cursor: scale > 1 ? "grab" : "zoom-in",
+          cursor: scale > 1 ? "grab" : onOpen ? "zoom-in" : "zoom-in",
         }}
       />
       {scale > 1 && (

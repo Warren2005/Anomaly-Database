@@ -2,13 +2,18 @@ import React, { useEffect, useMemo, useState } from "react";
 import { deleteLibraryEntry, resolveImageUrl } from "../api/client";
 import { PANEL_TAG_OPTIONS, STATUS_COLORS } from "../lib/iliConstants";
 import ZoomableImage from "./ZoomableImage";
+import ImageLightbox from "./ImageLightbox";
 
 const VIEW_FOCUS = "focus";
 const VIEW_PANELS = "panels";
 const VIEW_SPLIT = "split";
 
 function shortPanelLabel(tag) {
-  return (tag || "Panel").replace(/ Panel$/i, "");
+  return (tag || "Panel").replace(/ Panel$/i, "").trim();
+}
+
+function panelGroupKey(tag) {
+  return shortPanelLabel(tag).toLowerCase();
 }
 
 export default function ImageDetail({
@@ -38,6 +43,8 @@ export default function ImageDetail({
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState(null);
   const [viewMode, setViewMode] = useState(VIEW_FOCUS);
+  const [lightbox, setLightbox] = useState(null);
+  const [showRevisions, setShowRevisions] = useState(true);
 
   const canNavigate = typeof currentIndex === "number" && totalCount > 0 && (onPrev || onNext);
   const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
@@ -48,31 +55,68 @@ export default function ImageDetail({
   // non-primary media file) plus media_index saying which panel_tags slot
   // it actually is — falls back to mediaIdx for the browse/detail flow,
   // where media_urls holds every image in panel_tags order already.
-  const currentPanelTag =
-    panelTags[typeof media_index === "number" ? media_index : mediaIdx];
+  const currentPanelTag = panelTags[mediaIdx];
 
-  const panelSlots = useMemo(() => {
-    const slots = media.map((url, i) => ({
-      url,
-      index: i,
-      tag: panelTags[i] || `Image ${i + 1}`,
-    }));
-    // Prefer canonical panel order when tags are known.
+  const panelGroups = useMemo(() => {
     const rank = (tag) => {
       const idx = PANEL_TAG_OPTIONS.indexOf(tag);
       return idx >= 0 ? idx : PANEL_TAG_OPTIONS.length + 1;
     };
-    return [...slots].sort((a, b) => rank(a.tag) - rank(b.tag) || a.index - b.index);
+    const map = new Map();
+    media.forEach((url, i) => {
+      const raw = (panelTags[i] || `Image ${i + 1}`).trim();
+      const key = panelGroupKey(raw);
+      if (!map.has(key)) map.set(key, { tag: raw, indexes: [], urls: [] });
+      const group = map.get(key);
+      group.indexes.push(i);
+      group.urls.push(url);
+    });
+    return [...map.values()].sort((a, b) => rank(a.tag) - rank(b.tag));
   }, [media, panelTags]);
+
+  const currentGroup = useMemo(
+    () => panelGroups.find((g) => g.indexes.includes(mediaIdx)) || panelGroups[0] || null,
+    [panelGroups, mediaIdx]
+  );
+  const withinPos = currentGroup ? currentGroup.indexes.indexOf(mediaIdx) : 0;
+  const withinCount = currentGroup?.indexes.length || 1;
+  const canStepPanelImage = withinCount > 1;
+
+  const panelSlots = useMemo(
+    () =>
+      panelGroups.map((group) => ({
+        tag: group.tag,
+        index: group.indexes[0],
+        url: group.urls[0],
+        count: group.indexes.length,
+        active: group.indexes.includes(mediaIdx),
+      })),
+    [panelGroups, mediaIdx]
+  );
+
+  const selectPanel = (tag) => {
+    const group = panelGroups.find((g) => panelGroupKey(g.tag) === panelGroupKey(tag));
+    if (!group) return;
+    setMediaIdx(group.indexes.includes(mediaIdx) ? mediaIdx : group.indexes[0]);
+  };
+
+  const stepPanelImage = (dir) => {
+    if (!currentGroup || currentGroup.indexes.length < 2) return;
+    const next = withinPos + dir;
+    if (next < 0 || next >= currentGroup.indexes.length) return;
+    setMediaIdx(currentGroup.indexes[next]);
+  };
 
   const canUsePanels = media.length > 1;
   const canUseSplit = Boolean(orientation_image_url);
 
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
-    setMediaIdx(0);
+    setMediaIdx(typeof media_index === "number" ? media_index : 0);
     setShowOrientation(false);
     setViewMode(VIEW_FOCUS);
+    setLightbox(null);
+    setShowRevisions(true);
     setConfirmDelete(false);
     setDeleteError(null);
     setUnlockInput("");
@@ -95,6 +139,7 @@ export default function ImageDetail({
     if (!canNavigate) return undefined;
 
     const onKeyDown = (e) => {
+      if (lightbox) return;
       if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
       if (e.key === "ArrowLeft" && hasPrev) {
         e.preventDefault();
@@ -107,7 +152,7 @@ export default function ImageDetail({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canNavigate, hasPrev, hasNext, onPrev, onNext]);
+  }, [canNavigate, hasPrev, hasNext, onPrev, onNext, lightbox]);
 
   const title =
     image.identification ||
@@ -149,6 +194,11 @@ export default function ImageDetail({
     } finally {
       setUnlocking(false);
     }
+  };
+
+  const openLightbox = (src, alt) => {
+    if (!src) return;
+    setLightbox({ src, alt: alt || title });
   };
 
   const currentSrc =
@@ -300,15 +350,18 @@ export default function ImageDetail({
               {panelSlots.map((slot) => (
                 <button
                   type="button"
-                  key={`${slot.index}-${slot.tag}`}
-                  className={`panel-slot${slot.index === mediaIdx ? " is-active" : ""}`}
+                  key={slot.tag}
+                  className={`panel-slot${slot.active ? " is-active" : ""}`}
                   onClick={() => {
-                    setMediaIdx(slot.index);
-                    setViewMode(VIEW_FOCUS);
+                    selectPanel(slot.tag);
+                    openLightbox(resolveImageUrl(slot.url), slot.tag);
                   }}
-                  title={`Open ${slot.tag} in focus view`}
+                  title={`Open ${slot.tag} full size`}
                 >
-                  <div className="panel-slot-label">{shortPanelLabel(slot.tag)}</div>
+                  <div className="panel-slot-label">
+                    {shortPanelLabel(slot.tag)}
+                    {slot.count > 1 ? ` · ${slot.count}` : ""}
+                  </div>
                   <div className="panel-slot-frame">
                     <img src={resolveImageUrl(slot.url)} alt={slot.tag} />
                   </div>
@@ -324,6 +377,9 @@ export default function ImageDetail({
                 <ZoomableImage
                   src={resolveImageUrl(media[mediaIdx] || image_url)}
                   alt={title}
+                  onOpen={() =>
+                    openLightbox(resolveImageUrl(media[mediaIdx] || image_url), title)
+                  }
                 />
               </div>
               <div className="detail-split-pane">
@@ -331,34 +387,43 @@ export default function ImageDetail({
                 <ZoomableImage
                   src={resolveImageUrl(orientation_image_url)}
                   alt="Orientation reference"
+                  onOpen={() =>
+                    openLightbox(resolveImageUrl(orientation_image_url), "Orientation reference")
+                  }
                 />
               </div>
             </div>
           ) : (
             <>
-              <ZoomableImage src={currentSrc} alt={currentAlt} />
+              <ZoomableImage
+                src={currentSrc}
+                alt={currentAlt}
+                onOpen={() => openLightbox(currentSrc, currentAlt)}
+              />
               {showOrientation && (
                 <div className="media-nav">
                   <span>Orientation Image (reference only)</span>
                 </div>
               )}
-              {media.length > 1 && !showOrientation && (
+              {canStepPanelImage && !showOrientation && (
                 <div className="media-nav">
                   <button
                     className="btn btn-secondary"
-                    disabled={mediaIdx === 0}
-                    onClick={() => setMediaIdx((i) => i - 1)}
+                    disabled={withinPos === 0}
+                    onClick={() => stepPanelImage(-1)}
+                    aria-label="Previous image in this panel"
                   >
                     ‹
                   </button>
                   <span>
-                    {mediaIdx + 1} / {media.length}
-                    {currentPanelTag ? ` · ${currentPanelTag}` : ""}
+                    {withinPos + 1} / {withinCount}
+                    {currentGroup?.tag ? ` · ${shortPanelLabel(currentGroup.tag)}` : ""}
                   </span>
                   <button
                     className="btn btn-secondary"
-                    disabled={mediaIdx === media.length - 1}
-                    onClick={() => setMediaIdx((i) => i + 1)}
+                    disabled={withinPos === withinCount - 1}
+                    onClick={() => stepPanelImage(1)}
+                    aria-label="Next image in this panel"
                   >
                     ›
                   </button>
@@ -366,15 +431,19 @@ export default function ImageDetail({
               )}
               {media.length > 1 && !showOrientation && (
                 <div className="media-thumbs">
-                  {media.map((url, i) => (
+                  {panelGroups.map((group) => (
                     <button
-                      key={url}
+                      key={panelGroupKey(group.tag)}
                       type="button"
-                      className={`media-thumb${i === mediaIdx ? " active" : ""}`}
-                      onClick={() => setMediaIdx(i)}
-                      title={panelTags[i] || `Image ${i + 1}`}
+                      className={`media-thumb${group.indexes.includes(mediaIdx) ? " active" : ""}`}
+                      onClick={() => selectPanel(group.tag)}
+                      title={
+                        group.indexes.length > 1
+                          ? `${group.tag} · ${group.indexes.length} images`
+                          : group.tag
+                      }
                     >
-                      {shortPanelLabel(panelTags[i] || `Image ${i + 1}`)}
+                      {shortPanelLabel(group.tag)}
                     </button>
                   ))}
                 </div>
@@ -394,17 +463,44 @@ export default function ImageDetail({
             {viewMode === VIEW_PANELS && (
               <span className="detail-view-hint">Click a panel to open it in Focus</span>
             )}
+            {viewMode === VIEW_SPLIT && canStepPanelImage && (
+              <div className="media-nav media-nav-inline">
+                <button
+                  className="btn btn-secondary"
+                  disabled={withinPos === 0}
+                  onClick={() => stepPanelImage(-1)}
+                  aria-label="Previous image in this panel"
+                >
+                  ‹
+                </button>
+                <span>
+                  {withinPos + 1} / {withinCount}
+                </span>
+                <button
+                  className="btn btn-secondary"
+                  disabled={withinPos === withinCount - 1}
+                  onClick={() => stepPanelImage(1)}
+                  aria-label="Next image in this panel"
+                >
+                  ›
+                </button>
+              </div>
+            )}
             {viewMode === VIEW_SPLIT && media.length > 1 && (
               <div className="media-thumbs media-thumbs-inline">
-                {media.map((url, i) => (
+                {panelGroups.map((group) => (
                   <button
-                    key={url}
+                    key={panelGroupKey(group.tag)}
                     type="button"
-                    className={`media-thumb${i === mediaIdx ? " active" : ""}`}
-                    onClick={() => setMediaIdx(i)}
-                    title={panelTags[i] || `Image ${i + 1}`}
+                    className={`media-thumb${group.indexes.includes(mediaIdx) ? " active" : ""}`}
+                    onClick={() => selectPanel(group.tag)}
+                    title={
+                      group.indexes.length > 1
+                        ? `${group.tag} · ${group.indexes.length} images`
+                        : group.tag
+                    }
                   >
-                    {shortPanelLabel(panelTags[i] || `Image ${i + 1}`)}
+                    {shortPanelLabel(group.tag)}
                   </button>
                 ))}
               </div>
@@ -448,17 +544,19 @@ export default function ImageDetail({
 
           {(panelTags.length > 0 || tags.length > 0) && (
             <div className="detail-meta-block">
-              {panelTags.length > 0 && (
+              {panelGroups.length > 0 && (
                 <div className="panel-tag-row">
-                  {panelTags.map((tag, i) => (
+                  {panelGroups.map((group) => (
                     <span
-                      key={`${tag}-${i}`}
+                      key={group.tag}
                       className={`badge badge-panel${
-                        i === mediaIdx && !showOrientation ? " badge-panel-current" : ""
+                        group.indexes.includes(mediaIdx) && !showOrientation
+                          ? " badge-panel-current"
+                          : ""
                       }`}
                     >
-                      {panelTags.length > 1 ? `${i + 1}. ` : ""}
-                      {tag}
+                      {group.tag}
+                      {group.indexes.length > 1 ? ` (${group.indexes.length})` : ""}
                     </span>
                   ))}
                 </div>
@@ -564,20 +662,39 @@ export default function ImageDetail({
 
           {(image.revision_history || []).length > 0 && (
             <div className="detail-meta-block">
-              <div className="detail-meta-heading">Revision history</div>
-              <ul className="detail-revision-list">
-                {[...image.revision_history]
-                  .sort((a, b) => a.version - b.version)
-                  .map((rev) => (
-                    <li key={rev.version}>
-                      <span className="detail-revision-ver">V{rev.version}</span>
-                      <span className="detail-revision-body">
-                        {rev.name} — {new Date(rev.timestamp).toLocaleDateString()}
-                        {rev.comment && <div className="revision-comment">{rev.comment}</div>}
-                      </span>
-                    </li>
-                  ))}
-              </ul>
+              <button
+                type="button"
+                className="detail-meta-heading detail-revision-toggle"
+                onClick={() => setShowRevisions((open) => !open)}
+                aria-expanded={showRevisions}
+              >
+                <span>Revision history</span>
+                <span className="detail-revision-toggle-meta">
+                  {(image.revision_history || []).length}
+                  <span className="detail-revision-arrow" aria-hidden="true">
+                    {showRevisions ? "▴" : "▾"}
+                  </span>
+                </span>
+              </button>
+              {showRevisions && (
+                <ul className="detail-revision-list">
+                  {[...image.revision_history]
+                    .sort((a, b) => {
+                      const ver = (b.version ?? 0) - (a.version ?? 0);
+                      if (ver !== 0) return ver;
+                      return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+                    })
+                    .map((rev) => (
+                      <li key={rev.version}>
+                        <span className="detail-revision-ver">V{rev.version}</span>
+                        <span className="detail-revision-body">
+                          {rev.name} — {new Date(rev.timestamp).toLocaleDateString()}
+                          {rev.comment && <div className="revision-comment">{rev.comment}</div>}
+                        </span>
+                      </li>
+                    ))}
+                </ul>
+              )}
             </div>
           )}
 
@@ -598,6 +715,13 @@ export default function ImageDetail({
           </div>
         </div>
       </div>
+      {lightbox && (
+        <ImageLightbox
+          src={lightbox.src}
+          alt={lightbox.alt}
+          onClose={() => setLightbox(null)}
+        />
+      )}
     </div>
   );
 }

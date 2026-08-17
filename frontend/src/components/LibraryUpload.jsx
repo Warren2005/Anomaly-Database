@@ -1359,7 +1359,9 @@ export default function LibraryUpload({
           <div className="form-field revision-history-field">
             <label className="form-label">Revision History</label>
             <ul className="revision-history-list">
-              {editingImage.image.revision_history.map((rev) => (
+              {[...editingImage.image.revision_history]
+                .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))
+                .map((rev) => (
                 <li key={rev.version}>
                   <strong>V{rev.version}</strong> — {rev.name} —{" "}
                   {new Date(rev.timestamp).toLocaleDateString()}

@@ -62,7 +62,10 @@ export default function ReferenceCard({
             )}
           </div>
           <div className="ref-card-pair">
-            <div className="ref-card-title">{wallLocation || "—"}</div>
+            <div className="ref-card-wall">
+              <span className="ref-card-wall-label">Wall</span>
+              {wallLocation || "—"}
+            </div>
             <div className="ref-card-run">{runNumber || "—"}</div>
           </div>
         </div>

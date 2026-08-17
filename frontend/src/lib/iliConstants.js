@@ -147,6 +147,13 @@ export const PANEL_TAG_OPTIONS = [
   "Tool Pose Panel",
 ];
 
+/** Shortcuts under the Add Entry drop zone */
+export const COMMON_PANEL_TAGS = [
+  "Beamforming Panel",
+  "Image Panel",
+  "Raw Panel",
+];
+
 /** Past ILI runs available in Add Entry (newest first, including sub-runs) */
 export const RUN_OPTIONS = [
   "ILIT0016",

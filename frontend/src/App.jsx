@@ -71,9 +71,14 @@ function clampWindowZoom(value) {
   );
 }
 
+function getWindowZoom() {
+  const raw = document.documentElement.style.getPropertyValue("--window-zoom");
+  const n = Number.parseFloat(raw);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+}
+
 function applyWindowZoom(value) {
   document.documentElement.style.setProperty("--window-zoom", String(value));
-  document.documentElement.style.zoom = String(value);
 }
 
 function useWindowZoom() {
@@ -83,21 +88,18 @@ function useWindowZoom() {
     const onWheel = (e) => {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      const current = Number.parseFloat(document.documentElement.style.zoom || "1") || 1;
       const delta = e.deltaY > 0 ? -WINDOW_ZOOM_STEP : WINDOW_ZOOM_STEP;
-      applyWindowZoom(clampWindowZoom(current + delta));
+      applyWindowZoom(clampWindowZoom(getWindowZoom() + delta));
     };
 
     const onKeyDown = (e) => {
       if (!e.ctrlKey && !e.metaKey) return;
       if (e.key === "+" || e.key === "=") {
         e.preventDefault();
-        const current = Number.parseFloat(document.documentElement.style.zoom || "1") || 1;
-        applyWindowZoom(clampWindowZoom(current + WINDOW_ZOOM_STEP));
+        applyWindowZoom(clampWindowZoom(getWindowZoom() + WINDOW_ZOOM_STEP));
       } else if (e.key === "-" || e.key === "_") {
         e.preventDefault();
-        const current = Number.parseFloat(document.documentElement.style.zoom || "1") || 1;
-        applyWindowZoom(clampWindowZoom(current - WINDOW_ZOOM_STEP));
+        applyWindowZoom(clampWindowZoom(getWindowZoom() - WINDOW_ZOOM_STEP));
       } else if (e.key === "0") {
         e.preventDefault();
         applyWindowZoom(1);

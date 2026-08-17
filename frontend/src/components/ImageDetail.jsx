@@ -5,8 +5,7 @@ import ZoomableImage from "./ZoomableImage";
 import ImageLightbox from "./ImageLightbox";
 
 const VIEW_FOCUS = "focus";
-const VIEW_PANELS = "panels";
-const VIEW_SPLIT = "split";
+const VIEW_GRID = "grid";
 
 function shortPanelLabel(tag) {
   return (tag || "Panel").replace(/ Panel$/i, "").trim();
@@ -42,8 +41,8 @@ export default function ImageDetail({
   const [unlockInput, setUnlockInput] = useState("");
   const [unlocking, setUnlocking] = useState(false);
   const [unlockError, setUnlockError] = useState(null);
-  const [viewMode, setViewMode] = useState(VIEW_FOCUS);
   const [lightbox, setLightbox] = useState(null);
+  const [viewMode, setViewMode] = useState(VIEW_FOCUS);
   const [showRevisions, setShowRevisions] = useState(true);
 
   const canNavigate = typeof currentIndex === "number" && totalCount > 0 && (onPrev || onNext);
@@ -82,18 +81,6 @@ export default function ImageDetail({
   const withinCount = currentGroup?.indexes.length || 1;
   const canStepPanelImage = withinCount > 1;
 
-  const panelSlots = useMemo(
-    () =>
-      panelGroups.map((group) => ({
-        tag: group.tag,
-        index: group.indexes[0],
-        url: group.urls[0],
-        count: group.indexes.length,
-        active: group.indexes.includes(mediaIdx),
-      })),
-    [panelGroups, mediaIdx]
-  );
-
   const selectPanel = (tag) => {
     const group = panelGroups.find((g) => panelGroupKey(g.tag) === panelGroupKey(tag));
     if (!group) return;
@@ -108,7 +95,6 @@ export default function ImageDetail({
   };
 
   const canUsePanels = media.length > 1;
-  const canUseSplit = Boolean(orientation_image_url);
 
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
@@ -125,14 +111,11 @@ export default function ImageDetail({
   }, [image.id]);
 
   useEffect(() => {
-    if (viewMode === VIEW_PANELS && !canUsePanels) setViewMode(VIEW_FOCUS);
-    if (viewMode === VIEW_SPLIT && !canUseSplit) setViewMode(VIEW_FOCUS);
-  }, [viewMode, canUsePanels, canUseSplit]);
+    if (viewMode === VIEW_GRID && !canUsePanels) setViewMode(VIEW_FOCUS);
+  }, [viewMode, canUsePanels]);
 
   useEffect(() => {
-    if (viewMode !== VIEW_FOCUS) {
-      setShowOrientation(false);
-    }
+    if (viewMode !== VIEW_FOCUS) setShowOrientation(false);
   }, [viewMode]);
 
   useEffect(() => {
@@ -313,9 +296,9 @@ export default function ImageDetail({
         </div>
       </div>
 
-      <div className={`detail-content${viewMode !== VIEW_FOCUS ? " detail-content-wide" : ""}`}>
-        <div className="detail-image-container">
-          {(canUsePanels || canUseSplit) && (
+      <div className="detail-content">
+        <div className={`detail-image-container${viewMode === VIEW_GRID ? " is-grid" : ""}`}>
+          {canUsePanels && (
             <div className="detail-view-toggle" role="group" aria-label="Image layout">
               <button
                 type="button"
@@ -324,73 +307,41 @@ export default function ImageDetail({
               >
                 Focus
               </button>
-              {canUsePanels && (
-                <button
-                  type="button"
-                  className={`btn ${viewMode === VIEW_PANELS ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setViewMode(VIEW_PANELS)}
-                >
-                  Panels
-                </button>
-              )}
-              {canUseSplit && (
-                <button
-                  type="button"
-                  className={`btn ${viewMode === VIEW_SPLIT ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setViewMode(VIEW_SPLIT)}
-                >
-                  Side view
-                </button>
-              )}
+              <button
+                type="button"
+                className={`btn ${viewMode === VIEW_GRID ? "btn-primary" : "btn-secondary"}`}
+                onClick={() => setViewMode(VIEW_GRID)}
+              >
+                Grid
+              </button>
             </div>
           )}
 
-          {viewMode === VIEW_PANELS ? (
-            <div className="panel-mosaic">
-              {panelSlots.map((slot) => (
-                <button
-                  type="button"
-                  key={slot.tag}
-                  className={`panel-slot${slot.active ? " is-active" : ""}`}
-                  onClick={() => {
-                    selectPanel(slot.tag);
-                    openLightbox(resolveImageUrl(slot.url), slot.tag);
-                  }}
-                  title={`Open ${slot.tag} full size`}
-                >
-                  <div className="panel-slot-label">
-                    {shortPanelLabel(slot.tag)}
-                    {slot.count > 1 ? ` · ${slot.count}` : ""}
-                  </div>
-                  <div className="panel-slot-frame">
-                    <img src={resolveImageUrl(slot.url)} alt={slot.tag} />
-                  </div>
-                </button>
-              ))}
-            </div>
-          ) : viewMode === VIEW_SPLIT ? (
-            <div className="detail-split-view">
-              <div className="detail-split-pane">
-                <div className="detail-split-label">
-                  {currentPanelTag ? shortPanelLabel(currentPanelTag) : "Primary"}
-                </div>
-                <ZoomableImage
-                  src={resolveImageUrl(media[mediaIdx] || image_url)}
-                  alt={title}
-                  onOpen={() =>
-                    openLightbox(resolveImageUrl(media[mediaIdx] || image_url), title)
-                  }
-                />
-              </div>
-              <div className="detail-split-pane">
-                <div className="detail-split-label">Orientation</div>
-                <ZoomableImage
-                  src={resolveImageUrl(orientation_image_url)}
-                  alt="Orientation reference"
-                  onOpen={() =>
-                    openLightbox(resolveImageUrl(orientation_image_url), "Orientation reference")
-                  }
-                />
+          {viewMode === VIEW_GRID ? (
+            <div className="panel-layout">
+              <div
+                className="panel-masonry"
+                aria-label="Panel grid"
+              >
+                {media.map((url, i) => {
+                  const tag = (panelTags[i] || `Image ${i + 1}`).trim();
+                  const active = i === mediaIdx;
+                  return (
+                    <button
+                      type="button"
+                      key={`${url}-${i}`}
+                      className={`panel-slot${active ? " is-active" : ""}`}
+                      onClick={() => {
+                        setMediaIdx(i);
+                        openLightbox(resolveImageUrl(url), tag);
+                      }}
+                      title={`Open ${tag}`}
+                    >
+                      <div className="panel-slot-label">{shortPanelLabel(tag)}</div>
+                      <img src={resolveImageUrl(url)} alt={tag} />
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : (
@@ -451,61 +402,16 @@ export default function ImageDetail({
             </>
           )}
 
-          <div className="detail-controls">
-            {viewMode === VIEW_FOCUS && orientation_image_url && (
+          {viewMode === VIEW_FOCUS && orientation_image_url && (
+            <div className="detail-controls">
               <button
                 className={`btn ${showOrientation ? "btn-primary" : "btn-secondary"}`}
                 onClick={handleToggleOrientation}
               >
                 {showOrientation ? "Show Original" : "View Orientation Image"}
               </button>
-            )}
-            {viewMode === VIEW_PANELS && (
-              <span className="detail-view-hint">Click a panel to open it in Focus</span>
-            )}
-            {viewMode === VIEW_SPLIT && canStepPanelImage && (
-              <div className="media-nav media-nav-inline">
-                <button
-                  className="btn btn-secondary"
-                  disabled={withinPos === 0}
-                  onClick={() => stepPanelImage(-1)}
-                  aria-label="Previous image in this panel"
-                >
-                  ‹
-                </button>
-                <span>
-                  {withinPos + 1} / {withinCount}
-                </span>
-                <button
-                  className="btn btn-secondary"
-                  disabled={withinPos === withinCount - 1}
-                  onClick={() => stepPanelImage(1)}
-                  aria-label="Next image in this panel"
-                >
-                  ›
-                </button>
-              </div>
-            )}
-            {viewMode === VIEW_SPLIT && media.length > 1 && (
-              <div className="media-thumbs media-thumbs-inline">
-                {panelGroups.map((group) => (
-                  <button
-                    key={panelGroupKey(group.tag)}
-                    type="button"
-                    className={`media-thumb${group.indexes.includes(mediaIdx) ? " active" : ""}`}
-                    onClick={() => selectPanel(group.tag)}
-                    title={
-                      group.indexes.length > 1
-                        ? `${group.tag} · ${group.indexes.length} images`
-                        : group.tag
-                    }
-                  >
-                    {shortPanelLabel(group.tag)}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         <div className="detail-metadata">
@@ -547,17 +453,22 @@ export default function ImageDetail({
               {panelGroups.length > 0 && (
                 <div className="panel-tag-row">
                   {panelGroups.map((group) => (
-                    <span
+                    <button
+                      type="button"
                       key={group.tag}
                       className={`badge badge-panel${
                         group.indexes.includes(mediaIdx) && !showOrientation
                           ? " badge-panel-current"
                           : ""
                       }`}
+                      onClick={() => {
+                        selectPanel(group.tag);
+                        setShowOrientation(false);
+                      }}
                     >
                       {group.tag}
                       {group.indexes.length > 1 ? ` (${group.indexes.length})` : ""}
-                    </span>
+                    </button>
                   ))}
                 </div>
               )}
@@ -576,9 +487,12 @@ export default function ImageDetail({
               <span className="orientation-detail-label">Orientation</span>
               <button
                 type="button"
-                onClick={() => setViewMode(VIEW_SPLIT)}
+                onClick={() => {
+                  setViewMode(VIEW_FOCUS);
+                  handleToggleOrientation();
+                }}
                 className="orientation-detail-thumb"
-                title="Open side-by-side with orientation"
+                title="View orientation image"
               >
                 <img src={resolveImageUrl(orientation_image_url)} alt="Orientation reference" />
               </button>

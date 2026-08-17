@@ -8,6 +8,7 @@ import {
   IDENTIFICATION_DEFAULTS,
   ACCEPTED_IMAGE_TYPES,
   PANEL_TAG_OPTIONS,
+  COMMON_PANEL_TAGS,
   RUN_OPTIONS,
   RUN_DESCRIPTIONS,
   INTERACTION_OPTIONS,
@@ -18,6 +19,49 @@ import {
 const ADD_NEW_RUN = "__add_new__";
 const ADD_NEW_TAG = "__add_new_tag__";
 const CRACK_TYPE = "Crack-like";
+
+const FIELD_LABELS = {
+  anomaly_type: "Anomaly Type",
+  run_number: "Run",
+  identification: "Identification",
+  anomaly_id: "Anomaly ID",
+  classification_status: "Classification Status",
+  wall_location: "Wall Location",
+  crack_image_angles: "Crack Angle",
+  contributor_name: "Your Name",
+  signal_description: "Detection signature",
+  differential_diagnosis: "Similar anomalies / differential diagnosis",
+  limitations_uncertainty: "Limitations / uncertainty",
+  interacts_with_other_features: "Interacting?",
+  interaction_related_items: "Related features",
+  file: "Panel image",
+  depth: "Depth",
+  width: "Width",
+  length: "Length",
+  zero_angle_frame_index: "ZeroAngle Frame Index",
+  pipe_angle: "Pipe Angle",
+};
+
+function missingFieldLabels(errs) {
+  const labels = [];
+  const seen = new Set();
+  const add = (label) => {
+    if (!seen.has(label)) {
+      seen.add(label);
+      labels.push(label);
+    }
+  };
+  for (const key of Object.keys(errs)) {
+    if (key.startsWith("panel_") || key.startsWith("existing_")) {
+      add("Panel tag on each image");
+    } else if (key === "file") {
+      add(errs.file.includes("panel tag") ? "Panel tag on each image" : "At least one panel image");
+    } else {
+      add(FIELD_LABELS[key] || key);
+    }
+  }
+  return labels;
+}
 
 const FALLBACK_RUNS = RUN_OPTIONS.map((run) => ({
   run,
@@ -111,6 +155,7 @@ export default function LibraryUpload({
   const [previews, setPreviews] = useState([]);
   const [primaryIndex, setPrimaryIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [draggingPanel, setDraggingPanel] = useState(null);
   const [form, setForm] = useState(initialForm);
   const [existingMedia, setExistingMedia] = useState(() => existingMediaFromDetail(editingImage));
   const [uploading, setUploading] = useState(false);
@@ -140,7 +185,10 @@ export default function LibraryUpload({
   const [addingTag, setAddingTag] = useState(false);
   const [addTagError, setAddTagError] = useState(null);
   const [previewLightbox, setPreviewLightbox] = useState(null);
+  const [missingFields, setMissingFields] = useState(null);
   const fileInputRef = useRef(null);
+  const shortcutInputRef = useRef(null);
+  const pendingPanelRef = useRef("");
 
   const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
   const typeIdentifications = IDENTIFICATION_BY_TYPE[form.anomaly_type] || null;
@@ -174,13 +222,15 @@ export default function LibraryUpload({
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   useEffect(() => {
-    if (!previewLightbox) return undefined;
+    if (!previewLightbox && !missingFields) return undefined;
     const onKey = (e) => {
-      if (e.key === "Escape") setPreviewLightbox(null);
+      if (e.key !== "Escape") return;
+      if (missingFields) setMissingFields(null);
+      else setPreviewLightbox(null);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [previewLightbox]);
+  }, [previewLightbox, missingFields]);
 
   const openPreviewLightbox = useCallback((src, label = "") => {
     if (!src) return;
@@ -312,7 +362,7 @@ export default function LibraryUpload({
     [runs]
   );
 
-  const addFiles = useCallback((incoming) => {
+  const addFiles = useCallback((incoming, panelTag = "") => {
     const list = Array.from(incoming || []).filter((f) =>
       ACCEPTED_IMAGE_TYPES.includes(f.type) || f.type.startsWith("image/")
     );
@@ -323,7 +373,7 @@ export default function LibraryUpload({
     setError(null);
     setSuccess(null);
     setFiles((prev) => [...prev, ...list]);
-    setFilePanelTags((prev) => [...prev, ...list.map(() => "")]);
+    setFilePanelTags((prev) => [...prev, ...list.map(() => panelTag)]);
     list.forEach((f) => {
       const reader = new FileReader();
       reader.onload = (e) => {
@@ -407,6 +457,29 @@ export default function LibraryUpload({
     setIsDragging(false);
     addFiles(e.dataTransfer.files);
   }, [addFiles]);
+
+  const openPanelShortcut = (tag) => {
+    pendingPanelRef.current = tag;
+    shortcutInputRef.current?.click();
+  };
+
+  const handleShortcutDragOver = (e, tag) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingPanel(tag);
+  };
+
+  const handleShortcutDragLeave = (e) => {
+    e.preventDefault();
+    setDraggingPanel(null);
+  };
+
+  const handleShortcutDrop = (e, tag) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingPanel(null);
+    addFiles(e.dataTransfer.files, tag);
+  };
 
   const handleFormChange = (field, value) => {
     setForm((prev) => {
@@ -552,6 +625,7 @@ export default function LibraryUpload({
     const errs = validate();
     if (Object.keys(errs).length) {
       setFieldErrors(errs);
+      setMissingFields(missingFieldLabels(errs));
       return;
     }
     setUploading(true);
@@ -665,24 +739,23 @@ export default function LibraryUpload({
 
   return (
     <div className="library-upload">
-      <div className="library-browser-header">
-        <div>
-          <h2 className="library-browser-title">{isEditMode ? "Edit Entry" : "Add Entry"}</h2>
-          <p className="library-browser-subtitle">
-            {isEditMode
-              ? "Update fields or manage this anomaly's images — at least one image must remain"
-              : "Add one or more panel screenshots for the same anomaly — each image needs its own panel tag"}
-          </p>
-        </div>
-        {isEditMode && (
-          <button type="button" className="btn btn-secondary" onClick={onCancel}>
-            Cancel
-          </button>
-        )}
-      </div>
-
       <div className="upload-landscape">
         <div className="upload-media-col">
+          <div className="library-browser-header">
+            <div>
+              <h2 className="library-browser-title">{isEditMode ? "Edit Entry" : "Add Entry"}</h2>
+              <p className="library-browser-subtitle">
+                {isEditMode
+                  ? "Update fields or manage this anomaly's images — at least one image must remain"
+                  : "Upload panel screenshots and tag each one."}
+              </p>
+            </div>
+            {isEditMode && (
+              <button type="button" className="btn btn-secondary" onClick={onCancel}>
+                Cancel
+              </button>
+            )}
+          </div>
           <div
             className={`dropzone${isDragging ? " dropzone-active" : ""}${fieldErrors.file ? " has-error" : ""}`}
             onDragOver={handleDragOver}
@@ -707,6 +780,49 @@ export default function LibraryUpload({
                 e.target.value = "";
               }}
             />
+          </div>
+
+          <div className="panel-shortcut-block">
+            <p className="form-hint media-preview-hint">Quick add by panel</p>
+            <input
+              ref={shortcutInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/tiff,image/gif,image/webp"
+              multiple
+              style={{ display: "none" }}
+              onChange={(e) => {
+                addFiles(e.target.files, pendingPanelRef.current);
+                pendingPanelRef.current = "";
+                e.target.value = "";
+              }}
+            />
+            <div className="panel-shortcut-grid">
+              {COMMON_PANEL_TAGS.map((tag) => {
+                const count =
+                  filePanelTags.filter((t) => t === tag).length +
+                  survivingExisting.filter((m) => m.panelTag === tag).length;
+                const short = tag.replace(/ Panel$/i, "").trim();
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={`panel-shortcut${draggingPanel === tag ? " is-dragging" : ""}${
+                      count > 0 ? " has-images" : ""
+                    }`}
+                    onClick={() => openPanelShortcut(tag)}
+                    onDragOver={(e) => handleShortcutDragOver(e, tag)}
+                    onDragLeave={handleShortcutDragLeave}
+                    onDrop={(e) => handleShortcutDrop(e, tag)}
+                    title={`Add ${tag} image`}
+                  >
+                    <span className="panel-shortcut-label">{short}</span>
+                    <span className="panel-shortcut-hint">
+                      {count > 0 ? `${count} added` : "Drop or click"}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {isEditMode && survivingExisting.length > 0 && (
@@ -862,6 +978,7 @@ export default function LibraryUpload({
           )}
         </div>
 
+      <div className="upload-form-col">
       <form className="upload-form" onSubmit={handleSubmit}>
         <div className="form-row">
           <div className="form-field">
@@ -1459,6 +1576,36 @@ export default function LibraryUpload({
         </button>
       </form>
       </div>
+      </div>
+
+      {missingFields && (
+        <div
+          className="leave-confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="missing-fields-title"
+          onClick={() => setMissingFields(null)}
+        >
+          <div className="leave-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 id="missing-fields-title">Can’t save yet</h3>
+            <p>Fill in the missing fields, then try again:</p>
+            <ul className="missing-fields-list">
+              {missingFields.map((label) => (
+                <li key={label}>{label}</li>
+              ))}
+            </ul>
+            <div className="leave-confirm-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setMissingFields(null)}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {previewLightbox && (
         <div

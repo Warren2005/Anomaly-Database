@@ -147,7 +147,16 @@
       "Bash(curl -s -X PUT http://localhost:8001/api/v1/library/be69e86d-31ce-4546-b224-b47db59fa2b8 -H 'X-Delete-Passkey: admin123' -F 'contributor_name=Person A' -F 'contributor_comment=First edit' -F expected_updated_at=2026-08-14T16:26:33.253801Z -w '\\\\nstatus:%{http_code}\\\\n')",
       "Bash(curl -s -X PUT http://localhost:8001/api/v1/library/be69e86d-31ce-4546-b224-b47db59fa2b8 -H 'X-Delete-Passkey: admin123' -F 'contributor_name=Person B' -F 'contributor_comment=Second edit, should be rejected' -F expected_updated_at=2026-08-14T16:26:33.253801Z -w '\\\\nstatus:%{http_code}\\\\n')",
       "Bash(curl -s -X DELETE http://localhost:8001/api/v1/library/be69e86d-31ce-4546-b224-b47db59fa2b8 -H 'X-Delete-Passkey: admin123' -w '\\\\nstatus:%{http_code}\\\\n')",
-      "Bash(curl -s -X PUT http://localhost:8001/api/v1/library/be69e86d-31ce-4546-b224-b47db59fa2b8 -H 'X-Delete-Passkey: admin123' -F contributor_name=Collaborator -w '\\\\nstatus:%{http_code}\\\\n')"
+      "Bash(curl -s -X PUT http://localhost:8001/api/v1/library/be69e86d-31ce-4546-b224-b47db59fa2b8 -H 'X-Delete-Passkey: admin123' -F contributor_name=Collaborator -w '\\\\nstatus:%{http_code}\\\\n')",
+      "Bash(git fetch *)",
+      "Bash(git commit -m ' *)",
+      "Bash(venv/Scripts/python.exe -m pytest tests/ -q)",
+      "Bash(python -c \"import playwright\")",
+      "Bash(taskkill //PID 41216 //F)",
+      "Bash(curl -s http://localhost:8001/api/v1/images/472c2da6-5d47-4798-b96e-5b2118ec9dbe/file -o /tmp/stored_primary.png)",
+      "Read(//tmp/**)",
+      "Bash(curl -s http://localhost:8001/api/v1/images/472c2da6-5d47-4798-b96e-5b2118ec9dbe/media/2 -o /tmp/stored_media2.png)",
+      "Bash(curl -s -X DELETE http://localhost:8001/api/v1/library/472c2da6-5d47-4798-b96e-5b2118ec9dbe -H \"X-Delete-Passkey: admin123\" -w \"\\\\nstatus:%{http_code}\\\\n\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

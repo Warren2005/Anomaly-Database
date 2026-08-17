@@ -153,13 +153,13 @@ async def upload_to_library(
     if interacts_with_other_features and not parsed_interaction_items:
         raise ValidationError("Select at least one related anomaly type or component.")
 
+    # Preserve position (don't drop blank entries) — this list must stay
+    # index-aligned with `files` below, same convention as the edit
+    # endpoint's `final_tags`. Filtering out blanks here would silently
+    # shift every tag after a gap onto the wrong file.
     parsed_tags: list[str] = []
     if panel_tags:
-        parsed_tags = [
-            t.strip()
-            for t in panel_tags.replace(";", ",").split(",")
-            if t.strip()
-        ]
+        parsed_tags = [t.strip() for t in panel_tags.replace(";", ",").split(",")]
     # Ordered 1:1 with media files when provided that way (primary, then extras).
     # Caller may nominate a different primary via primary_index; rotate so that
     # file becomes files[0] (and its panel tag stays aligned).

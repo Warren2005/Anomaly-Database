@@ -221,6 +221,15 @@ export default function LibraryUpload({
 
   useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
+  const previewsRef = useRef(previews);
+  useEffect(() => {
+    previewsRef.current = previews;
+  }, [previews]);
+  useEffect(
+    () => () => previewsRef.current.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); }),
+    []
+  );
+
   useEffect(() => {
     if (!previewLightbox && !missingFields) return undefined;
     const onKey = (e) => {
@@ -374,13 +383,18 @@ export default function LibraryUpload({
     setSuccess(null);
     setFiles((prev) => [...prev, ...list]);
     setFilePanelTags((prev) => [...prev, ...list.map(() => panelTag)]);
-    list.forEach((f) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        setPreviews((prev) => [...prev, { url: e.target.result, name: f.name }]);
-      };
-      reader.readAsDataURL(f);
-    });
+    // Build previews synchronously (object URLs, not FileReader) so this
+    // array's order always matches `files`/`filePanelTags`. The panel-tag
+    // select, "Make primary", and remove (✕) controls are rendered per
+    // preview but index into `files`/`filePanelTags`/`primaryIndex` by that
+    // same position — FileReader's async onload completes in whatever
+    // order the browser finishes reading each file, not read-start order,
+    // so appending previews there could silently desync which thumbnail
+    // the user is looking at from which file their click actually affects.
+    setPreviews((prev) => [
+      ...prev,
+      ...list.map((f) => ({ url: URL.createObjectURL(f), name: f.name })),
+    ]);
   }, []);
 
   const removeFile = (idx) => {
@@ -388,7 +402,10 @@ export default function LibraryUpload({
     const combinedIdx = existingCount + idx;
     setFiles((prev) => prev.filter((_, i) => i !== idx));
     setFilePanelTags((prev) => prev.filter((_, i) => i !== idx));
-    setPreviews((prev) => prev.filter((_, i) => i !== idx));
+    setPreviews((prev) => {
+      if (prev[idx]?.url) URL.revokeObjectURL(prev[idx].url);
+      return prev.filter((_, i) => i !== idx);
+    });
     setPrimaryIndex((prev) => {
       if (prev === combinedIdx) return 0;
       if (prev > combinedIdx) return prev - 1;
@@ -706,6 +723,7 @@ export default function LibraryUpload({
   };
 
   const handleReset = () => {
+    previews.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); });
     setFiles([]);
     setFilePanelTags([]);
     setPreviews([]);

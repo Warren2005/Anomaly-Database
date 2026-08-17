@@ -3108,8 +3108,8 @@ button.badge {
 }
 
 .panel-shortcut-grid {
-  display: flex;
-  flex-wrap: nowrap;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
   gap: 8px;
 }
 
@@ -3118,12 +3118,12 @@ button.badge {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 2px;
-  flex: 1;
+  gap: 4px;
+  aspect-ratio: 1;
   min-width: 0;
   padding: 8px 6px;
   border: 1.5px dashed var(--border-strong);
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--bg-surface);
   color: inherit;
   font: inherit;
@@ -3133,15 +3133,13 @@ button.badge {
 }
 
 .panel-shortcut-label {
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   letter-spacing: 0.03em;
   text-transform: uppercase;
   color: var(--accent);
   width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  line-height: 1.2;
 }
 
 .panel-shortcut-hint {

@@ -19,7 +19,7 @@ from fastapi import APIRouter, File, Form, Header, UploadFile
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
-from app.core.errors import ConflictError, ForbiddenError, NotFoundError, ValidationError
+from app.core.errors import ForbiddenError, NotFoundError, ValidationError
 from app.models.image import Image
 from app.schemas.image import ImageResponse, LibraryUploadResponse
 from app.schemas.search import ImageDetailResponse, LibraryBrowseResponse
@@ -588,7 +588,6 @@ async def update_library_entry(
     zero_angle_frame_index: Optional[str] = Form(None),
     track: Optional[str] = Form(None),
     primary_index: Optional[int] = Form(None),
-    expected_updated_at: Optional[str] = Form(None),
     x_delete_passkey: Optional[str] = Header(default=None),
 ):
     """Edit an existing library entry's fields and/or its images.
@@ -605,13 +604,6 @@ async def update_library_entry(
     panel tag. The resulting entry must end up with at least one image —
     if it wouldn't, the whole edit is rejected before anything is
     written or uploaded.
-
-    Concurrency: `expected_updated_at` is the `updated_at` the client last
-    saw for this entry (echoed back verbatim from whatever load populated
-    the edit form). If someone else deleted or saved over the entry since
-    then, this no longer matches the stored value and the edit is rejected
-    with a 409 instead of silently overwriting their change — optional so
-    direct API callers that don't track it aren't forced to.
     """
     if x_delete_passkey != settings.library_delete_passkey:
         raise ForbiddenError("Incorrect passkey.")
@@ -619,24 +611,8 @@ async def update_library_entry(
     existing = await file_store_service.get_image(image_id)
     if not existing:
         raise NotFoundError(
-            "This entry no longer exists — it may have been deleted by "
-            "someone else. Please reload the library.",
-            details={"image_id": str(image_id)},
+            f"Image {image_id} not found", details={"image_id": str(image_id)}
         )
-
-    if expected_updated_at:
-        try:
-            expected_dt = datetime.fromisoformat(expected_updated_at)
-        except ValueError as exc:
-            raise ValidationError(
-                f"Invalid expected_updated_at: {expected_updated_at!r}"
-            ) from exc
-        if expected_dt != existing.updated_at:
-            raise ConflictError(
-                "This entry was changed by someone else since you opened "
-                "it. Please reload and re-apply your changes.",
-                details={"image_id": str(image_id)},
-            )
 
     track_val = _resolved_num(track, existing.track, int)
     if track_val is not None and (track_val < 0 or track_val > 21):

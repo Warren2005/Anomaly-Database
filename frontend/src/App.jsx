@@ -60,7 +60,63 @@ function ImageSearchIcon() {
   );
 }
 
+const WINDOW_ZOOM_MIN = 0.75;
+const WINDOW_ZOOM_MAX = 1.75;
+const WINDOW_ZOOM_STEP = 0.05;
+
+function clampWindowZoom(value) {
+  return Math.min(
+    WINDOW_ZOOM_MAX,
+    Math.max(WINDOW_ZOOM_MIN, Math.round(value * 100) / 100)
+  );
+}
+
+function applyWindowZoom(value) {
+  document.documentElement.style.setProperty("--window-zoom", String(value));
+  document.documentElement.style.zoom = String(value);
+}
+
+function useWindowZoom() {
+  useEffect(() => {
+    applyWindowZoom(1);
+
+    const onWheel = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      const current = Number.parseFloat(document.documentElement.style.zoom || "1") || 1;
+      const delta = e.deltaY > 0 ? -WINDOW_ZOOM_STEP : WINDOW_ZOOM_STEP;
+      applyWindowZoom(clampWindowZoom(current + delta));
+    };
+
+    const onKeyDown = (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        const current = Number.parseFloat(document.documentElement.style.zoom || "1") || 1;
+        applyWindowZoom(clampWindowZoom(current + WINDOW_ZOOM_STEP));
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        const current = Number.parseFloat(document.documentElement.style.zoom || "1") || 1;
+        applyWindowZoom(clampWindowZoom(current - WINDOW_ZOOM_STEP));
+      } else if (e.key === "0") {
+        e.preventDefault();
+        applyWindowZoom(1);
+      }
+    };
+
+    window.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      window.removeEventListener("wheel", onWheel, { capture: true });
+      window.removeEventListener("keydown", onKeyDown);
+      document.documentElement.style.zoom = "";
+      document.documentElement.style.removeProperty("--window-zoom");
+    };
+  }, []);
+}
+
 export default function App() {
+  useWindowZoom();
   const [state, setState] = useState("idle"); // idle | searching | results | detail
   const [results, setResults] = useState(null);
   const [selectedResult, setSelectedResult] = useState(null);
@@ -69,6 +125,9 @@ export default function App() {
   const [error, setError] = useState(null);
   const [searchPanelTag, setSearchPanelTag] = useState("");
   const [activeSearchPanelTag, setActiveSearchPanelTag] = useState("");
+  const [panelPickerOpen, setPanelPickerOpen] = useState(false);
+  const [pendingPanelTag, setPendingPanelTag] = useState("");
+  const pendingPanelRef = useRef("");
   const [isDark, setIsDark] = useState(
     () => (localStorage.getItem("theme") ?? "dark") === "dark"
   );
@@ -108,6 +167,18 @@ export default function App() {
     }
     action?.();
   }, [mode, addEntryDirty]);
+
+  useEffect(() => {
+    if (!panelPickerOpen) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setPanelPickerOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [panelPickerOpen]);
 
   useEffect(() => {
     if (!addEntryDirty) return undefined;
@@ -180,23 +251,34 @@ export default function App() {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (!searchPanelTag) {
-      setError("Select a panel type before searching by image.");
+    const panel = pendingPanelRef.current || searchPanelTag;
+    if (!panel) {
+      setPanelPickerOpen(true);
       return;
     }
     runWithLeaveGuard("search", () => {
-      void handleSearch(file, searchPanelTag);
+      void handleSearch(file, panel);
     });
   }, [runWithLeaveGuard, handleSearch, searchPanelTag]);
 
   const startImageSearch = useCallback(() => {
-    if (!searchPanelTag) {
-      setError("Select a panel type before searching by image.");
-      return;
-    }
+    setError(null);
+    setPendingPanelTag(searchPanelTag);
+    setPanelPickerOpen(true);
+  }, [searchPanelTag]);
+
+  const closePanelPicker = useCallback(() => {
+    setPanelPickerOpen(false);
+  }, []);
+
+  const confirmPanelAndPick = useCallback(() => {
+    if (!pendingPanelTag) return;
+    pendingPanelRef.current = pendingPanelTag;
+    setSearchPanelTag(pendingPanelTag);
+    setPanelPickerOpen(false);
     setError(null);
     imageSearchRef.current?.click();
-  }, [searchPanelTag]);
+  }, [pendingPanelTag]);
 
   const handleResultClick = useCallback((result) => {
     setSelectedResult(result);
@@ -290,28 +372,12 @@ export default function App() {
           </button>
         </nav>
         <div className="header-actions">
-          <select
-            className="form-select header-panel-select"
-            value={searchPanelTag}
-            onChange={(e) => setSearchPanelTag(e.target.value)}
-            aria-label="Panel type for image search"
-            title="Search only library entries that include this panel"
-          >
-            <option value="">Panel for search…</option>
-            {PANEL_TAG_OPTIONS.map((tag) => (
-              <option key={tag} value={tag}>{tag}</option>
-            ))}
-          </select>
           <button
             type="button"
             className="btn btn-primary header-image-search"
             onClick={startImageSearch}
             aria-label="Search by image"
-            title={
-              searchPanelTag
-                ? `Search within ${searchPanelTag} entries`
-                : "Select a panel type first, then upload an image"
-            }
+            title="Choose a panel type, then upload an image"
           >
             <ImageSearchIcon />
             <span>Search by image</span>
@@ -436,6 +502,54 @@ export default function App() {
       </main>
 
       <StatusBar health={health} results={mode === "search" ? results : null} />
+
+      {panelPickerOpen && (
+        <div
+          className="leave-confirm-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="panel-picker-title"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) closePanelPicker();
+          }}
+        >
+          <div className="leave-confirm-modal panel-picker-modal">
+            <h3 id="panel-picker-title">Select panel type</h3>
+            <p>Choose which panel to search against, then pick an image.</p>
+            <div className="panel-picker-grid" role="listbox" aria-label="Panel types">
+              {PANEL_TAG_OPTIONS.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  role="option"
+                  aria-selected={pendingPanelTag === tag}
+                  className={`chip ${pendingPanelTag === tag ? "chip-active" : ""}`}
+                  onClick={() => setPendingPanelTag(tag)}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+            <div className="leave-confirm-actions">
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={closePanelPicker}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={!pendingPanelTag}
+                onClick={confirmPanelAndPick}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {leaveAddConfirm && (
         <div

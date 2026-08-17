@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { deleteLibraryEntry, resolveImageUrl } from "../api/client";
 import { PANEL_TAG_OPTIONS, STATUS_COLORS } from "../lib/iliConstants";
 import ZoomableImage from "./ZoomableImage";
@@ -374,10 +374,7 @@ export default function ImageDetail({
                       onClick={() => setMediaIdx(i)}
                       title={panelTags[i] || `Image ${i + 1}`}
                     >
-                      <img src={resolveImageUrl(url)} alt="" />
-                      {panelTags[i] && (
-                        <span className="media-thumb-tag">{shortPanelLabel(panelTags[i])}</span>
-                      )}
+                      {shortPanelLabel(panelTags[i] || `Image ${i + 1}`)}
                     </button>
                   ))}
                 </div>
@@ -407,10 +404,7 @@ export default function ImageDetail({
                     onClick={() => setMediaIdx(i)}
                     title={panelTags[i] || `Image ${i + 1}`}
                   >
-                    <img src={resolveImageUrl(url)} alt="" />
-                    {panelTags[i] && (
-                      <span className="media-thumb-tag">{shortPanelLabel(panelTags[i])}</span>
-                    )}
+                    {shortPanelLabel(panelTags[i] || `Image ${i + 1}`)}
                   </button>
                 ))}
               </div>

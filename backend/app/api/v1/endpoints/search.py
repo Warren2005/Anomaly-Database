@@ -4,7 +4,8 @@ Similarity search endpoint.
 POST /api/v1/search/similar
 Accepts an image file, generates a CLIP embedding on-the-fly, and does a
 brute-force cosine-similarity search against every stored image's embedding
-(see app/services/file_store.py).
+(see app/services/file_store.py), returning results with feedback-adjusted
+scores.
 """
 
 import time
@@ -114,8 +115,16 @@ async def search_similar(
         rerank_time = (time.time() - rerank_start) * 1000
     matches = matches[:limit]
 
+    # Feedback-adjusted scores
+    image_ids = [image.id for image, _, _ in matches]
+    feedback_scores = await file_store_service.get_net_votes(image_ids)
+
+    FEEDBACK_WEIGHT = 0.02
     results = []
     for image, score, media_idx in matches:
+        net_vote = feedback_scores.get(image.id, 0)
+        adjusted_score = score + (net_vote * FEEDBACK_WEIGHT)
+        adjusted_score = max(0.0, min(1.0, adjusted_score))
         if media_idx is not None:
             image_url = f"/api/v1/images/{image.id}/media/{media_idx}"
         else:
@@ -123,7 +132,7 @@ async def search_similar(
         results.append(
             SearchResult(
                 image=ImageResponse.model_validate(image),
-                similarity_score=round(score, 6),
+                similarity_score=round(adjusted_score, 6),
                 image_url=image_url,
                 media_index=media_idx,
                 orientation_image_url=(
@@ -133,6 +142,9 @@ async def search_similar(
                 ),
             )
         )
+
+    # Re-sort by adjusted score
+    results.sort(key=lambda r: r.similarity_score, reverse=True)
 
     total_time = (time.time() - total_start) * 1000
 

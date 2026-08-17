@@ -3,8 +3,9 @@ import { resolveImageUrl } from "../api/client";
 
 /**
  * Catalog-style card for Library browse and image-search results.
- * Search: ID alone; identification↔%; type↔run.
- * Browse: left = ID / identification; right = type + run.
+ * Row 1: anomaly ID
+ * Row 2: identification ↔ anomaly type
+ * Row 3: wall location ↔ run
  */
 export default function ReferenceCard({
   image,
@@ -15,8 +16,9 @@ export default function ReferenceCard({
   footer = null,
 }) {
   const anomalyId = image?.anomaly_id || null;
-  const identification = image?.identification || image?.diagnosis || null;
+  const identification = image?.identification || null;
   const anomalyType = image?.anomaly_type || null;
+  const wallLocation = image?.wall_location || null;
   const runNumber = image?.run_number || null;
   const isSearch = similarityScore != null;
   const scorePct = isSearch ? `${(similarityScore * 100).toFixed(1)}%` : null;
@@ -44,44 +46,26 @@ export default function ReferenceCard({
         />
       </div>
       <div className="ref-card-body">
-        {isSearch ? (
-          <div className="ref-card-search-stack">
+        <div className="ref-card-search-stack">
+          <div className="ref-card-pair">
             <div className="ref-card-id">{anomalyId || "No Anomaly ID"}</div>
-            <div className="ref-card-pair">
-              <h3 className="ref-card-title">
-                {identification || "Untitled reference"}
-              </h3>
-              <div className="ref-card-score-text">{scorePct}</div>
-            </div>
-            <div className="ref-card-pair">
-              {anomalyType ? (
-                <span className="ref-card-type">{anomalyType}</span>
-              ) : (
-                <span />
-              )}
-              <div className="ref-card-run">{runNumber || "—"}</div>
-            </div>
+            {isSearch && <div className="ref-card-score-text">{scorePct}</div>}
           </div>
-        ) : (
-          <div className="ref-card-top">
-            <div className="ref-card-copy">
-              <div className="ref-card-id">{anomalyId || "No Anomaly ID"}</div>
-              <h3 className="ref-card-title">
-                {identification || "Untitled reference"}
-              </h3>
-            </div>
-            {(anomalyType || runNumber) && (
-              <div className="ref-card-aside">
-                {anomalyType && (
-                  <span className="ref-card-type">{anomalyType}</span>
-                )}
-                {runNumber && (
-                  <span className="ref-card-run">{runNumber}</span>
-                )}
-              </div>
+          <div className="ref-card-pair">
+            <h3 className="ref-card-title">
+              {identification || "Untitled reference"}
+            </h3>
+            {anomalyType ? (
+              <span className="ref-card-type">{anomalyType}</span>
+            ) : (
+              <span />
             )}
           </div>
-        )}
+          <div className="ref-card-pair">
+            <div className="ref-card-title">{wallLocation || "—"}</div>
+            <div className="ref-card-run">{runNumber || "—"}</div>
+          </div>
+        </div>
         {footer}
       </div>
     </article>

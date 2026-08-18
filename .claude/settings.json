@@ -156,7 +156,15 @@
       "Bash(curl -s http://localhost:8001/api/v1/images/472c2da6-5d47-4798-b96e-5b2118ec9dbe/file -o /tmp/stored_primary.png)",
       "Read(//tmp/**)",
       "Bash(curl -s http://localhost:8001/api/v1/images/472c2da6-5d47-4798-b96e-5b2118ec9dbe/media/2 -o /tmp/stored_media2.png)",
-      "Bash(curl -s -X DELETE http://localhost:8001/api/v1/library/472c2da6-5d47-4798-b96e-5b2118ec9dbe -H \"X-Delete-Passkey: admin123\" -w \"\\\\nstatus:%{http_code}\\\\n\")"
+      "Bash(curl -s -X DELETE http://localhost:8001/api/v1/library/472c2da6-5d47-4798-b96e-5b2118ec9dbe -H \"X-Delete-Passkey: admin123\" -w \"\\\\nstatus:%{http_code}\\\\n\")",
+      "Bash(venv/Scripts/python.exe -m pytest tests/test_images.py tests/test_library.py -q)",
+      "Bash(taskkill //PID 7680 //F)",
+      "Bash(venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8001)",
+      "Bash(tail -20 /tmp/backend2.log; echo ---; netstat -ano | grep ':8001' | grep LISTENING || echo \"not up yet\")",
+      "Bash(curl -sI \"http://localhost:8001/api/v1/images/1d8cd305-71dd-444a-bcd9-e82634e58091/file\")",
+      "Bash(curl -s \"http://localhost:8001/api/v1/library/browse\")",
+      "Bash(curl -s \"http://localhost:8001/api/v1/images/1d8cd305-71dd-444a-bcd9-e82634e58091/file\")",
+      "Bash(curl -s -D - -o /dev/null \"http://localhost:8001/api/v1/images/1d8cd305-71dd-444a-bcd9-e82634e58091/file\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

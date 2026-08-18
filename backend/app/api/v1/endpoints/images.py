@@ -22,6 +22,16 @@ from app.services.tag_catalog import tag_catalog_service
 
 router = APIRouter()
 
+# These endpoints are stable, index-based URLs (.../file, .../media/{n})
+# whose underlying bytes change whenever an entry's images are reordered,
+# replaced, or removed — the URL itself never changes, only what it
+# currently resolves to. Without this header, browsers are free to cache
+# a response by URL and keep serving old bytes under a since-changed
+# panel tag/primary label after an edit (see the panel-mislabeling bug
+# this fixed: a viewer's browser cached "/media/1" from before a reorder,
+# so they saw the new, correct label sitting on the old, stale picture).
+NO_CACHE_HEADERS = {"Cache-Control": "no-store"}
+
 
 @router.get("/filters", response_model=FiltersResponse)
 async def get_filters():
@@ -77,7 +87,7 @@ async def get_image_file(image_id: UUID):
     data = await local_storage_service.get_image(image.image_path)
     suffix = image.image_path.rsplit(".", 1)[-1].lower()
     media_type = "image/jpeg" if suffix in ("jpg", "jpeg") else f"image/{suffix}"
-    return Response(content=data, media_type=media_type)
+    return Response(content=data, media_type=media_type, headers=NO_CACHE_HEADERS)
 
 
 @router.get("/{image_id}/media/{index}")
@@ -105,7 +115,7 @@ async def get_image_media(image_id: UUID, index: int):
     data = await local_storage_service.get_image(path)
     suffix = path.rsplit(".", 1)[-1].lower()
     media_type = "image/jpeg" if suffix in ("jpg", "jpeg") else f"image/{suffix}"
-    return Response(content=data, media_type=media_type)
+    return Response(content=data, media_type=media_type, headers=NO_CACHE_HEADERS)
 
 
 @router.get("/{image_id}/orientation")
@@ -121,7 +131,7 @@ async def get_image_orientation(image_id: UUID):
     data = await local_storage_service.get_image(image.orientation_image_path)
     suffix = image.orientation_image_path.rsplit(".", 1)[-1].lower()
     media_type = "image/jpeg" if suffix in ("jpg", "jpeg") else f"image/{suffix}"
-    return Response(content=data, media_type=media_type)
+    return Response(content=data, media_type=media_type, headers=NO_CACHE_HEADERS)
 
 
 @router.get("/{image_id}", response_model=ImageDetailResponse)

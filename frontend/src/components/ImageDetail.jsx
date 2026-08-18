@@ -274,7 +274,6 @@ export default function ImageDetail({
               >
                 {unlocking ? "Checking…" : "Unlock"}
               </button>
-              {unlockError && <span className="detail-error delete-error">{unlockError}</span>}
             </form>
           )}
           {allowEdit && adminPasskey && !confirmDelete && (
@@ -317,7 +316,6 @@ export default function ImageDetail({
               >
                 Cancel
               </button>
-              {deleteError && <span className="detail-error delete-error">{deleteError}</span>}
             </form>
           )}
         </div>
@@ -664,6 +662,35 @@ export default function ImageDetail({
           alt={lightbox.alt}
           onClose={() => setLightbox(null)}
         />
+      )}
+      {(unlockError || deleteError) && (
+        <div
+          className="leave-confirm-overlay"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="passkey-error-title"
+          onClick={() => {
+            setUnlockError(null);
+            setDeleteError(null);
+          }}
+        >
+          <div className="leave-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 id="passkey-error-title">{unlockError || deleteError}</h3>
+            <p>Check the passkey and try again.</p>
+            <div className="leave-confirm-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => {
+                  setUnlockError(null);
+                  setDeleteError(null);
+                }}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

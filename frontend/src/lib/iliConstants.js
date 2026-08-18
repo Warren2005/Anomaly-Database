@@ -45,9 +45,9 @@ export const CRACK_IMAGE_ANGLE_OPTIONS = ["+", "-", "Both"];
 /** Display labels for the anomaly page — keep + / − on Add Entry. */
 export function formatCrackAngle(value) {
   const v = (value || "").trim();
-  if (v === "+" ) return "pos";
-  if (v === "-" || v === "−") return "neg";
-  if (v.toLowerCase() === "both") return "both";
+  if (v === "+" ) return "Pos";
+  if (v === "-" || v === "−") return "Neg";
+  if (v.toLowerCase() === "both") return "Both";
   return v;
 }
 
@@ -158,37 +158,15 @@ export const PANEL_TAG_OPTIONS = [
 
 /** Default shortcuts under the Add Entry drop zone (user-customizable) */
 export const DEFAULT_PANEL_SHORTCUTS = [
-  "Beamforming Panel",
-  "Image Panel",
-  "Raw Panel",
+  { panel: "Beamforming Panel", mode: "" },
+  { panel: "Image Panel", mode: "" },
+  { panel: "Raw Panel", mode: "" },
 ];
 
-export const COMMON_PANEL_TAGS = DEFAULT_PANEL_SHORTCUTS;
+export const COMMON_PANEL_TAGS = DEFAULT_PANEL_SHORTCUTS.map((s) => s.panel);
 
-const PANEL_SHORTCUTS_KEY = "ili-panel-shortcuts";
-
-export function loadPanelShortcuts() {
-  try {
-    const parsed = JSON.parse(localStorage.getItem(PANEL_SHORTCUTS_KEY) || "null");
-    if (!Array.isArray(parsed)) return [...DEFAULT_PANEL_SHORTCUTS];
-    const allowed = new Set(PANEL_TAG_OPTIONS);
-    const unique = [];
-    for (const tag of parsed) {
-      if (allowed.has(tag) && !unique.includes(tag)) unique.push(tag);
-    }
-    return unique;
-  } catch {
-    return [...DEFAULT_PANEL_SHORTCUTS];
-  }
-}
-
-export function savePanelShortcuts(tags) {
-  try {
-    localStorage.setItem(PANEL_SHORTCUTS_KEY, JSON.stringify(tags));
-  } catch {
-    /* ignore quota / private mode */
-  }
-}
+const PANEL_SHORTCUTS_KEY = "ili-panel-shortcuts-v2";
+const LEGACY_SHORTCUTS_KEY = "ili-panel-shortcuts";
 
 export const BEAMFORMING_PANEL = "Beamforming Panel";
 
@@ -253,6 +231,65 @@ export function anomalyTypeForBeamformingMode(type) {
   if (METAL_LOSS_BEAMFORMING_MODES.includes(t)) return "Metal Loss";
   if (CRACK_BEAMFORMING_MODES.includes(t)) return "Crack-like";
   return "";
+}
+
+export function shortcutComboKey(panel, mode = "") {
+  const p = (panel || "").trim();
+  const m = isBeamformingPanel(p) ? canonicalBeamformingType(mode) : "";
+  return `${p}::${m}`;
+}
+
+export function normalizePanelShortcut(raw) {
+  if (typeof raw === "string") {
+    if (!PANEL_TAG_OPTIONS.includes(raw)) return null;
+    return { panel: raw, mode: "" };
+  }
+  if (!raw || !PANEL_TAG_OPTIONS.includes(raw.panel)) return null;
+  return {
+    panel: raw.panel,
+    mode: isBeamformingPanel(raw.panel) ? canonicalBeamformingType(raw.mode) : "",
+  };
+}
+
+function parseStoredShortcuts(rawJson) {
+  const parsed = JSON.parse(rawJson);
+  if (!Array.isArray(parsed) || !parsed.length) return null;
+  // Old string[] layouts (Cross-Section, etc.) should not override the new defaults.
+  if (parsed.every((item) => typeof item === "string")) return null;
+  const unique = [];
+  const seen = new Set();
+  for (const raw of parsed) {
+    const shortcut = normalizePanelShortcut(raw);
+    if (!shortcut) continue;
+    const key = shortcutComboKey(shortcut.panel, shortcut.mode);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(shortcut);
+  }
+  return unique.length ? unique : null;
+}
+
+export function loadPanelShortcuts() {
+  try {
+    const current = localStorage.getItem(PANEL_SHORTCUTS_KEY);
+    if (current) {
+      const parsed = parseStoredShortcuts(current);
+      if (parsed) return parsed;
+    }
+    // Ignore legacy string layouts; v2 starts from Beamforming (no mode), Image, Raw.
+    localStorage.removeItem(LEGACY_SHORTCUTS_KEY);
+    return DEFAULT_PANEL_SHORTCUTS.map((s) => ({ ...s }));
+  } catch {
+    return DEFAULT_PANEL_SHORTCUTS.map((s) => ({ ...s }));
+  }
+}
+
+export function savePanelShortcuts(shortcuts) {
+  try {
+    localStorage.setItem(PANEL_SHORTCUTS_KEY, JSON.stringify(shortcuts));
+  } catch {
+    /* ignore quota / private mode */
+  }
 }
 
 /** Past ILI runs available in Add Entry (newest first, including sub-runs) */

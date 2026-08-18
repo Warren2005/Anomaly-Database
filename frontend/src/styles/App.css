@@ -3297,7 +3297,13 @@ button.badge {
   border: 1.5px dashed var(--border-strong);
   border-radius: 10px;
   background: var(--bg-surface);
-  transition: border-color 0.15s ease, background 0.15s ease;
+  cursor: grab;
+  user-select: none;
+  transition: border-color 0.15s ease, background 0.15s ease, opacity 0.15s ease;
+}
+
+.panel-shortcut:active {
+  cursor: grabbing;
 }
 
 .panel-shortcut-main {
@@ -3315,7 +3321,7 @@ button.badge {
   background: transparent;
   color: inherit;
   font: inherit;
-  cursor: pointer;
+  cursor: grab;
   text-align: center;
 }
 
@@ -3359,6 +3365,21 @@ button.badge {
 
 .panel-shortcut-mode-btn.has-value {
   color: var(--text-primary, inherit);
+}
+
+.panel-shortcut-mode-btn.is-locked {
+  cursor: default;
+  pointer-events: none;
+  padding-right: 10px;
+}
+
+.panel-shortcut-mode-btn.is-locked:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background: var(--select-bg);
+}
+
+.panel-shortcut-mode-btn.is-locked .panel-shortcut-mode-caret {
+  display: none;
 }
 
 .panel-shortcut-mode-kicker {
@@ -3406,6 +3427,9 @@ button.badge {
 }
 
 .panel-shortcut-picker-group {
+  position: sticky;
+  top: -4px;
+  z-index: 1;
   margin: 6px 4px 4px;
   padding: 8px 10px 4px;
   font-size: 14px;
@@ -3413,6 +3437,15 @@ button.badge {
   letter-spacing: 0.02em;
   text-transform: none;
   color: var(--accent);
+  background: var(--select-bg);
+}
+
+[data-theme="dark"] .panel-shortcut-picker-group {
+  background: #17171b;
+}
+
+[data-theme="light"] .panel-shortcut-picker-group {
+  background: #ffffff;
 }
 
 .panel-shortcut-picker button.is-selected {
@@ -3441,10 +3474,19 @@ button.badge {
 }
 
 .panel-shortcut:hover,
-.panel-shortcut.is-dragging,
+.panel-shortcut.is-drop-target,
 .panel-shortcut.is-open {
   border-color: var(--accent);
   background: var(--accent-dim);
+}
+
+.panel-shortcut.is-dragging {
+  opacity: 0.45;
+}
+
+.panel-shortcut-add,
+.panel-shortcut-add .panel-shortcut-main {
+  cursor: pointer;
 }
 
 .panel-shortcut.has-images {
@@ -3510,8 +3552,10 @@ button.badge {
   right: auto;
   bottom: auto;
   z-index: 80;
-  max-height: none;
-  overflow: visible;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
 }
 
 .panel-shortcut-picker button {

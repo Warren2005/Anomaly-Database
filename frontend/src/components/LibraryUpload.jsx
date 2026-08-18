@@ -11,10 +11,12 @@ import {
   PANEL_TAG_OPTIONS,
   loadPanelShortcuts,
   savePanelShortcuts,
+  shortcutComboKey,
   isBeamformingPanel,
   beamformingModesForAnomalyType,
   canonicalBeamformingType,
   anomalyTypeForBeamformingMode,
+  BEAMFORMING_TYPE_OPTIONS,
   METAL_LOSS_BEAMFORMING_MODES,
   CRACK_BEAMFORMING_MODES,
   RUN_OPTIONS,
@@ -27,6 +29,11 @@ import {
 const ADD_NEW_RUN = "__add_new__";
 const ADD_NEW_TAG = "__add_new_tag__";
 const CRACK_TYPE = "Crack-like";
+const SHORTCUT_REORDER_TYPE = "application/x-ili-shortcut-index";
+
+function shortShortcutLabel(tag) {
+  return (tag || "Panel").replace(/ Panel$/i, "").trim();
+}
 
 const FIELD_LABELS = {
   anomaly_type: "Anomaly Type",
@@ -76,8 +83,10 @@ const FALLBACK_RUNS = RUN_OPTIONS.map((run) => ({
   run_id: RUN_DESCRIPTIONS[run] || "",
 }));
 
-function shortShortcutLabel(tag) {
-  return (tag || "Panel").replace(/ Panel$/i, "").trim();
+function shortcutMatchesMedia(shortcut, panelTag, beamType) {
+  if ((panelTag || "") !== shortcut.panel) return false;
+  if (!isBeamformingPanel(shortcut.panel)) return true;
+  return canonicalBeamformingType(beamType) === canonicalBeamformingType(shortcut.mode);
 }
 
 function ShortcutPickerMenu({ anchorEl, menuRef, minWidth = 200, className = "", children }) {
@@ -92,7 +101,18 @@ function ShortcutPickerMenu({ anchorEl, menuRef, minWidth = 200, className = "",
       if (left + width > window.innerWidth - 8) {
         left = Math.max(8, window.innerWidth - width - 8);
       }
-      setPos({ top: r.bottom + 6, left, width });
+      const gap = 6;
+      const margin = 8;
+      const spaceBelow = window.innerHeight - r.bottom - gap - margin;
+      const spaceAbove = r.top - gap - margin;
+      const openDown = spaceBelow >= 220 || spaceBelow >= spaceAbove;
+      const maxHeight = Math.max(160, openDown ? spaceBelow : spaceAbove);
+      setPos({
+        top: openDown ? r.bottom + gap : Math.max(margin, r.top - gap - maxHeight),
+        left,
+        width,
+        maxHeight,
+      });
     };
     place();
     window.addEventListener("resize", place);
@@ -103,25 +123,13 @@ function ShortcutPickerMenu({ anchorEl, menuRef, minWidth = 200, className = "",
     };
   }, [anchorEl, minWidth]);
 
-  useLayoutEffect(() => {
-    const menu = menuRef?.current;
-    if (!menu || !pos) return;
-    const rect = menu.getBoundingClientRect();
-    const overflow = rect.bottom - (window.innerHeight - 8);
-    if (overflow <= 0) return;
-    setPos((p) => {
-      const nextTop = Math.max(8, p.top - overflow);
-      return nextTop === p.top ? p : { ...p, top: nextTop };
-    });
-  }, [pos, menuRef, children]);
-
   if (!anchorEl || !pos) return null;
   return createPortal(
     <div
       ref={menuRef}
       className={`panel-shortcut-picker is-portal${className ? ` ${className}` : ""}`}
       role="listbox"
-      style={{ top: pos.top, left: pos.left, width: pos.width }}
+      style={{ top: pos.top, left: pos.left, width: pos.width, maxHeight: pos.maxHeight }}
     >
       {children}
     </div>,
@@ -157,7 +165,7 @@ const EMPTY_FORM = {
 };
 
 function formFromImage(image) {
-  if (!image) return EMPTY_FORM;
+  if (!image) return { ...EMPTY_FORM };
   return {
     identification: image.identification || "",
     anomaly_id: image.anomaly_id || "",
@@ -219,7 +227,10 @@ export default function LibraryUpload({
   const [previews, setPreviews] = useState([]);
   const [primaryIndex, setPrimaryIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
-  const [draggingPanel, setDraggingPanel] = useState(null);
+  const [dropTargetIndex, setDropTargetIndex] = useState(null);
+  const [reorderFrom, setReorderFrom] = useState(null);
+  const reorderFromRef = useRef(null);
+  const didReorderRef = useRef(false);
   const [form, setForm] = useState(initialForm);
   const [existingMedia, setExistingMedia] = useState(() => existingMediaFromDetail(editingImage));
   const [uploading, setUploading] = useState(false);
@@ -257,9 +268,9 @@ export default function LibraryUpload({
   const shortcutPickerRef = useRef(null);
   const pickerAnchorRef = useRef(null);
   const shortcutMenuRef = useRef(null);
-  const [panelShortcuts, setPanelShortcuts] = useState(loadPanelShortcuts);
+  const [panelShortcuts, setPanelShortcuts] = useState(() => loadPanelShortcuts());
   const [shortcutPicker, setShortcutPicker] = useState(null);
-  const [shortcutBeamMode, setShortcutBeamMode] = useState("");
+  const [shortcutDupError, setShortcutDupError] = useState(null);
 
   const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
   const typeIdentifications = IDENTIFICATION_BY_TYPE[form.anomaly_type] || null;
@@ -460,6 +471,20 @@ export default function LibraryUpload({
       ...prev,
       ...list.map((f) => ({ url: URL.createObjectURL(f), name: f.name })),
     ]);
+    if (mode) {
+      const inferred = anomalyTypeForBeamformingMode(mode);
+      if (inferred) {
+        setForm((prev) => {
+          if (prev.anomaly_type) return prev;
+          const opts = IDENTIFICATION_BY_TYPE[inferred];
+          return {
+            ...prev,
+            anomaly_type: inferred,
+            identification: IDENTIFICATION_DEFAULTS[inferred] || opts?.[0] || prev.identification,
+          };
+        });
+      }
+    }
   }, []);
 
   const removeFile = (idx) => {
@@ -563,31 +588,49 @@ export default function LibraryUpload({
     addFiles(e.dataTransfer.files);
   }, [addFiles]);
 
-  const openPanelShortcut = (tag) => {
-    pendingPanelRef.current = tag;
-    pendingBeamformingRef.current = isBeamformingPanel(tag) ? shortcutBeamMode : "";
+  const isFileDrag = (e) => Array.from(e.dataTransfer?.types || []).includes("Files");
+
+  const openPanelShortcut = (shortcut) => {
+    if (didReorderRef.current) {
+      didReorderRef.current = false;
+      return;
+    }
+    pendingPanelRef.current = shortcut.panel;
+    pendingBeamformingRef.current = isBeamformingPanel(shortcut.panel) ? shortcut.mode : "";
     shortcutInputRef.current?.click();
   };
 
-  const handleShortcutDragOver = (e, tag) => {
+  const handleShortcutReorderStart = (e, index) => {
+    if (e.target.closest(".panel-shortcut-icon")) {
+      e.preventDefault();
+      return;
+    }
+    didReorderRef.current = false;
+    reorderFromRef.current = index;
+    setReorderFrom(index);
+    e.dataTransfer.setData(SHORTCUT_REORDER_TYPE, String(index));
+    e.dataTransfer.setData("text/plain", String(index));
+    e.dataTransfer.effectAllowed = "move";
+  };
+
+  const handleShortcutReorderEnd = () => {
+    reorderFromRef.current = null;
+    setReorderFrom(null);
+    setDropTargetIndex(null);
+  };
+
+  const handleShortcutDragOver = (e, index) => {
     e.preventDefault();
     e.stopPropagation();
-    setDraggingPanel(tag);
+    e.dataTransfer.dropEffect = isFileDrag(e) ? "copy" : "move";
+    setDropTargetIndex(index);
   };
 
   const handleShortcutDragLeave = (e) => {
+    if (e.currentTarget.contains(e.relatedTarget)) return;
     e.preventDefault();
-    setDraggingPanel(null);
+    setDropTargetIndex(null);
   };
-
-  const handleShortcutDrop = (e, tag) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setDraggingPanel(null);
-    addFiles(e.dataTransfer.files, tag, isBeamformingPanel(tag) ? shortcutBeamMode : "");
-  };
-
-  const unusedShortcutPanels = PANEL_TAG_OPTIONS.filter((tag) => !panelShortcuts.includes(tag));
 
   const persistShortcuts = (next) => {
     setPanelShortcuts(next);
@@ -596,20 +639,127 @@ export default function LibraryUpload({
     setShortcutPicker(null);
   };
 
-  const addPanelShortcut = (tag) => {
-    if (!tag || panelShortcuts.includes(tag)) {
-      setShortcutPicker(null);
-      return;
-    }
-    persistShortcuts([...panelShortcuts, tag]);
+  const reorderShortcuts = (from, to) => {
+    if (!Number.isInteger(from) || !Number.isInteger(to) || from === to) return;
+    if (from < 0 || to < 0 || from >= panelShortcuts.length || to >= panelShortcuts.length) return;
+    const next = [...panelShortcuts];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved);
+    persistShortcuts(next);
   };
 
-  const replacePanelShortcut = (index, tag) => {
-    if (!tag) {
+  const handleShortcutDrop = (e, shortcut, index) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDropTargetIndex(null);
+    if (isFileDrag(e) && e.dataTransfer.files?.length) {
+      reorderFromRef.current = null;
+      setReorderFrom(null);
+      addFiles(
+        e.dataTransfer.files,
+        shortcut.panel,
+        isBeamformingPanel(shortcut.panel) ? shortcut.mode : ""
+      );
+      return;
+    }
+    const fromRaw = e.dataTransfer.getData(SHORTCUT_REORDER_TYPE) || e.dataTransfer.getData("text/plain");
+    const from = reorderFromRef.current ?? (fromRaw === "" ? NaN : Number(fromRaw));
+    reorderFromRef.current = null;
+    setReorderFrom(null);
+    if (Number.isInteger(from) && from >= 0) {
+      didReorderRef.current = from !== index;
+      reorderShortcuts(from, index);
+    }
+  };
+
+  const usedNonBeamPanels = new Set(
+    panelShortcuts.filter((s) => s?.panel && !isBeamformingPanel(s.panel)).map((s) => s.panel)
+  );
+
+  const unusedBeamModes = (exceptIndex = -1) => {
+    const used = new Set(
+      panelShortcuts
+        .filter((s, i) => i !== exceptIndex && isBeamformingPanel(s.panel))
+        .map((s) => canonicalBeamformingType(s.mode))
+    );
+    const modes = BEAMFORMING_TYPE_OPTIONS.filter((m) => !used.has(m));
+    if (!used.has("")) modes.unshift("");
+    return modes;
+  };
+
+  const addablePanels = PANEL_TAG_OPTIONS.filter((panel) => {
+    if (isBeamformingPanel(panel)) return unusedBeamModes().length > 0;
+    return !usedNonBeamPanels.has(panel);
+  });
+
+  const shortcutAlreadyExists = (panel, mode, exceptIndex = -1) => {
+    const key = shortcutComboKey(panel, mode);
+    return panelShortcuts.some(
+      (s, i) => i !== exceptIndex && shortcutComboKey(s.panel, s.mode) === key
+    );
+  };
+
+  const warnDuplicateShortcut = () => {
+    pickerAnchorRef.current = null;
+    setShortcutPicker(null);
+    setShortcutDupError("That shortcut already exists.");
+  };
+
+  const addPanelShortcut = (panel, mode = "") => {
+    if (!panel) {
       setShortcutPicker(null);
       return;
     }
-    persistShortcuts(panelShortcuts.map((t, i) => (i === index ? tag : t)));
+    if (isBeamformingPanel(panel) && shortcutPicker?.mode === "add") {
+      pickerAnchorRef.current = pickerAnchorRef.current;
+      setShortcutPicker({ mode: "add-beam-mode" });
+      return;
+    }
+    if (shortcutAlreadyExists(panel, mode)) {
+      warnDuplicateShortcut();
+      return;
+    }
+    persistShortcuts([...panelShortcuts, { panel, mode: isBeamformingPanel(panel) ? canonicalBeamformingType(mode) : "" }]);
+  };
+
+  const addBeamformingShortcut = (mode) => {
+    const canonical = canonicalBeamformingType(mode);
+    if (shortcutAlreadyExists("Beamforming Panel", canonical)) {
+      warnDuplicateShortcut();
+      return;
+    }
+    persistShortcuts([...panelShortcuts, { panel: "Beamforming Panel", mode: canonical }]);
+  };
+
+  const replacePanelShortcut = (index, panel) => {
+    if (!panel) {
+      setShortcutPicker(null);
+      return;
+    }
+    if (isBeamformingPanel(panel)) {
+      setShortcutPicker({ mode: "edit-beam-mode", index });
+      return;
+    }
+    if (shortcutAlreadyExists(panel, "", index)) {
+      warnDuplicateShortcut();
+      return;
+    }
+    persistShortcuts(
+      panelShortcuts.map((s, i) => (i === index ? { panel, mode: "" } : s))
+    );
+  };
+
+  const replaceBeamformingMode = (index, mode) => {
+    const canonical = canonicalBeamformingType(mode);
+    if (shortcutAlreadyExists("Beamforming Panel", canonical, index)) {
+      warnDuplicateShortcut();
+      return;
+    }
+    persistShortcuts(
+      panelShortcuts.map((s, i) =>
+        i === index ? { panel: "Beamforming Panel", mode: canonical } : s
+      )
+    );
   };
 
   const removePanelShortcut = (index) => {
@@ -694,7 +844,6 @@ export default function LibraryUpload({
       setFileBeamformingTypes((prev) =>
         prev.map((t) => (t && allowed.has(t) ? t : ""))
       );
-      setShortcutBeamMode((prev) => (prev && allowed.has(prev) ? prev : ""));
     }
     setFieldErrors((prev) => {
       const cleared = { ...prev, [field]: undefined };
@@ -704,19 +853,6 @@ export default function LibraryUpload({
       }
       return cleared;
     });
-  };
-
-  const applyShortcutBeamMode = (mode) => {
-    const canonical = canonicalBeamformingType(mode);
-    setShortcutBeamMode(canonical);
-    pickerAnchorRef.current = null;
-    setShortcutPicker(null);
-    if (!canonical) return;
-    const inferred = anomalyTypeForBeamformingMode(canonical);
-    if (inferred) handleFormChange("anomaly_type", inferred);
-    setFileBeamformingTypes((prev) =>
-      prev.map((t, i) => (isBeamformingPanel(filePanelTags[i]) && !t ? canonical : t))
-    );
   };
 
   const handleRunSelect = (value) => {
@@ -1000,7 +1136,7 @@ export default function LibraryUpload({
           </div>
 
           <div className="panel-shortcut-block" ref={shortcutPickerRef}>
-            <p className="form-hint media-preview-hint">Quick add by panel</p>
+            <p className="form-hint media-preview-hint">Shortcuts · click or drop to add, drag to rearrange</p>
             <input
               ref={shortcutInputRef}
               type="file"
@@ -1015,21 +1151,27 @@ export default function LibraryUpload({
               }}
             />
             <div className="panel-shortcut-grid">
-              {panelShortcuts.map((tag, index) => {
+              {panelShortcuts.map((shortcut, index) => {
+                const tag = shortcut.panel;
                 const count =
-                  filePanelTags.filter((t) => t === tag).length +
-                  survivingExisting.filter((m) => m.panelTag === tag).length;
+                  files.filter((_, i) => shortcutMatchesMedia(shortcut, filePanelTags[i], fileBeamformingTypes[i])).length +
+                  survivingExisting.filter((m) =>
+                    shortcutMatchesMedia(shortcut, m.panelTag, m.beamformingType)
+                  ).length;
                 const short = shortShortcutLabel(tag);
                 const isBeam = isBeamformingPanel(tag);
                 return (
                   <div
-                    key={`${tag}-${index}`}
-                    className={`panel-shortcut${draggingPanel === tag ? " is-dragging" : ""}${
-                      count > 0 ? " has-images" : ""
-                    }${isBeam ? " has-mode" : ""}`}
-                    onDragOver={(e) => handleShortcutDragOver(e, tag)}
+                    key={`${shortcutComboKey(tag, shortcut.mode)}-${index}`}
+                    draggable
+                    className={`panel-shortcut${reorderFrom === index ? " is-dragging" : ""}${
+                      dropTargetIndex === index ? " is-drop-target" : ""
+                    }${count > 0 ? " has-images" : ""}${isBeam && shortcut.mode ? " has-mode" : ""}`}
+                    onDragStart={(e) => handleShortcutReorderStart(e, index)}
+                    onDragEnd={handleShortcutReorderEnd}
+                    onDragOver={(e) => handleShortcutDragOver(e, index)}
                     onDragLeave={handleShortcutDragLeave}
-                    onDrop={(e) => handleShortcutDrop(e, tag)}
+                    onDrop={(e) => handleShortcutDrop(e, shortcut, index)}
                   >
                     <div className="panel-shortcut-actions">
                       <button
@@ -1057,47 +1199,43 @@ export default function LibraryUpload({
                         ✕
                       </button>
                     </div>
-                    <button
-                      type="button"
+                    <div
+                      role="button"
+                      tabIndex={0}
                       className="panel-shortcut-main"
-                      onClick={() => openPanelShortcut(tag)}
-                      title={`Add ${tag} image`}
+                      onClick={() => openPanelShortcut(shortcut)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openPanelShortcut(shortcut);
+                        }
+                      }}
+                      title={
+                        shortcut.mode
+                          ? `Add ${tag} · ${shortcut.mode}`
+                          : `Add ${tag} image`
+                      }
                     >
                       <span className="panel-shortcut-label">{short}</span>
                       <span className="panel-shortcut-hint">
-                        {count > 0 ? `${count} added` : "Drop or click"}
+                        {count > 0 ? `${count} added` : "Drop, click, or drag"}
                       </span>
-                    </button>
-                    {isBeam && (
+                    </div>
+                    {isBeam && shortcut.mode ? (
                       <div className="panel-shortcut-mode-wrap">
-                        <button
-                          type="button"
-                          className={`panel-shortcut-mode-btn${shortcutBeamMode ? " has-value" : ""}${
-                            shortcutPicker?.mode === "beam-mode" ? " is-open" : ""
-                          }`}
-                          title={shortcutBeamMode || "Choose a beamforming mode"}
-                          aria-label="Beamforming mode"
-                          aria-expanded={shortcutPicker?.mode === "beam-mode"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleShortcutPicker({ mode: "beam-mode" }, e.currentTarget);
-                          }}
-                        >
+                        <div className="panel-shortcut-mode-btn has-value is-locked">
                           <span className="panel-shortcut-mode-kicker">Mode</span>
-                          {shortcutBeamMode && (
-                            <span className="panel-shortcut-mode-value">{shortcutBeamMode}</span>
-                          )}
-                          <span className="panel-shortcut-mode-caret" aria-hidden="true">▾</span>
-                        </button>
+                          <span className="panel-shortcut-mode-value">{shortcut.mode}</span>
+                        </div>
                       </div>
-                    )}
+                    ) : null}
                   </div>
                 );
               })}
-              {unusedShortcutPanels.length > 0 && (
+              {addablePanels.length > 0 && (
                 <div
                   className={`panel-shortcut panel-shortcut-add${
-                    shortcutPicker?.mode === "add" ? " is-open" : ""
+                    shortcutPicker?.mode === "add" || shortcutPicker?.mode === "add-beam-mode" ? " is-open" : ""
                   }`}
                 >
                   <button
@@ -1944,11 +2082,19 @@ export default function LibraryUpload({
         <ShortcutPickerMenu
           anchorEl={pickerAnchorRef.current}
           menuRef={shortcutMenuRef}
-          minWidth={shortcutPicker.mode === "beam-mode" ? 420 : 200}
-          className={shortcutPicker.mode === "beam-mode" ? "panel-shortcut-mode-picker" : ""}
+          minWidth={
+            shortcutPicker.mode === "add-beam-mode" || shortcutPicker.mode === "edit-beam-mode" || shortcutPicker.mode === "edit"
+              ? 420
+              : 200
+          }
+          className={
+            shortcutPicker.mode === "add-beam-mode" || shortcutPicker.mode === "edit-beam-mode"
+              ? "panel-shortcut-mode-picker"
+              : ""
+          }
         >
           {shortcutPicker.mode === "add" &&
-            unusedShortcutPanels.map((option) => (
+            addablePanels.map((option) => (
               <button
                 key={option}
                 type="button"
@@ -1959,52 +2105,122 @@ export default function LibraryUpload({
               </button>
             ))}
           {shortcutPicker.mode === "edit" && (
-            unusedShortcutPanels.length === 0 ? (
-              <p className="panel-shortcut-picker-empty">All panels are already shortcuts</p>
-            ) : (
-              unusedShortcutPanels.map((option) => (
+            <>
+              <p className="panel-shortcut-picker-group">Panel</p>
+              {PANEL_TAG_OPTIONS.filter((panel) => {
+                const current = panelShortcuts[shortcutPicker.index];
+                if (isBeamformingPanel(panel)) return true;
+                if (current?.panel === panel) return true;
+                return !usedNonBeamPanels.has(panel);
+              }).map((option) => (
                 <button
                   key={option}
                   type="button"
                   role="option"
+                  className={panelShortcuts[shortcutPicker.index]?.panel === option ? "is-selected" : ""}
                   onClick={() => replacePanelShortcut(shortcutPicker.index, option)}
                 >
                   {shortShortcutLabel(option)}
                 </button>
-              ))
-            )
+              ))}
+              {isBeamformingPanel(panelShortcuts[shortcutPicker.index]?.panel) && (
+                <>
+                  <p className="panel-shortcut-picker-group">Mode</p>
+                  {unusedBeamModes(shortcutPicker.index).map((type) => (
+                    <button
+                      key={type || "no-mode"}
+                      type="button"
+                      role="option"
+                      className={
+                        canonicalBeamformingType(panelShortcuts[shortcutPicker.index]?.mode) === type
+                          ? "is-selected"
+                          : ""
+                      }
+                      onClick={() => replaceBeamformingMode(shortcutPicker.index, type)}
+                    >
+                      {type || "No mode"}
+                    </button>
+                  ))}
+                </>
+              )}
+            </>
           )}
-          {shortcutPicker.mode === "beam-mode" && (
+          {(shortcutPicker.mode === "add-beam-mode" || shortcutPicker.mode === "edit-beam-mode") && (
             <>
               <p className="panel-shortcut-picker-group">Metal Loss</p>
-              {METAL_LOSS_BEAMFORMING_MODES.map((type) => (
+              {METAL_LOSS_BEAMFORMING_MODES.filter((type) =>
+                unusedBeamModes(shortcutPicker.mode === "edit-beam-mode" ? shortcutPicker.index : -1).includes(type)
+              ).map((type) => (
                 <button
                   key={type}
                   type="button"
                   role="option"
-                  aria-selected={shortcutBeamMode === type}
-                  className={shortcutBeamMode === type ? "is-selected" : ""}
-                  onClick={() => applyShortcutBeamMode(type)}
+                  onClick={() =>
+                    shortcutPicker.mode === "edit-beam-mode"
+                      ? replaceBeamformingMode(shortcutPicker.index, type)
+                      : addBeamformingShortcut(type)
+                  }
                 >
                   {type}
                 </button>
               ))}
               <p className="panel-shortcut-picker-group">Crack-like</p>
-              {CRACK_BEAMFORMING_MODES.map((type) => (
+              {CRACK_BEAMFORMING_MODES.filter((type) =>
+                unusedBeamModes(shortcutPicker.mode === "edit-beam-mode" ? shortcutPicker.index : -1).includes(type)
+              ).map((type) => (
                 <button
                   key={type}
                   type="button"
                   role="option"
-                  aria-selected={shortcutBeamMode === type}
-                  className={shortcutBeamMode === type ? "is-selected" : ""}
-                  onClick={() => applyShortcutBeamMode(type)}
+                  onClick={() =>
+                    shortcutPicker.mode === "edit-beam-mode"
+                      ? replaceBeamformingMode(shortcutPicker.index, type)
+                      : addBeamformingShortcut(type)
+                  }
                 >
                   {type}
                 </button>
               ))}
+              {unusedBeamModes(shortcutPicker.mode === "edit-beam-mode" ? shortcutPicker.index : -1).includes("") && (
+                <button
+                  type="button"
+                  role="option"
+                  onClick={() =>
+                    shortcutPicker.mode === "edit-beam-mode"
+                      ? replaceBeamformingMode(shortcutPicker.index, "")
+                      : addBeamformingShortcut("")
+                  }
+                >
+                  No mode
+                </button>
+              )}
             </>
           )}
         </ShortcutPickerMenu>
+      )}
+
+      {shortcutDupError && (
+        <div
+          className="leave-confirm-overlay"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="shortcut-dup-title"
+          onClick={() => setShortcutDupError(null)}
+        >
+          <div className="leave-confirm-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 id="shortcut-dup-title">Shortcut already exists</h3>
+            <p>{shortcutDupError} Pick a different panel or mode.</p>
+            <div className="leave-confirm-actions">
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShortcutDupError(null)}
+              >
+                OK
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {previewLightbox && (

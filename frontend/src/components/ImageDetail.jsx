@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { deleteLibraryEntry, resolveImageUrl } from "../api/client";
-import { PANEL_TAG_OPTIONS, STATUS_COLORS, canonicalBeamformingType, formatCrackAngle, isBeamformingPanel } from "../lib/iliConstants";
+import { PANEL_TAG_OPTIONS, STATUS_COLORS, canonicalBeamformingType, canonicalPanelTag, formatCrackAngle, isBeamformingPanel } from "../lib/iliConstants";
 import ZoomableImage from "./ZoomableImage";
 import ImageLightbox from "./ImageLightbox";
 
@@ -8,7 +8,8 @@ const VIEW_FOCUS = "focus";
 const VIEW_GRID = "grid";
 
 function shortPanelLabel(tag) {
-  return (tag || "Panel").replace(/ Panel$/i, "").trim();
+  const canonical = canonicalPanelTag(tag);
+  return (canonical || "Panel").replace(/ Panel$/i, "").trim();
 }
 
 function panelGroupKey(tag) {

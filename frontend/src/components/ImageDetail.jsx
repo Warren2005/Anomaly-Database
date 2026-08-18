@@ -286,21 +286,42 @@ export default function ImageDetail({
       <div className="detail-content">
         <div className={`detail-image-container${viewMode === VIEW_GRID ? " is-grid" : ""}`}>
           {canUsePanels && (
-            <div className="detail-view-toggle" role="group" aria-label="Image layout">
-              <button
-                type="button"
-                className={`btn ${viewMode === VIEW_FOCUS ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setViewMode(VIEW_FOCUS)}
-              >
-                Focus
-              </button>
-              <button
-                type="button"
-                className={`btn ${viewMode === VIEW_GRID ? "btn-primary" : "btn-secondary"}`}
-                onClick={() => setViewMode(VIEW_GRID)}
-              >
-                Grid
-              </button>
+            <div className="detail-image-toolbar">
+              <div className="detail-view-toggle" role="group" aria-label="Image layout">
+                <button
+                  type="button"
+                  className={`btn ${viewMode === VIEW_FOCUS ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setViewMode(VIEW_FOCUS)}
+                >
+                  Focus
+                </button>
+                <button
+                  type="button"
+                  className={`btn ${viewMode === VIEW_GRID ? "btn-primary" : "btn-secondary"}`}
+                  onClick={() => setViewMode(VIEW_GRID)}
+                >
+                  Grid
+                </button>
+              </div>
+              {viewMode === VIEW_FOCUS && (
+                <div className="media-thumbs detail-panel-tabs">
+                  {panelGroups.map((group) => (
+                    <button
+                      key={panelGroupKey(group.tag)}
+                      type="button"
+                      className={`media-thumb${group.indexes.includes(mediaIdx) ? " active" : ""}`}
+                      onClick={() => selectPanel(group.tag)}
+                      title={
+                        group.indexes.length > 1
+                          ? `${group.tag} · ${group.indexes.length} images`
+                          : group.tag
+                      }
+                    >
+                      {shortPanelLabel(group.tag)}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
@@ -341,46 +362,29 @@ export default function ImageDetail({
                 />
               </div>
               {canStepPanelImage && (
-                <div className="media-nav">
-                  <button
-                    className="btn btn-secondary"
-                    disabled={withinPos === 0}
-                    onClick={() => stepPanelImage(-1)}
-                    aria-label="Previous image in this panel"
-                  >
-                    ‹
-                  </button>
-                  <span>
-                    {withinPos + 1} / {withinCount}
-                    {currentGroup?.tag ? ` · ${shortPanelLabel(currentGroup.tag)}` : ""}
-                  </span>
-                  <button
-                    className="btn btn-secondary"
-                    disabled={withinPos === withinCount - 1}
-                    onClick={() => stepPanelImage(1)}
-                    aria-label="Next image in this panel"
-                  >
-                    ›
-                  </button>
-                </div>
-              )}
-              {media.length > 1 && (
-                <div className="media-thumbs">
-                  {panelGroups.map((group) => (
+                <div className="detail-image-footer">
+                  <div className="media-nav">
                     <button
-                      key={panelGroupKey(group.tag)}
-                      type="button"
-                      className={`media-thumb${group.indexes.includes(mediaIdx) ? " active" : ""}`}
-                      onClick={() => selectPanel(group.tag)}
-                      title={
-                        group.indexes.length > 1
-                          ? `${group.tag} · ${group.indexes.length} images`
-                          : group.tag
-                      }
+                      className="btn btn-secondary"
+                      disabled={withinPos === 0}
+                      onClick={() => stepPanelImage(-1)}
+                      aria-label="Previous image in this panel"
                     >
-                      {shortPanelLabel(group.tag)}
+                      ‹
                     </button>
-                  ))}
+                    <span>
+                      {withinPos + 1} / {withinCount}
+                      {currentGroup?.tag ? ` · ${shortPanelLabel(currentGroup.tag)}` : ""}
+                    </span>
+                    <button
+                      className="btn btn-secondary"
+                      disabled={withinPos === withinCount - 1}
+                      onClick={() => stepPanelImage(1)}
+                      aria-label="Next image in this panel"
+                    >
+                      ›
+                    </button>
+                  </div>
                 </div>
               )}
             </>
@@ -403,13 +407,41 @@ export default function ImageDetail({
             )}
           </div>
 
-          {(image.anomaly_type || image.anomaly_id) && (
+          {(image.anomaly_type || image.anomaly_id || panelGroups.length > 0 || tags.length > 0) && (
             <div className="detail-meta-chips">
               {image.anomaly_type && (
                 <span className="ref-card-type">{image.anomaly_type}</span>
               )}
               {image.anomaly_id && (
                 <span className="detail-id-chip">{image.anomaly_id}</span>
+              )}
+              {(panelGroups.length > 0 || tags.length > 0) && (
+                <div className="detail-panel-tags">
+                  {panelGroups.length > 0 && (
+                    <div className="panel-tag-row">
+                      {panelGroups.map((group) => (
+                        <button
+                          type="button"
+                          key={group.tag}
+                          className={`badge badge-panel${
+                            group.indexes.includes(mediaIdx) ? " badge-panel-current" : ""
+                          }`}
+                          onClick={() => selectPanel(group.tag)}
+                        >
+                          {group.tag}
+                          {group.indexes.length > 1 ? ` (${group.indexes.length})` : ""}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {tags.length > 0 && (
+                    <div className="panel-tag-row">
+                      {tags.map((tag) => (
+                        <span key={tag} className="badge">{tag}</span>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -418,35 +450,6 @@ export default function ImageDetail({
             <div className="detail-score">
               <span className="detail-label">Similarity</span>
               <span className="detail-value">{(similarity_score * 100).toFixed(1)}%</span>
-            </div>
-          )}
-
-          {(panelTags.length > 0 || tags.length > 0) && (
-            <div className="detail-meta-block">
-              {panelGroups.length > 0 && (
-                <div className="panel-tag-row">
-                  {panelGroups.map((group) => (
-                    <button
-                      type="button"
-                      key={group.tag}
-                      className={`badge badge-panel${
-                        group.indexes.includes(mediaIdx) ? " badge-panel-current" : ""
-                      }`}
-                      onClick={() => selectPanel(group.tag)}
-                    >
-                      {group.tag}
-                      {group.indexes.length > 1 ? ` (${group.indexes.length})` : ""}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {tags.length > 0 && (
-                <div className="panel-tag-row">
-                  {tags.map((tag) => (
-                    <span key={tag} className="badge">{tag}</span>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 

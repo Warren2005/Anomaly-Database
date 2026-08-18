@@ -1223,15 +1223,13 @@ export default function LibraryUpload({
                       <span className="panel-shortcut-hint">
                         {count > 0 ? `${count} added` : "Drop, click, or drag"}
                       </span>
-                    </div>
-                    {isBeam && shortcut.mode ? (
-                      <div className="panel-shortcut-mode-wrap">
-                        <div className="panel-shortcut-mode-btn has-value is-locked">
+                      {isBeam && shortcut.mode ? (
+                        <span className="panel-shortcut-mode">
                           <span className="panel-shortcut-mode-kicker">Mode</span>
                           <span className="panel-shortcut-mode-value">{shortcut.mode}</span>
-                        </div>
-                      </div>
-                    ) : null}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
                 );
               })}

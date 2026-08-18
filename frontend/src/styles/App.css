@@ -3385,56 +3385,21 @@ button.badge {
 }
 
 .panel-shortcut.has-mode .panel-shortcut-main {
-  min-height: 56px;
-  padding-bottom: 2px;
+  min-height: 108px;
+  padding: 14px 28px 12px 8px;
+  gap: 4px;
 }
 
-.panel-shortcut-mode-wrap {
-  position: relative;
-  margin: 0 10px 10px;
-}
-
-.panel-shortcut-mode-btn {
-  position: relative;
+.panel-shortcut-mode {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   align-items: center;
-  gap: 2px 8px;
+  gap: 2px;
   width: 100%;
-  padding: 7px 26px 7px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-  border-radius: 8px;
-  background: var(--select-bg);
-  color: var(--text-secondary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
-}
-
-.panel-shortcut-mode-btn:hover,
-.panel-shortcut-mode-btn.is-open {
-  border-color: var(--accent);
-  background: var(--select-bg-hover);
-}
-
-.panel-shortcut-mode-btn.has-value {
-  color: var(--text-primary, inherit);
-}
-
-.panel-shortcut-mode-btn.is-locked {
-  cursor: default;
+  margin-top: 4px;
+  padding: 8px 4px 0;
+  border-top: 1px solid var(--border);
   pointer-events: none;
-  padding-right: 10px;
-}
-
-.panel-shortcut-mode-btn.is-locked:hover {
-  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
-  background: var(--select-bg);
-}
-
-.panel-shortcut-mode-btn.is-locked .panel-shortcut-mode-caret {
-  display: none;
 }
 
 .panel-shortcut-mode-kicker {
@@ -3446,11 +3411,11 @@ button.badge {
 }
 
 .panel-shortcut-mode-value {
-  flex: 1 1 100%;
   font-size: 12px;
   font-weight: 500;
   line-height: 1.35;
-  color: inherit;
+  color: var(--text-primary, inherit);
+  text-align: center;
 }
 
 .panel-shortcut-mode-caret {

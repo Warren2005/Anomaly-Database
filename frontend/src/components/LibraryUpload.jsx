@@ -14,6 +14,7 @@ import {
   shortcutComboKey,
   isBeamformingPanel,
   canonicalBeamformingType,
+  shortcutModeLabel,
   anomalyTypeForBeamformingMode,
   BEAMFORMING_TYPE_OPTIONS,
   METAL_LOSS_BEAMFORMING_MODES,
@@ -1226,7 +1227,7 @@ export default function LibraryUpload({
                       {isBeam && shortcut.mode ? (
                         <span className="panel-shortcut-mode">
                           <span className="panel-shortcut-mode-kicker">Mode</span>
-                          <span className="panel-shortcut-mode-value">{shortcut.mode}</span>
+                          <span className="panel-shortcut-mode-value">{shortcutModeLabel(shortcut.mode)}</span>
                         </span>
                       ) : null}
                     </div>

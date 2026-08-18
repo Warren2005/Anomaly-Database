@@ -225,6 +225,15 @@ export function shortBeamformingType(type) {
   return canonicalBeamformingType(type);
 }
 
+/** Shortcut-tile label: crack modes show the method only (no brackets).
+ *  Surface-detect modes keep the full official name. Dropdowns are unchanged. */
+export function shortcutModeLabel(type) {
+  const t = canonicalBeamformingType(type);
+  if (!CRACK_BEAMFORMING_MODES.includes(t)) return t;
+  const match = t.match(/\(([^)]+)\)\s*$/);
+  return match ? match[1] : t;
+}
+
 /** Only crack modes imply an anomaly type. Surface-detect modes do not. */
 export function anomalyTypeForBeamformingMode(type) {
   const t = canonicalBeamformingType(type);

@@ -3386,7 +3386,7 @@ button.badge {
 
 .panel-shortcut.has-mode .panel-shortcut-main {
   min-height: 108px;
-  padding: 14px 28px 12px 8px;
+  padding: 12px 10px 10px;
   gap: 4px;
 }
 
@@ -3395,8 +3395,9 @@ button.badge {
   flex-direction: column;
   align-items: center;
   gap: 2px;
-  width: 100%;
-  margin-top: 4px;
+  align-self: stretch;
+  width: auto;
+  margin: 8px 0 0;
   padding: 8px 4px 0;
   border-top: 1px solid var(--border);
   pointer-events: none;

@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useState, useCallback, useRef, useEffect, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import { uploadToLibrary, updateLibraryEntry, getRuns, addRun, getTags, addTag, resolveImageUrl } from "../api/client";
 import {
   ANOMALY_TYPES,
@@ -8,7 +9,14 @@ import {
   IDENTIFICATION_DEFAULTS,
   ACCEPTED_IMAGE_TYPES,
   PANEL_TAG_OPTIONS,
-  COMMON_PANEL_TAGS,
+  loadPanelShortcuts,
+  savePanelShortcuts,
+  isBeamformingPanel,
+  beamformingModesForAnomalyType,
+  canonicalBeamformingType,
+  anomalyTypeForBeamformingMode,
+  METAL_LOSS_BEAMFORMING_MODES,
+  CRACK_BEAMFORMING_MODES,
   RUN_OPTIONS,
   RUN_DESCRIPTIONS,
   INTERACTION_OPTIONS,
@@ -67,6 +75,59 @@ const FALLBACK_RUNS = RUN_OPTIONS.map((run) => ({
   run,
   run_id: RUN_DESCRIPTIONS[run] || "",
 }));
+
+function shortShortcutLabel(tag) {
+  return (tag || "Panel").replace(/ Panel$/i, "").trim();
+}
+
+function ShortcutPickerMenu({ anchorEl, menuRef, minWidth = 200, className = "", children }) {
+  const [pos, setPos] = useState(null);
+
+  useLayoutEffect(() => {
+    if (!anchorEl) return undefined;
+    const place = () => {
+      const r = anchorEl.getBoundingClientRect();
+      const width = Math.min(Math.max(r.width, minWidth), window.innerWidth - 16);
+      let left = r.left;
+      if (left + width > window.innerWidth - 8) {
+        left = Math.max(8, window.innerWidth - width - 8);
+      }
+      setPos({ top: r.bottom + 6, left, width });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [anchorEl, minWidth]);
+
+  useLayoutEffect(() => {
+    const menu = menuRef?.current;
+    if (!menu || !pos) return;
+    const rect = menu.getBoundingClientRect();
+    const overflow = rect.bottom - (window.innerHeight - 8);
+    if (overflow <= 0) return;
+    setPos((p) => {
+      const nextTop = Math.max(8, p.top - overflow);
+      return nextTop === p.top ? p : { ...p, top: nextTop };
+    });
+  }, [pos, menuRef, children]);
+
+  if (!anchorEl || !pos) return null;
+  return createPortal(
+    <div
+      ref={menuRef}
+      className={`panel-shortcut-picker is-portal${className ? ` ${className}` : ""}`}
+      role="listbox"
+      style={{ top: pos.top, left: pos.left, width: pos.width }}
+    >
+      {children}
+    </div>,
+    document.body
+  );
+}
 
 const EMPTY_FORM = {
   identification: "",
@@ -132,10 +193,12 @@ function existingMediaFromDetail(detail) {
   if (!detail) return [];
   const urls = detail.media_urls?.length ? detail.media_urls : [detail.image_url];
   const tags = detail.image.panel_tags || [];
+  const beamTypes = detail.image.beamforming_types || [];
   return urls.map((url, i) => ({
     originalIndex: i,
     url,
     panelTag: tags[i] || "",
+    beamformingType: canonicalBeamformingType(beamTypes[i] || ""),
     removed: false,
   }));
 }
@@ -152,6 +215,7 @@ export default function LibraryUpload({
   const [initialForm] = useState(() => formFromImage(editingImage?.image));
   const [files, setFiles] = useState([]);
   const [filePanelTags, setFilePanelTags] = useState([]);
+  const [fileBeamformingTypes, setFileBeamformingTypes] = useState([]);
   const [previews, setPreviews] = useState([]);
   const [primaryIndex, setPrimaryIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
@@ -189,6 +253,13 @@ export default function LibraryUpload({
   const fileInputRef = useRef(null);
   const shortcutInputRef = useRef(null);
   const pendingPanelRef = useRef("");
+  const pendingBeamformingRef = useRef("");
+  const shortcutPickerRef = useRef(null);
+  const pickerAnchorRef = useRef(null);
+  const shortcutMenuRef = useRef(null);
+  const [panelShortcuts, setPanelShortcuts] = useState(loadPanelShortcuts);
+  const [shortcutPicker, setShortcutPicker] = useState(null);
+  const [shortcutBeamMode, setShortcutBeamMode] = useState("");
 
   const requiredDims = DIMENSION_REQUIREMENTS[form.anomaly_type] || [];
   const typeIdentifications = IDENTIFICATION_BY_TYPE[form.anomaly_type] || null;
@@ -371,7 +442,7 @@ export default function LibraryUpload({
     [runs]
   );
 
-  const addFiles = useCallback((incoming, panelTag = "") => {
+  const addFiles = useCallback((incoming, panelTag = "", beamformingType = "") => {
     const list = Array.from(incoming || []).filter((f) =>
       ACCEPTED_IMAGE_TYPES.includes(f.type) || f.type.startsWith("image/")
     );
@@ -381,16 +452,10 @@ export default function LibraryUpload({
     }
     setError(null);
     setSuccess(null);
+    const mode = isBeamformingPanel(panelTag) ? canonicalBeamformingType(beamformingType) : "";
     setFiles((prev) => [...prev, ...list]);
     setFilePanelTags((prev) => [...prev, ...list.map(() => panelTag)]);
-    // Build previews synchronously (object URLs, not FileReader) so this
-    // array's order always matches `files`/`filePanelTags`. The panel-tag
-    // select, "Make primary", and remove (✕) controls are rendered per
-    // preview but index into `files`/`filePanelTags`/`primaryIndex` by that
-    // same position — FileReader's async onload completes in whatever
-    // order the browser finishes reading each file, not read-start order,
-    // so appending previews there could silently desync which thumbnail
-    // the user is looking at from which file their click actually affects.
+    setFileBeamformingTypes((prev) => [...prev, ...list.map(() => mode)]);
     setPreviews((prev) => [
       ...prev,
       ...list.map((f) => ({ url: URL.createObjectURL(f), name: f.name })),
@@ -402,6 +467,7 @@ export default function LibraryUpload({
     const combinedIdx = existingCount + idx;
     setFiles((prev) => prev.filter((_, i) => i !== idx));
     setFilePanelTags((prev) => prev.filter((_, i) => i !== idx));
+    setFileBeamformingTypes((prev) => prev.filter((_, i) => i !== idx));
     setPreviews((prev) => {
       if (prev[idx]?.url) URL.revokeObjectURL(prev[idx].url);
       return prev.filter((_, i) => i !== idx);
@@ -420,7 +486,14 @@ export default function LibraryUpload({
 
   const setFilePanelTag = (idx, tag) => {
     setFilePanelTags((prev) => prev.map((t, i) => (i === idx ? tag : t)));
+    if (!isBeamformingPanel(tag)) {
+      setFileBeamformingTypes((prev) => prev.map((t, i) => (i === idx ? "" : t)));
+    }
     setFieldErrors((prev) => ({ ...prev, [`panel_${idx}`]: undefined, file: undefined }));
+  };
+
+  const setFileBeamformingType = (idx, type) => {
+    setFileBeamformingTypes((prev) => prev.map((t, i) => (i === idx ? type : t)));
   };
 
   const removeExistingMedia = (originalIndex) => {
@@ -441,13 +514,28 @@ export default function LibraryUpload({
 
   const setExistingPanelTag = (originalIndex, tag) => {
     setExistingMedia((prev) =>
-      prev.map((m) => (m.originalIndex === originalIndex ? { ...m, panelTag: tag } : m))
+      prev.map((m) =>
+        m.originalIndex === originalIndex
+          ? {
+              ...m,
+              panelTag: tag,
+              beamformingType: isBeamformingPanel(tag) ? m.beamformingType : "",
+            }
+          : m
+      )
     );
     setFieldErrors((prev) => ({ ...prev, [`existing_${originalIndex}`]: undefined, file: undefined }));
   };
 
+  const setExistingBeamformingType = (originalIndex, type) => {
+    setExistingMedia((prev) =>
+      prev.map((m) => (m.originalIndex === originalIndex ? { ...m, beamformingType: type } : m))
+    );
+  };
+
   const survivingExisting = existingMedia.filter((m) => !m.removed);
   const mediaCount = survivingExisting.length + files.length;
+  const beamformingModeOptions = beamformingModesForAnomalyType(form.anomaly_type);
 
   useEffect(() => {
     if (mediaCount === 0) {
@@ -477,6 +565,7 @@ export default function LibraryUpload({
 
   const openPanelShortcut = (tag) => {
     pendingPanelRef.current = tag;
+    pendingBeamformingRef.current = isBeamformingPanel(tag) ? shortcutBeamMode : "";
     shortcutInputRef.current?.click();
   };
 
@@ -495,7 +584,75 @@ export default function LibraryUpload({
     e.preventDefault();
     e.stopPropagation();
     setDraggingPanel(null);
-    addFiles(e.dataTransfer.files, tag);
+    addFiles(e.dataTransfer.files, tag, isBeamformingPanel(tag) ? shortcutBeamMode : "");
+  };
+
+  const unusedShortcutPanels = PANEL_TAG_OPTIONS.filter((tag) => !panelShortcuts.includes(tag));
+
+  const persistShortcuts = (next) => {
+    setPanelShortcuts(next);
+    savePanelShortcuts(next);
+    pickerAnchorRef.current = null;
+    setShortcutPicker(null);
+  };
+
+  const addPanelShortcut = (tag) => {
+    if (!tag || panelShortcuts.includes(tag)) {
+      setShortcutPicker(null);
+      return;
+    }
+    persistShortcuts([...panelShortcuts, tag]);
+  };
+
+  const replacePanelShortcut = (index, tag) => {
+    if (!tag) {
+      setShortcutPicker(null);
+      return;
+    }
+    persistShortcuts(panelShortcuts.map((t, i) => (i === index ? tag : t)));
+  };
+
+  const removePanelShortcut = (index) => {
+    persistShortcuts(panelShortcuts.filter((_, i) => i !== index));
+  };
+
+  useEffect(() => {
+    if (!shortcutPicker) return undefined;
+    const onPointerDown = (e) => {
+      const inBlock = shortcutPickerRef.current?.contains(e.target);
+      const inMenu = shortcutMenuRef.current?.contains(e.target);
+      if (!inBlock && !inMenu) {
+        pickerAnchorRef.current = null;
+        setShortcutPicker(null);
+      }
+    };
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") {
+        pickerAnchorRef.current = null;
+        setShortcutPicker(null);
+      }
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [shortcutPicker]);
+
+  const toggleShortcutPicker = (next, anchorEl) => {
+    const same =
+      shortcutPicker &&
+      next &&
+      shortcutPicker.mode === next.mode &&
+      shortcutPicker.index === next.index;
+    if (same) {
+      pickerAnchorRef.current = null;
+      setShortcutPicker(null);
+      return;
+    }
+    pickerAnchorRef.current = anchorEl;
+    setShortcutPicker(next);
   };
 
   const handleFormChange = (field, value) => {
@@ -525,6 +682,20 @@ export default function LibraryUpload({
       }
       return next;
     });
+    if (field === "anomaly_type") {
+      const allowed = new Set(beamformingModesForAnomalyType(value));
+      setExistingMedia((prev) =>
+        prev.map((m) =>
+          !m.beamformingType || allowed.has(m.beamformingType)
+            ? m
+            : { ...m, beamformingType: "" }
+        )
+      );
+      setFileBeamformingTypes((prev) =>
+        prev.map((t) => (t && allowed.has(t) ? t : ""))
+      );
+      setShortcutBeamMode((prev) => (prev && allowed.has(prev) ? prev : ""));
+    }
     setFieldErrors((prev) => {
       const cleared = { ...prev, [field]: undefined };
       if (field === "anomaly_type") {
@@ -533,6 +704,19 @@ export default function LibraryUpload({
       }
       return cleared;
     });
+  };
+
+  const applyShortcutBeamMode = (mode) => {
+    const canonical = canonicalBeamformingType(mode);
+    setShortcutBeamMode(canonical);
+    pickerAnchorRef.current = null;
+    setShortcutPicker(null);
+    if (!canonical) return;
+    const inferred = anomalyTypeForBeamformingMode(canonical);
+    if (inferred) handleFormChange("anomaly_type", inferred);
+    setFileBeamformingTypes((prev) =>
+      prev.map((t, i) => (isBeamformingPanel(filePanelTags[i]) && !t ? canonical : t))
+    );
   };
 
   const handleRunSelect = (value) => {
@@ -683,6 +867,14 @@ export default function LibraryUpload({
         const removeIndices = existingMedia.filter((m) => m.removed).map((m) => m.originalIndex);
         // Final image order matches the backend: surviving existing first, then new uploads.
         const panelTags = [...survivingExisting.map((m) => m.panelTag), ...filePanelTags];
+        const beamformingTypes = [
+          ...survivingExisting.map((m) =>
+            isBeamformingPanel(m.panelTag) ? canonicalBeamformingType(m.beamformingType) : ""
+          ),
+          ...filePanelTags.map((tag, i) =>
+            isBeamformingPanel(tag) ? canonicalBeamformingType(fileBeamformingTypes[i]) : ""
+          ),
+        ];
         // Lets the backend detect "someone else changed/deleted this since
         // you opened it" instead of silently overwriting their edit.
         payload.expected_updated_at = editingImage.image.updated_at;
@@ -691,6 +883,7 @@ export default function LibraryUpload({
           {
             newFiles: files,
             panelTags,
+            beamformingTypes,
             removeIndices,
             primaryIndex,
             newOrientationImage: orientationFile,
@@ -706,6 +899,11 @@ export default function LibraryUpload({
       } else {
         // Ordered 1:1 with uploaded files; primary_index nominates CLIP primary.
         payload.panel_tags = filePanelTags.join(",");
+        payload.beamforming_types = filePanelTags
+          .map((tag, i) =>
+            isBeamformingPanel(tag) ? canonicalBeamformingType(fileBeamformingTypes[i]) : ""
+          )
+          .join(",");
         payload.primary_index = String(primaryIndex);
         const result = await uploadToLibrary(files, payload, orientationFile);
         setSuccess(result);
@@ -726,6 +924,7 @@ export default function LibraryUpload({
     previews.forEach((p) => { if (p.url) URL.revokeObjectURL(p.url); });
     setFiles([]);
     setFilePanelTags([]);
+    setFileBeamformingTypes([]);
     setPreviews([]);
     setPrimaryIndex(0);
     setForm(EMPTY_FORM);
@@ -800,7 +999,7 @@ export default function LibraryUpload({
             />
           </div>
 
-          <div className="panel-shortcut-block">
+          <div className="panel-shortcut-block" ref={shortcutPickerRef}>
             <p className="form-hint media-preview-hint">Quick add by panel</p>
             <input
               ref={shortcutInputRef}
@@ -809,37 +1008,111 @@ export default function LibraryUpload({
               multiple
               style={{ display: "none" }}
               onChange={(e) => {
-                addFiles(e.target.files, pendingPanelRef.current);
+                addFiles(e.target.files, pendingPanelRef.current, pendingBeamformingRef.current);
                 pendingPanelRef.current = "";
+                pendingBeamformingRef.current = "";
                 e.target.value = "";
               }}
             />
             <div className="panel-shortcut-grid">
-              {COMMON_PANEL_TAGS.map((tag) => {
+              {panelShortcuts.map((tag, index) => {
                 const count =
                   filePanelTags.filter((t) => t === tag).length +
                   survivingExisting.filter((m) => m.panelTag === tag).length;
-                const short = tag.replace(/ Panel$/i, "").trim();
+                const short = shortShortcutLabel(tag);
+                const isBeam = isBeamformingPanel(tag);
                 return (
-                  <button
-                    key={tag}
-                    type="button"
+                  <div
+                    key={`${tag}-${index}`}
                     className={`panel-shortcut${draggingPanel === tag ? " is-dragging" : ""}${
                       count > 0 ? " has-images" : ""
-                    }`}
-                    onClick={() => openPanelShortcut(tag)}
+                    }${isBeam ? " has-mode" : ""}`}
                     onDragOver={(e) => handleShortcutDragOver(e, tag)}
                     onDragLeave={handleShortcutDragLeave}
                     onDrop={(e) => handleShortcutDrop(e, tag)}
-                    title={`Add ${tag} image`}
                   >
-                    <span className="panel-shortcut-label">{short}</span>
-                    <span className="panel-shortcut-hint">
-                      {count > 0 ? `${count} added` : "Drop or click"}
-                    </span>
-                  </button>
+                    <div className="panel-shortcut-actions">
+                      <button
+                        type="button"
+                        className="panel-shortcut-icon"
+                        title="Change this shortcut"
+                        aria-label={`Change ${short} shortcut`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleShortcutPicker({ mode: "edit", index }, e.currentTarget.closest(".panel-shortcut"));
+                        }}
+                      >
+                        ✎
+                      </button>
+                      <button
+                        type="button"
+                        className="panel-shortcut-icon"
+                        title="Remove this shortcut"
+                        aria-label={`Remove ${short} shortcut`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          removePanelShortcut(index);
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="panel-shortcut-main"
+                      onClick={() => openPanelShortcut(tag)}
+                      title={`Add ${tag} image`}
+                    >
+                      <span className="panel-shortcut-label">{short}</span>
+                      <span className="panel-shortcut-hint">
+                        {count > 0 ? `${count} added` : "Drop or click"}
+                      </span>
+                    </button>
+                    {isBeam && (
+                      <div className="panel-shortcut-mode-wrap">
+                        <button
+                          type="button"
+                          className={`panel-shortcut-mode-btn${shortcutBeamMode ? " has-value" : ""}${
+                            shortcutPicker?.mode === "beam-mode" ? " is-open" : ""
+                          }`}
+                          title={shortcutBeamMode || "Choose a beamforming mode"}
+                          aria-label="Beamforming mode"
+                          aria-expanded={shortcutPicker?.mode === "beam-mode"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleShortcutPicker({ mode: "beam-mode" }, e.currentTarget);
+                          }}
+                        >
+                          <span className="panel-shortcut-mode-kicker">Mode</span>
+                          {shortcutBeamMode && (
+                            <span className="panel-shortcut-mode-value">{shortcutBeamMode}</span>
+                          )}
+                          <span className="panel-shortcut-mode-caret" aria-hidden="true">▾</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
+              {unusedShortcutPanels.length > 0 && (
+                <div
+                  className={`panel-shortcut panel-shortcut-add${
+                    shortcutPicker?.mode === "add" ? " is-open" : ""
+                  }`}
+                >
+                  <button
+                    type="button"
+                    className="panel-shortcut-main"
+                    onClick={(e) =>
+                      toggleShortcutPicker({ mode: "add" }, e.currentTarget.closest(".panel-shortcut"))
+                    }
+                    title="Add a panel shortcut"
+                  >
+                    <span className="panel-shortcut-label">+ Add shortcut</span>
+                    <span className="panel-shortcut-hint">Choose a panel</span>
+                  </button>
+                </div>
+              )}
             </div>
           </div>
 
@@ -904,6 +1177,27 @@ export default function LibraryUpload({
                         <option key={tag} value={tag}>{tag}</option>
                       ))}
                     </select>
+                    {isBeamformingPanel(m.panelTag) && beamformingModeOptions.length > 0 && (
+                      <>
+                        <label className="form-label preview-panel-label">
+                          Mode <span className="opt">optional</span>
+                        </label>
+                        <select
+                          className="form-select"
+                          value={m.beamformingType || ""}
+                          onChange={(e) => setExistingBeamformingType(m.originalIndex, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <option value="">— Select mode —</option>
+                          {(m.beamformingType && !beamformingModeOptions.includes(m.beamformingType)
+                            ? [m.beamformingType, ...beamformingModeOptions]
+                            : beamformingModeOptions
+                          ).map((type) => (
+                            <option key={type} value={type}>{type}</option>
+                          ))}
+                        </select>
+                      </>
+                    )}
                   </div>
                 ))}
               </div>
@@ -977,6 +1271,27 @@ export default function LibraryUpload({
                         <option key={tag} value={tag}>{tag}</option>
                       ))}
                     </select>
+                    {isBeamformingPanel(filePanelTags[i]) && beamformingModeOptions.length > 0 && (
+                      <>
+                        <label className="form-label preview-panel-label">
+                          Mode <span className="opt">optional</span>
+                        </label>
+                        <select
+                          className="form-select"
+                          value={fileBeamformingTypes[i] || ""}
+                          onChange={(e) => setFileBeamformingType(i, e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <option value="">— Select mode —</option>
+                          {(fileBeamformingTypes[i] && !beamformingModeOptions.includes(fileBeamformingTypes[i])
+                            ? [fileBeamformingTypes[i], ...beamformingModeOptions]
+                            : beamformingModeOptions
+                          ).map((type) => (
+                            <option key={type} value={type}>{type}</option>
+                          ))}
+                        </select>
+                      </>
+                    )}
                   </div>
                   );
                 })}
@@ -1623,6 +1938,73 @@ export default function LibraryUpload({
             </div>
           </div>
         </div>
+      )}
+
+      {shortcutPicker && (
+        <ShortcutPickerMenu
+          anchorEl={pickerAnchorRef.current}
+          menuRef={shortcutMenuRef}
+          minWidth={shortcutPicker.mode === "beam-mode" ? 420 : 200}
+          className={shortcutPicker.mode === "beam-mode" ? "panel-shortcut-mode-picker" : ""}
+        >
+          {shortcutPicker.mode === "add" &&
+            unusedShortcutPanels.map((option) => (
+              <button
+                key={option}
+                type="button"
+                role="option"
+                onClick={() => addPanelShortcut(option)}
+              >
+                {shortShortcutLabel(option)}
+              </button>
+            ))}
+          {shortcutPicker.mode === "edit" && (
+            unusedShortcutPanels.length === 0 ? (
+              <p className="panel-shortcut-picker-empty">All panels are already shortcuts</p>
+            ) : (
+              unusedShortcutPanels.map((option) => (
+                <button
+                  key={option}
+                  type="button"
+                  role="option"
+                  onClick={() => replacePanelShortcut(shortcutPicker.index, option)}
+                >
+                  {shortShortcutLabel(option)}
+                </button>
+              ))
+            )
+          )}
+          {shortcutPicker.mode === "beam-mode" && (
+            <>
+              <p className="panel-shortcut-picker-group">Metal Loss</p>
+              {METAL_LOSS_BEAMFORMING_MODES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  role="option"
+                  aria-selected={shortcutBeamMode === type}
+                  className={shortcutBeamMode === type ? "is-selected" : ""}
+                  onClick={() => applyShortcutBeamMode(type)}
+                >
+                  {type}
+                </button>
+              ))}
+              <p className="panel-shortcut-picker-group">Crack-like</p>
+              {CRACK_BEAMFORMING_MODES.map((type) => (
+                <button
+                  key={type}
+                  type="button"
+                  role="option"
+                  aria-selected={shortcutBeamMode === type}
+                  className={shortcutBeamMode === type ? "is-selected" : ""}
+                  onClick={() => applyShortcutBeamMode(type)}
+                >
+                  {type}
+                </button>
+              ))}
+            </>
+          )}
+        </ShortcutPickerMenu>
       )}
 
       {previewLightbox && (

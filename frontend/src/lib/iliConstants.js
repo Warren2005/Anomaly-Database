@@ -42,6 +42,15 @@ export const WALL_LOCATION_OPTIONS = [
 /** Crack-like only: which image angle(s) are present */
 export const CRACK_IMAGE_ANGLE_OPTIONS = ["+", "-", "Both"];
 
+/** Display labels for the anomaly page — keep + / − on Add Entry. */
+export function formatCrackAngle(value) {
+  const v = (value || "").trim();
+  if (v === "+" ) return "pos";
+  if (v === "-" || v === "−") return "neg";
+  if (v.toLowerCase() === "both") return "both";
+  return v;
+}
+
 export const DIMENSION_REQUIREMENTS = {
   "Metal Loss": ["depth", "width", "length"],
   Weld: ["depth", "width", "length"],
@@ -147,13 +156,104 @@ export const PANEL_TAG_OPTIONS = [
   "Tool Pose Panel",
 ];
 
-/** Shortcuts under the Add Entry drop zone */
-export const COMMON_PANEL_TAGS = [
+/** Default shortcuts under the Add Entry drop zone (user-customizable) */
+export const DEFAULT_PANEL_SHORTCUTS = [
   "Beamforming Panel",
   "Image Panel",
   "Raw Panel",
-  "Cross-Section Panel",
 ];
+
+export const COMMON_PANEL_TAGS = DEFAULT_PANEL_SHORTCUTS;
+
+const PANEL_SHORTCUTS_KEY = "ili-panel-shortcuts";
+
+export function loadPanelShortcuts() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(PANEL_SHORTCUTS_KEY) || "null");
+    if (!Array.isArray(parsed)) return [...DEFAULT_PANEL_SHORTCUTS];
+    const allowed = new Set(PANEL_TAG_OPTIONS);
+    const unique = [];
+    for (const tag of parsed) {
+      if (allowed.has(tag) && !unique.includes(tag)) unique.push(tag);
+    }
+    return unique;
+  } catch {
+    return [...DEFAULT_PANEL_SHORTCUTS];
+  }
+}
+
+export function savePanelShortcuts(tags) {
+  try {
+    localStorage.setItem(PANEL_SHORTCUTS_KEY, JSON.stringify(tags));
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+export const BEAMFORMING_PANEL = "Beamforming Panel";
+
+/** Metal Loss beamforming modes — metadata only, not used for search */
+export const METAL_LOSS_BEAMFORMING_MODES = [
+  "Inner Surface Detect (Fluid Flood)",
+  "Outer Surface Detect (Direct L-L)",
+  "Outer Surface (Direct L-L Complex Surface)",
+];
+
+/** Crack-like beamforming modes — metadata only, not used for search */
+export const CRACK_BEAMFORMING_MODES = [
+  "Inner Surface Detect (Fluid Flood Angled)",
+  "Outer Surface Verify (Direct T-T)",
+  "Crack Detect Outer (Halfskip TT-T)",
+  "Crack Detect Inner (Halfskip T-TT)",
+  "Crack Verify Outer (1.5 skip TTT-TT)",
+  "Crack Verify Inner (1.5 skip TT-TTT)",
+  "Outer Surface Verify Complex (Direct T-T Complex Surface)",
+  "Crack Detect Outer Complex (Halfskip TT-T Complex Surface)",
+  "Crack Detect Inner Complex (Halfskip T-TT Complex Surface)",
+];
+
+export const BEAMFORMING_TYPE_OPTIONS = [
+  ...METAL_LOSS_BEAMFORMING_MODES,
+  ...CRACK_BEAMFORMING_MODES,
+];
+
+/** Older truncated labels → full official names (including parentheticals) */
+const BEAMFORMING_TYPE_ALIASES = {
+  "Outer Surface Verify Complex (Direct T-T Complex)":
+    "Outer Surface Verify Complex (Direct T-T Complex Surface)",
+  "Crack Detect Outer Complex (Halfskip TT-T Complex)":
+    "Crack Detect Outer Complex (Halfskip TT-T Complex Surface)",
+  "Crack Detect Inner Complex (Halfskip T-TT Complex)":
+    "Crack Detect Inner Complex (Halfskip T-TT Complex Surface)",
+};
+
+export function isBeamformingPanel(tag) {
+  return (tag || "").trim() === BEAMFORMING_PANEL;
+}
+
+export function beamformingModesForAnomalyType(anomalyType) {
+  if (anomalyType === "Metal Loss") return METAL_LOSS_BEAMFORMING_MODES;
+  if (anomalyType === "Crack-like") return CRACK_BEAMFORMING_MODES;
+  return [];
+}
+
+/** Full mode name, including bracketed method. Never truncated for display. */
+export function canonicalBeamformingType(type) {
+  const t = (type || "").trim();
+  return BEAMFORMING_TYPE_ALIASES[t] || t;
+}
+
+export function shortBeamformingType(type) {
+  return canonicalBeamformingType(type);
+}
+
+/** Infer Anomaly Type from a beamforming mode so the shortcut can autofill it. */
+export function anomalyTypeForBeamformingMode(type) {
+  const t = canonicalBeamformingType(type);
+  if (METAL_LOSS_BEAMFORMING_MODES.includes(t)) return "Metal Loss";
+  if (CRACK_BEAMFORMING_MODES.includes(t)) return "Crack-like";
+  return "";
+}
 
 /** Past ILI runs available in Add Entry (newest first, including sub-runs) */
 export const RUN_OPTIONS = [

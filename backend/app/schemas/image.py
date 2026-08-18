@@ -38,6 +38,7 @@ class ImageBase(BaseModel):
     limitations_uncertainty: Optional[str] = None
     notes: Optional[str] = None
     panel_tags: Optional[list[str]] = None
+    beamforming_types: Optional[list[str]] = None
     tags: Optional[list[str]] = None
     interacts_with_other_features: Optional[bool] = None
     interaction_related_items: Optional[list[str]] = None

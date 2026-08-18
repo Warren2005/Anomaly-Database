@@ -64,6 +64,11 @@ class Image:
     notes: Optional[str] = None
     # Panel view tags (e.g. Image Panel, Beamforming Panel) — multi-select
     panel_tags: Optional[list] = field(default_factory=list)
+    # Per-image Beamforming surface mode, aligned 1:1 with
+    # [image_path, *additional_image_paths] / panel_tags. Empty string
+    # when the slot is not a Beamforming Panel. Display-only metadata —
+    # search never reads this field.
+    beamforming_types: Optional[list] = field(default_factory=list)
     # Free-form, user-growable tags for the anomaly as a whole (distinct
     # from panel_tags, which is per-image from a fixed vocabulary). New
     # values just get typed in — see /api/v1/images/filters' `tags`,

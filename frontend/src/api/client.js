@@ -244,6 +244,7 @@ export async function updateLibraryEntry(
   {
     newFiles = [],
     panelTags = [],
+    beamformingTypes = [],
     removeIndices = [],
     primaryIndex = 0,
     newOrientationImage = null,
@@ -255,6 +256,7 @@ export async function updateLibraryEntry(
   const form = new FormData();
   newFiles.forEach((f) => form.append("new_files", f));
   if (panelTags.length) form.append("panel_tags", panelTags.join(","));
+  form.append("beamforming_types", beamformingTypes.join(","));
   if (removeIndices.length) form.append("remove_media", removeIndices.join(","));
   form.append("primary_index", String(primaryIndex ?? 0));
   if (newOrientationImage) form.append("new_orientation_image", newOrientationImage);

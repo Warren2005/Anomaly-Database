@@ -21,7 +21,7 @@ def test_image_model_fields():
         "depth", "width", "length",
         "is_qc_flag", "qc_raised_by", "qc_reviewer", "qc_decision_rationale",
         "signal_description", "differential_diagnosis", "limitations_uncertainty",
-        "notes", "panel_tags", "tags",
+        "notes", "panel_tags", "beamforming_types", "tags",
         "interacts_with_other_features", "interaction_related_items",
         "zero_angle_frame_index", "track", "additional_image_paths",
         "orientation_image_path", "pipe_angle",

@@ -1541,6 +1541,18 @@ button.badge {
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 55%, transparent);
 }
 
+.badge-beam-type {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  cursor: default;
+  text-transform: none;
+  letter-spacing: 0.02em;
+  white-space: normal;
+  max-width: 100%;
+  line-height: 1.35;
+}
+
 .badge-status {
   background: rgba(96, 165, 250, 0.16);
   color: #60a5fa;
@@ -2429,10 +2441,10 @@ button.badge {
 }
 
 .detail-image-toolbar {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1fr);
   align-items: center;
-  gap: 10px 16px;
+  gap: 10px 12px;
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -2442,13 +2454,27 @@ button.badge {
   padding: 0;
   border-bottom: none;
   flex-shrink: 0;
+  justify-self: start;
+}
+
+.detail-beam-mode {
+  justify-self: center;
+  min-width: 0;
+  max-width: 100%;
+  text-align: center;
+}
+
+.detail-image-toolbar .badge-beam-type {
+  display: inline-block;
+  max-width: 100%;
 }
 
 .detail-image-toolbar .detail-panel-tabs {
   margin-top: 0;
-  margin-left: auto;
+  margin-left: 0;
   justify-content: flex-end;
-  flex: 1 1 auto;
+  justify-self: end;
+  flex: 0 1 auto;
 }
 
 .detail-view-toggle {
@@ -3224,6 +3250,7 @@ button.badge {
   top: 108px;
   max-height: calc(100dvh - 130px);
   overflow: auto;
+  overflow-anchor: none;
   zoom: 1;
   min-width: 0;
 }
@@ -3250,31 +3277,148 @@ button.badge {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow: visible;
 }
 
 .panel-shortcut-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
+  width: 100%;
 }
 
 .panel-shortcut {
+  position: relative;
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  min-height: 88px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 10px;
+  background: var(--bg-surface);
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.panel-shortcut-main {
+  display: flex;
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 4px;
   min-width: 0;
-  min-height: 76px;
-  padding: 12px 8px;
-  border: 1.5px dashed var(--border-strong);
+  min-height: 88px;
+  padding: 12px 28px 12px 8px;
+  border: 0;
   border-radius: 10px;
-  background: var(--bg-surface);
+  background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
   text-align: center;
-  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.panel-shortcut-add .panel-shortcut-main {
+  padding: 12px 8px;
+}
+
+.panel-shortcut.has-mode .panel-shortcut-main {
+  min-height: 56px;
+  padding-bottom: 2px;
+}
+
+.panel-shortcut-mode-wrap {
+  position: relative;
+  margin: 0 10px 10px;
+}
+
+.panel-shortcut-mode-btn {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 8px;
+  width: 100%;
+  padding: 7px 26px 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
+  border-radius: 8px;
+  background: var(--select-bg);
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.panel-shortcut-mode-btn:hover,
+.panel-shortcut-mode-btn.is-open {
+  border-color: var(--accent);
+  background: var(--select-bg-hover);
+}
+
+.panel-shortcut-mode-btn.has-value {
+  color: var(--text-primary, inherit);
+}
+
+.panel-shortcut-mode-kicker {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.panel-shortcut-mode-value {
+  flex: 1 1 100%;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: inherit;
+}
+
+.panel-shortcut-mode-caret {
+  position: absolute;
+  right: 8px;
+  top: 8px;
+  font-size: 10px;
+  color: var(--accent);
+  pointer-events: none;
+}
+
+.panel-shortcut-mode-picker {
+  min-width: 0;
+}
+
+.panel-shortcut-picker.is-portal.panel-shortcut-mode-picker {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px 8px;
+}
+
+.panel-shortcut-picker.is-portal.panel-shortcut-mode-picker .panel-shortcut-picker-group {
+  grid-column: 1 / -1;
+}
+
+.panel-shortcut-mode-picker button {
+  white-space: normal;
+  line-height: 1.35;
+}
+
+.panel-shortcut-picker-group {
+  margin: 6px 4px 4px;
+  padding: 8px 10px 4px;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--accent);
+}
+
+.panel-shortcut-picker button.is-selected {
+  background: var(--select-bg-hover);
+  color: var(--accent);
+  font-weight: 600;
 }
 
 .panel-shortcut-label {
@@ -3297,7 +3441,8 @@ button.badge {
 }
 
 .panel-shortcut:hover,
-.panel-shortcut.is-dragging {
+.panel-shortcut.is-dragging,
+.panel-shortcut.is-open {
   border-color: var(--accent);
   background: var(--accent-dim);
 }
@@ -3305,6 +3450,95 @@ button.badge {
 .panel-shortcut.has-images {
   border-style: solid;
   border-color: var(--accent);
+}
+
+.panel-shortcut-actions {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+}
+
+.panel-shortcut-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--bg-elevated, #1a1a1a) 80%, transparent);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.panel-shortcut-icon:hover {
+  background: var(--accent-dim);
+  color: var(--accent);
+}
+
+.panel-shortcut-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--select-bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+[data-theme="dark"] .panel-shortcut-picker {
+  background: #17171b;
+}
+
+[data-theme="light"] .panel-shortcut-picker {
+  background: #ffffff;
+}
+
+.panel-shortcut-picker.is-portal {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+  z-index: 80;
+  max-height: none;
+  overflow: visible;
+}
+
+.panel-shortcut-picker button {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.panel-shortcut-picker button:hover,
+.panel-shortcut-picker button.is-selected {
+  background: var(--select-bg-hover);
+  color: var(--accent);
+}
+
+.panel-shortcut-picker-empty {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .library-upload .media-preview-grid,

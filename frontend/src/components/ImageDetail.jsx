@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { deleteLibraryEntry, resolveImageUrl } from "../api/client";
-import { PANEL_TAG_OPTIONS, STATUS_COLORS } from "../lib/iliConstants";
+import { PANEL_TAG_OPTIONS, STATUS_COLORS, canonicalBeamformingType, formatCrackAngle } from "../lib/iliConstants";
 import ZoomableImage from "./ZoomableImage";
 import ImageLightbox from "./ImageLightbox";
 
@@ -50,12 +50,13 @@ export default function ImageDetail({
   const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
   const hasNext = canNavigate && currentIndex < totalCount - 1 && typeof onNext === "function";
   const panelTags = Array.isArray(image.panel_tags) ? image.panel_tags : [];
+  const beamformingTypes = Array.isArray(image.beamforming_types) ? image.beamforming_types : [];
   const tags = Array.isArray(image.tags) ? image.tags : [];
   // Panel-scoped search results carry a single image_url (possibly a
   // non-primary media file) plus media_index saying which panel_tags slot
   // it actually is — falls back to mediaIdx for the browse/detail flow,
   // where media_urls holds every image in panel_tags order already.
-  const currentPanelTag = panelTags[mediaIdx];
+  const currentBeamformingType = canonicalBeamformingType(beamformingTypes[mediaIdx] || "");
 
   const panelGroups = useMemo(() => {
     const rank = (tag) => {
@@ -327,43 +328,50 @@ export default function ImageDetail({
           ref={imagePaneRef}
           className={`detail-image-container${viewMode === VIEW_GRID ? " is-grid" : ""}`}
         >
-          {canUsePanels && (
+          {(canUsePanels || currentBeamformingType) && (
             <div className="detail-image-toolbar">
               <div className="detail-view-toggle" role="group" aria-label="Image layout">
-                <button
-                  type="button"
-                  className={`btn ${viewMode === VIEW_FOCUS ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setViewMode(VIEW_FOCUS)}
-                >
-                  Focus
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${viewMode === VIEW_GRID ? "btn-primary" : "btn-secondary"}`}
-                  onClick={() => setViewMode(VIEW_GRID)}
-                >
-                  Grid
-                </button>
-              </div>
-              {viewMode === VIEW_FOCUS && (
-                <div className="media-thumbs detail-panel-tabs">
-                  {panelGroups.map((group) => (
+                {canUsePanels && (
+                  <>
                     <button
-                      key={panelGroupKey(group.tag)}
                       type="button"
-                      className={`media-thumb${group.indexes.includes(mediaIdx) ? " active" : ""}`}
-                      onClick={() => selectPanel(group.tag)}
-                      title={
-                        group.indexes.length > 1
-                          ? `${group.tag} · ${group.indexes.length} images`
-                          : group.tag
-                      }
+                      className={`btn ${viewMode === VIEW_FOCUS ? "btn-primary" : "btn-secondary"}`}
+                      onClick={() => setViewMode(VIEW_FOCUS)}
                     >
-                      {shortPanelLabel(group.tag)}
+                      Focus
                     </button>
-                  ))}
-                </div>
-              )}
+                    <button
+                      type="button"
+                      className={`btn ${viewMode === VIEW_GRID ? "btn-primary" : "btn-secondary"}`}
+                      onClick={() => setViewMode(VIEW_GRID)}
+                    >
+                      Grid
+                    </button>
+                  </>
+                )}
+              </div>
+              <div className="detail-beam-mode">
+                {currentBeamformingType && (
+                  <span className="badge badge-beam-type">{currentBeamformingType}</span>
+                )}
+              </div>
+              <div className="media-thumbs detail-panel-tabs">
+                {canUsePanels && viewMode === VIEW_FOCUS && panelGroups.map((group) => (
+                  <button
+                    key={panelGroupKey(group.tag)}
+                    type="button"
+                    className={`media-thumb${group.indexes.includes(mediaIdx) ? " active" : ""}`}
+                    onClick={() => selectPanel(group.tag)}
+                    title={
+                      group.indexes.length > 1
+                        ? `${group.tag} · ${group.indexes.length} images`
+                        : group.tag
+                    }
+                  >
+                    {shortPanelLabel(group.tag)}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -525,7 +533,7 @@ export default function ImageDetail({
             <dl className="detail-dl">
               <DetailItem label="Identification" value={image.identification} />
               <DetailItem label="Wall Location" value={image.wall_location} />
-              <DetailItem label="Crack Angle" value={image.crack_image_angles} />
+              <DetailItem label="Crack Angle" value={formatCrackAngle(image.crack_image_angles)} />
               <DetailItem
                 label="Interacting features"
                 value={

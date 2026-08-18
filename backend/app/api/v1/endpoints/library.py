@@ -117,6 +117,7 @@ async def upload_to_library(
     limitations_uncertainty: Optional[str] = Form(None),
     notes: Optional[str] = Form(None),
     panel_tags: Optional[str] = Form(None),
+    beamforming_types: Optional[str] = Form(None),
     tags: Optional[str] = Form(None),
     primary_index: Optional[int] = Form(0),
     interacts_with_other_features: Optional[bool] = Form(None),
@@ -153,18 +154,19 @@ async def upload_to_library(
     if interacts_with_other_features and not parsed_interaction_items:
         raise ValidationError("Select at least one related anomaly type or component.")
 
-    # Preserve position (don't drop blank entries) — this list must stay
-    # index-aligned with `files` below, same convention as the edit
-    # endpoint's `final_tags`. Filtering out blanks here would silently
-    # shift every tag after a gap onto the wrong file.
     parsed_tags: list[str] = []
     if panel_tags:
-        parsed_tags = [t.strip() for t in panel_tags.replace(";", ",").split(",")]
+        parsed_tags = [
+            t.strip()
+            for t in panel_tags.replace(";", ",").split(",")
+            if t.strip()
+        ]
     # Ordered 1:1 with media files when provided that way (primary, then extras).
     # Caller may nominate a different primary via primary_index; rotate so that
     # file becomes files[0] (and its panel tag stays aligned).
     files_list = list(files)
     tag_list = list(parsed_tags) if panel_tags else []
+    bf_list = _parse_aligned_csv(beamforming_types, len(files_list))
     idx = primary_index if primary_index is not None else 0
     if idx < 0 or idx >= len(files_list):
         idx = 0
@@ -175,7 +177,12 @@ async def upload_to_library(
                 tag_list.append("")
             tag_list = [tag_list[idx], *tag_list[:idx], *tag_list[idx + 1 :]]
             parsed_tags = tag_list[: len(files_list)]
+        bf_list = _rotate(bf_list, idx)
     files = files_list
+    while len(parsed_tags) < len(files):
+        parsed_tags.append("")
+    parsed_tags = parsed_tags[: len(files)]
+    parsed_beamforming_types = _sanitize_beamforming_types(parsed_tags, bf_list)
 
     parsed_anomaly_tags = _parse_tag_list(tags)
 
@@ -245,6 +252,7 @@ async def upload_to_library(
         limitations_uncertainty=limitations_uncertainty,
         notes=notes,
         panel_tags=parsed_tags,
+        beamforming_types=parsed_beamforming_types,
         tags=parsed_anomaly_tags,
         interacts_with_other_features=interacts_with_other_features,
         interaction_related_items=parsed_interaction_items,
@@ -511,6 +519,37 @@ def _parse_tag_list(raw: Optional[str]) -> list[str]:
     return result
 
 
+BEAMFORMING_PANEL = "Beamforming Panel"
+
+
+def _parse_aligned_csv(raw: Optional[str], length: int) -> list[str]:
+    """Split a comma-separated string into `length` slots, keeping blanks."""
+    if length <= 0:
+        return []
+    items = [t.strip() for t in raw.replace(";", ",").split(",")] if raw else []
+    if len(items) < length:
+        items += [""] * (length - len(items))
+    return items[:length]
+
+
+def _rotate(items: list, idx: int):
+    if not items or idx <= 0 or idx >= len(items):
+        return items
+    return [items[idx], *items[:idx], *items[idx + 1 :]]
+
+
+def _sanitize_beamforming_types(panel_tags: list[str], types: list[str]) -> list[str]:
+    """Keep a surface tag only on Beamforming Panel slots. Never used for search."""
+    out: list[str] = []
+    for i, panel in enumerate(panel_tags):
+        value = types[i].strip() if i < len(types) and types[i] else ""
+        if (panel or "").strip() != BEAMFORMING_PANEL:
+            out.append("")
+        else:
+            out.append(value)
+    return out
+
+
 def _build_revision_entry(version: int, name: str, comment: Optional[str]) -> dict:
     """timestamp is baked in as an ISO string here (not a datetime) because
     it ends up nested inside Image.revision_history, a plain list field —
@@ -558,6 +597,7 @@ async def update_library_entry(
     remove_orientation_image: Optional[bool] = Form(None),
     pipe_angle: Optional[str] = Form(None),
     panel_tags: Optional[str] = Form(None),
+    beamforming_types: Optional[str] = Form(None),
     remove_media: Optional[str] = Form(None),
     anomaly_description: Optional[str] = Form(None),
     anomaly_status: Optional[str] = Form(None),
@@ -712,6 +752,7 @@ async def update_library_entry(
     if len(final_tags) < len(final_paths):
         final_tags += [""] * (len(final_paths) - len(final_tags))
     final_tags = final_tags[: len(final_paths)]
+    final_bf = _parse_aligned_csv(beamforming_types, len(final_paths))
 
     # Promote a chosen media slot to primary (index 0) when requested.
     if primary_index is not None and final_paths:
@@ -721,6 +762,9 @@ async def update_library_entry(
         if pidx != 0:
             final_paths = [final_paths[pidx], *final_paths[:pidx], *final_paths[pidx + 1 :]]
             final_tags = [final_tags[pidx], *final_tags[:pidx], *final_tags[pidx + 1 :]]
+            final_bf = [final_bf[pidx], *final_bf[:pidx], *final_bf[pidx + 1 :]]
+
+    final_bf = _sanitize_beamforming_types(final_tags, final_bf)
 
     # Now that we know the edit is going through, remove the files that
     # dropped out (do this after storing new uploads, so a mid-request
@@ -837,6 +881,7 @@ async def update_library_entry(
         ),
         notes=_resolved(notes, existing.notes),
         panel_tags=final_tags,
+        beamforming_types=final_bf,
         tags=_parse_tag_list(tags),
         interacts_with_other_features=interacts_val,
         interaction_related_items=interaction_items_val,

@@ -445,6 +445,39 @@ class TestUploadLibraryEntry:
             assert response.status_code == 200
             assert response.json()["image"]["tags"] == []
 
+    def test_upload_stores_beamforming_surface_without_changing_panel_tags(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data=self._valid_data(
+                    panel_tags="Beamforming Panel,Image Panel",
+                    beamforming_types="Inner Surface Detect (Fluid Flood),Outer Surface Detect (Direct L-L)",
+                ),
+                files=[
+                    ("files", ("bf.jpg", b"fake-bytes", "image/jpeg")),
+                    ("files", ("img.jpg", b"fake-bytes", "image/jpeg")),
+                ],
+            )
+
+            assert response.status_code == 200
+            body = response.json()["image"]
+            assert body["panel_tags"] == ["Beamforming Panel", "Image Panel"]
+            assert body["beamforming_types"] == [
+                "Inner Surface Detect (Fluid Flood)",
+                "",
+            ]
+
 
 class TestOrientationImage:
     """The orientation image is reference-only and must never enter the

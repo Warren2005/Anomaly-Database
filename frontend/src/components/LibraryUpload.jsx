@@ -13,6 +13,7 @@ import {
   savePanelShortcuts,
   shortcutComboKey,
   isBeamformingPanel,
+  canonicalPanelTag,
   canonicalBeamformingType,
   shortcutModeLabel,
   anomalyTypeForBeamformingMode,
@@ -32,7 +33,8 @@ const CRACK_TYPE = "Crack-like";
 const SHORTCUT_REORDER_TYPE = "application/x-ili-shortcut-index";
 
 function shortShortcutLabel(tag) {
-  return (tag || "Panel").replace(/ Panel$/i, "").trim();
+  const canonical = canonicalPanelTag(tag);
+  return (canonical || "Panel").replace(/ Panel$/i, "").trim();
 }
 
 const FIELD_LABELS = {
@@ -252,7 +254,7 @@ function existingMediaFromDetail(detail) {
   return urls.map((url, i) => ({
     originalIndex: i,
     url,
-    panelTag: tags[i] || "",
+    panelTag: canonicalPanelTag(tags[i] || ""),
     beamformingType: canonicalBeamformingType(beamTypes[i] || ""),
     removed: false,
   }));
@@ -510,9 +512,10 @@ export default function LibraryUpload({
     }
     setError(null);
     setSuccess(null);
-    const mode = isBeamformingPanel(panelTag) ? canonicalBeamformingType(beamformingType) : "";
+    const tag = canonicalPanelTag(panelTag);
+    const mode = isBeamformingPanel(tag) ? canonicalBeamformingType(beamformingType) : "";
     setFiles((prev) => [...prev, ...list]);
-    setFilePanelTags((prev) => [...prev, ...list.map(() => panelTag)]);
+    setFilePanelTags((prev) => [...prev, ...list.map(() => tag)]);
     setFileBeamformingTypes((prev) => [...prev, ...list.map(() => mode)]);
     setPreviews((prev) => [
       ...prev,
@@ -1006,7 +1009,10 @@ export default function LibraryUpload({
       if (isEditMode) {
         const removeIndices = existingMedia.filter((m) => m.removed).map((m) => m.originalIndex);
         // Final image order matches the backend: surviving existing first, then new uploads.
-        const panelTags = [...survivingExisting.map((m) => m.panelTag), ...filePanelTags];
+        const panelTags = [
+          ...survivingExisting.map((m) => canonicalPanelTag(m.panelTag)),
+          ...filePanelTags.map(canonicalPanelTag),
+        ];
         const beamformingTypes = [
           ...survivingExisting.map((m) =>
             isBeamformingPanel(m.panelTag) ? canonicalBeamformingType(m.beamformingType) : ""
@@ -1038,7 +1044,7 @@ export default function LibraryUpload({
         if (onSuccess) onSuccess(result);
       } else {
         // Ordered 1:1 with uploaded files; primary_index nominates CLIP primary.
-        payload.panel_tags = filePanelTags.join(",");
+        payload.panel_tags = filePanelTags.map(canonicalPanelTag).join(",");
         payload.beamforming_types = filePanelTags
           .map((tag, i) =>
             isBeamformingPanel(tag) ? canonicalBeamformingType(fileBeamformingTypes[i]) : ""

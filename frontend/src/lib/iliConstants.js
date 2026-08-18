@@ -146,6 +146,7 @@ export const ACCEPTED_IMAGE_TYPES = [
 /** Panel / view tags — multi-select on Add Entry (matches ILI Open Panel types) */
 export const PANEL_TAG_OPTIONS = [
   "Beamforming Panel",
+  "Raw Frame",
   "Raw Panel",
   "Plot Panel",
   "Image Panel",
@@ -160,7 +161,7 @@ export const PANEL_TAG_OPTIONS = [
 export const DEFAULT_PANEL_SHORTCUTS = [
   { panel: "Beamforming Panel", mode: "" },
   { panel: "Image Panel", mode: "" },
-  { panel: "Raw Panel", mode: "" },
+  { panel: "Raw Frame", mode: "" },
 ];
 
 export const COMMON_PANEL_TAGS = DEFAULT_PANEL_SHORTCUTS.map((s) => s.panel);
@@ -169,6 +170,11 @@ const PANEL_SHORTCUTS_KEY = "ili-panel-shortcuts-v2";
 const LEGACY_SHORTCUTS_KEY = "ili-panel-shortcuts";
 
 export const BEAMFORMING_PANEL = "Beamforming Panel";
+
+/** Trim a panel tag. Kept as a helper so callers can pass stored values through. */
+export function canonicalPanelTag(tag) {
+  return (tag || "").trim();
+}
 
 /** Surface-detect beamforming modes (Direct L-L / Fluid Flood).
  *  Not limited to Metal Loss anomalies — any type can use these. */
@@ -249,13 +255,16 @@ export function shortcutComboKey(panel, mode = "") {
 
 export function normalizePanelShortcut(raw) {
   if (typeof raw === "string") {
-    if (!PANEL_TAG_OPTIONS.includes(raw)) return null;
-    return { panel: raw, mode: "" };
+    const panel = canonicalPanelTag(raw);
+    if (!PANEL_TAG_OPTIONS.includes(panel)) return null;
+    return { panel, mode: "" };
   }
-  if (!raw || !PANEL_TAG_OPTIONS.includes(raw.panel)) return null;
+  if (!raw) return null;
+  const panel = canonicalPanelTag(raw.panel);
+  if (!PANEL_TAG_OPTIONS.includes(panel)) return null;
   return {
-    panel: raw.panel,
-    mode: isBeamformingPanel(raw.panel) ? canonicalBeamformingType(raw.mode) : "",
+    panel,
+    mode: isBeamformingPanel(panel) ? canonicalBeamformingType(raw.mode) : "",
   };
 }
 
@@ -284,7 +293,7 @@ export function loadPanelShortcuts() {
       const parsed = parseStoredShortcuts(current);
       if (parsed) return parsed;
     }
-    // Ignore legacy string layouts; v2 starts from Beamforming (no mode), Image, Raw.
+    // Ignore legacy string layouts; v2 starts from Beamforming (no mode), Image, Raw Frame.
     localStorage.removeItem(LEGACY_SHORTCUTS_KEY);
     return DEFAULT_PANEL_SHORTCUTS.map((s) => ({ ...s }));
   } catch {

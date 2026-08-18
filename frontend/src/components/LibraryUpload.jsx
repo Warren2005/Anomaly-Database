@@ -143,6 +143,17 @@ function ShortcutPickerMenu({ anchorEl, menuRef, minWidth = 200, className = "",
 
   useLayoutEffect(() => {
     if (!anchorEl) return undefined;
+    const gap = 6;
+    const margin = 8;
+    const needed = Math.min(340, Math.round(window.innerHeight * 0.45));
+    const first = anchorEl.getBoundingClientRect();
+    const shortfall = first.bottom + gap + needed - (window.innerHeight - margin);
+    if (shortfall > 0) {
+      const col = anchorEl.closest(".upload-media-col");
+      if (col) col.scrollTop += shortfall;
+      else window.scrollBy(0, shortfall);
+    }
+
     const place = () => {
       const r = anchorEl.getBoundingClientRect();
       const width = Math.min(Math.max(r.width, minWidth), window.innerWidth - 16);
@@ -150,17 +161,12 @@ function ShortcutPickerMenu({ anchorEl, menuRef, minWidth = 200, className = "",
       if (left + width > window.innerWidth - 8) {
         left = Math.max(8, window.innerWidth - width - 8);
       }
-      const gap = 6;
-      const margin = 8;
-      const spaceBelow = window.innerHeight - r.bottom - gap - margin;
-      const spaceAbove = r.top - gap - margin;
-      const openDown = spaceBelow >= 220 || spaceBelow >= spaceAbove;
-      const maxHeight = Math.max(160, openDown ? spaceBelow : spaceAbove);
+      const spaceBelow = Math.max(160, window.innerHeight - r.bottom - gap - margin);
       setPos({
-        top: openDown ? r.bottom + gap : Math.max(margin, r.top - gap - maxHeight),
+        top: r.bottom + gap,
         left,
         width,
-        maxHeight,
+        maxHeight: spaceBelow,
       });
     };
     place();

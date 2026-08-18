@@ -1136,9 +1136,9 @@ body {
 }
 
 .zoomable-image-wrap.in-lightbox {
-  width: min(92vw, 1400px);
-  height: 88vh;
-  background: transparent;
+  width: 100%;
+  height: 100%;
+  background: #000;
 }
 
 .zoomable-image-wrap.in-lightbox .zoomable-image {
@@ -1382,7 +1382,7 @@ body {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(0, 0, 0, 0.92);
+  background: #000;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1665,6 +1665,21 @@ button.badge {
   flex-direction: column;
   gap: 8px;
   zoom: 1;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.browse-filter-sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.browse-filter-sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.browse-filter-sidebar::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
 }
 
 .browse-filter-panel-head {
@@ -2682,6 +2697,10 @@ button.badge {
   background: #f7f6f3;
 }
 
+[data-theme="light"] .zoomable-image-wrap.in-lightbox {
+  background: #000;
+}
+
 [data-theme="light"] .panel-slot {
   background: #fafaf8;
   border-color: rgba(0, 0, 0, 0.08);
@@ -3577,6 +3596,12 @@ button.badge {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}
+
+.panel-shortcut-picker.is-portal::-webkit-scrollbar {
+  width: 6px;
 }
 
 .panel-shortcut-picker button {

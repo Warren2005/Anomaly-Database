@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { deleteLibraryEntry, resolveImageUrl } from "../api/client";
-import { PANEL_TAG_OPTIONS, STATUS_COLORS, canonicalBeamformingType, formatCrackAngle } from "../lib/iliConstants";
+import { PANEL_TAG_OPTIONS, STATUS_COLORS, canonicalBeamformingType, formatCrackAngle, isBeamformingPanel } from "../lib/iliConstants";
 import ZoomableImage from "./ZoomableImage";
 import ImageLightbox from "./ImageLightbox";
 
@@ -382,6 +382,7 @@ export default function ImageDetail({
                 {media.map((url, i) => {
                   const tag = (panelTags[i] || `Image ${i + 1}`).trim();
                   const active = i === mediaIdx;
+                  const slotMode = canonicalBeamformingType(beamformingTypes[i] || "");
                   return (
                     <button
                       type="button"
@@ -394,6 +395,7 @@ export default function ImageDetail({
                       title={`Open ${tag}`}
                     >
                       <div className="panel-slot-label">{shortPanelLabel(tag)}</div>
+                      {slotMode ? <div className="panel-slot-mode">{slotMode}</div> : null}
                       <img src={resolveImageUrl(url)} alt={tag} />
                     </button>
                   );
@@ -530,6 +532,10 @@ export default function ImageDetail({
             <div className="detail-meta-heading">Identity</div>
             <dl className="detail-dl">
               <DetailItem label="Identification" value={image.identification} />
+              <DetailItem
+                label="Mode"
+                value={isBeamformingPanel(currentGroup?.tag) ? currentBeamformingType : null}
+              />
               <DetailItem label="Wall Location" value={image.wall_location} />
               <DetailItem label="Crack Angle" value={formatCrackAngle(image.crack_image_angles)} />
               <DetailItem

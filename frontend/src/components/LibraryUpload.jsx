@@ -13,7 +13,6 @@ import {
   savePanelShortcuts,
   shortcutComboKey,
   isBeamformingPanel,
-  beamformingModesForAnomalyType,
   canonicalBeamformingType,
   anomalyTypeForBeamformingMode,
   BEAMFORMING_TYPE_OPTIONS,
@@ -87,6 +86,39 @@ function shortcutMatchesMedia(shortcut, panelTag, beamType) {
   if ((panelTag || "") !== shortcut.panel) return false;
   if (!isBeamformingPanel(shortcut.panel)) return true;
   return canonicalBeamformingType(beamType) === canonicalBeamformingType(shortcut.mode);
+}
+
+function BeamformingModeSelect({ value, onChange }) {
+  const selected = value || "";
+  const extra = selected && !BEAMFORMING_TYPE_OPTIONS.includes(selected) ? [selected] : [];
+  return (
+    <>
+      <label className="form-label preview-panel-label">
+        Mode <span className="opt">optional</span>
+      </label>
+      <select
+        className="form-select"
+        value={selected}
+        onChange={(e) => onChange(e.target.value)}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <option value="">— Select mode —</option>
+        {extra.map((type) => (
+          <option key={type} value={type}>{type}</option>
+        ))}
+        <optgroup label="Metal Loss">
+          {METAL_LOSS_BEAMFORMING_MODES.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </optgroup>
+        <optgroup label="Crack-like">
+          {CRACK_BEAMFORMING_MODES.map((type) => (
+            <option key={type} value={type}>{type}</option>
+          ))}
+        </optgroup>
+      </select>
+    </>
+  );
 }
 
 function ShortcutPickerMenu({ anchorEl, menuRef, minWidth = 200, className = "", children }) {
@@ -560,7 +592,6 @@ export default function LibraryUpload({
 
   const survivingExisting = existingMedia.filter((m) => !m.removed);
   const mediaCount = survivingExisting.length + files.length;
-  const beamformingModeOptions = beamformingModesForAnomalyType(form.anomaly_type);
 
   useEffect(() => {
     if (mediaCount === 0) {
@@ -832,19 +863,6 @@ export default function LibraryUpload({
       }
       return next;
     });
-    if (field === "anomaly_type") {
-      const allowed = new Set(beamformingModesForAnomalyType(value));
-      setExistingMedia((prev) =>
-        prev.map((m) =>
-          !m.beamformingType || allowed.has(m.beamformingType)
-            ? m
-            : { ...m, beamformingType: "" }
-        )
-      );
-      setFileBeamformingTypes((prev) =>
-        prev.map((t) => (t && allowed.has(t) ? t : ""))
-      );
-    }
     setFieldErrors((prev) => {
       const cleared = { ...prev, [field]: undefined };
       if (field === "anomaly_type") {
@@ -1315,26 +1333,11 @@ export default function LibraryUpload({
                         <option key={tag} value={tag}>{tag}</option>
                       ))}
                     </select>
-                    {isBeamformingPanel(m.panelTag) && beamformingModeOptions.length > 0 && (
-                      <>
-                        <label className="form-label preview-panel-label">
-                          Mode <span className="opt">optional</span>
-                        </label>
-                        <select
-                          className="form-select"
-                          value={m.beamformingType || ""}
-                          onChange={(e) => setExistingBeamformingType(m.originalIndex, e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <option value="">— Select mode —</option>
-                          {(m.beamformingType && !beamformingModeOptions.includes(m.beamformingType)
-                            ? [m.beamformingType, ...beamformingModeOptions]
-                            : beamformingModeOptions
-                          ).map((type) => (
-                            <option key={type} value={type}>{type}</option>
-                          ))}
-                        </select>
-                      </>
+                    {isBeamformingPanel(m.panelTag) && (
+                      <BeamformingModeSelect
+                        value={m.beamformingType}
+                        onChange={(type) => setExistingBeamformingType(m.originalIndex, type)}
+                      />
                     )}
                   </div>
                 ))}
@@ -1409,26 +1412,11 @@ export default function LibraryUpload({
                         <option key={tag} value={tag}>{tag}</option>
                       ))}
                     </select>
-                    {isBeamformingPanel(filePanelTags[i]) && beamformingModeOptions.length > 0 && (
-                      <>
-                        <label className="form-label preview-panel-label">
-                          Mode <span className="opt">optional</span>
-                        </label>
-                        <select
-                          className="form-select"
-                          value={fileBeamformingTypes[i] || ""}
-                          onChange={(e) => setFileBeamformingType(i, e.target.value)}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <option value="">— Select mode —</option>
-                          {(fileBeamformingTypes[i] && !beamformingModeOptions.includes(fileBeamformingTypes[i])
-                            ? [fileBeamformingTypes[i], ...beamformingModeOptions]
-                            : beamformingModeOptions
-                          ).map((type) => (
-                            <option key={type} value={type}>{type}</option>
-                          ))}
-                        </select>
-                      </>
+                    {isBeamformingPanel(filePanelTags[i]) && (
+                      <BeamformingModeSelect
+                        value={fileBeamformingTypes[i]}
+                        onChange={(type) => setFileBeamformingType(i, type)}
+                      />
                     )}
                   </div>
                   );

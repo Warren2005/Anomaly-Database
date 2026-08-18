@@ -139,6 +139,18 @@ export default function App() {
   const [addEntryDirty, setAddEntryDirty] = useState(false);
   const [leaveAddConfirm, setLeaveAddConfirm] = useState(null);
   const imageSearchRef = useRef(null);
+  const [queryPreview, setQueryPreview] = useState(null);
+  const [queryPreviewOpen, setQueryPreviewOpen] = useState(false);
+  const queryPreviewUrlRef = useRef(null);
+
+  const clearQueryPreview = useCallback(() => {
+    if (queryPreviewUrlRef.current) {
+      URL.revokeObjectURL(queryPreviewUrlRef.current);
+      queryPreviewUrlRef.current = null;
+    }
+    setQueryPreview(null);
+    setQueryPreviewOpen(false);
+  }, []);
 
   const handleAddDirtyChange = useCallback((dirty) => {
     setAddEntryDirty(Boolean(dirty));
@@ -225,6 +237,13 @@ export default function App() {
   const handleSearch = useCallback(
     async (file, panelTag) => {
       const panel = (panelTag || "").trim();
+      if (queryPreviewUrlRef.current) {
+        URL.revokeObjectURL(queryPreviewUrlRef.current);
+      }
+      const previewUrl = URL.createObjectURL(file);
+      queryPreviewUrlRef.current = previewUrl;
+      setQueryPreview({ url: previewUrl, name: file.name || "Query image" });
+      setQueryPreviewOpen(false);
       setActiveSearchPanelTag(panel);
       setMode("search");
       setState("searching");
@@ -328,6 +347,7 @@ export default function App() {
   }, [filteredResults, selectedResult, state]);
 
   const handleNewSearch = useCallback(() => {
+    clearQueryPreview();
     setState("idle");
     setResults(null);
     setSelectedResult(null);
@@ -335,7 +355,7 @@ export default function App() {
     setMinSimilarity(0);
     setMaxSimilarity(100);
     setMode("browse");
-  }, []);
+  }, [clearQueryPreview]);
 
   const goHome = useCallback(() => {
     requestModeChange("browse", () => {
@@ -343,6 +363,10 @@ export default function App() {
       setSelectedResult(null);
     });
   }, [requestModeChange]);
+
+  useEffect(() => () => {
+    if (queryPreviewUrlRef.current) URL.revokeObjectURL(queryPreviewUrlRef.current);
+  }, []);
 
   return (
     <div className="app">
@@ -469,6 +493,26 @@ export default function App() {
                       />
                     </div>
                   </div>
+                  {queryPreview && (
+                    <div className="browse-filter-section is-open search-query-preview">
+                      <div className="browse-filter-section-static">
+                        <span className="browse-filter-section-label">Query image</span>
+                      </div>
+                      <div className="browse-filter-section-body">
+                        <button
+                          type="button"
+                          className="search-query-thumb"
+                          onClick={() => setQueryPreviewOpen(true)}
+                          title="View query image"
+                        >
+                          <img src={queryPreview.url} alt={queryPreview.name} />
+                        </button>
+                        <p className="search-query-name" title={queryPreview.name}>
+                          {queryPreview.name}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </aside>
 
                 <div className="library-browser-main">
@@ -583,6 +627,33 @@ export default function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+      {queryPreviewOpen && queryPreview && (
+        <div
+          className="image-lightbox"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Query image"
+          onClick={() => setQueryPreviewOpen(false)}
+        >
+          <button
+            type="button"
+            className="image-lightbox-close"
+            onClick={() => setQueryPreviewOpen(false)}
+            aria-label="Close query image"
+          >
+            ✕
+          </button>
+          <div className="image-lightbox-stage">
+            <img
+              src={queryPreview.url}
+              alt={queryPreview.name}
+              className="image-lightbox-image"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </div>
+          <span className="image-lightbox-hint">{queryPreview.name}</span>
         </div>
       )}
     </div>

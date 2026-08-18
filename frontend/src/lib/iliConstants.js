@@ -170,14 +170,15 @@ const LEGACY_SHORTCUTS_KEY = "ili-panel-shortcuts";
 
 export const BEAMFORMING_PANEL = "Beamforming Panel";
 
-/** Metal Loss beamforming modes — metadata only, not used for search */
+/** Surface-detect beamforming modes (Direct L-L / Fluid Flood).
+ *  Not limited to Metal Loss anomalies — any type can use these. */
 export const METAL_LOSS_BEAMFORMING_MODES = [
   "Inner Surface Detect (Fluid Flood)",
   "Outer Surface Detect (Direct L-L)",
   "Outer Surface (Direct L-L Complex Surface)",
 ];
 
-/** Crack-like beamforming modes — metadata only, not used for search */
+/** Crack-like beamforming modes — metadata only; these imply Crack-like. */
 export const CRACK_BEAMFORMING_MODES = [
   "Inner Surface Detect (Fluid Flood Angled)",
   "Outer Surface Verify (Direct T-T)",
@@ -210,9 +211,8 @@ export function isBeamformingPanel(tag) {
 }
 
 export function beamformingModesForAnomalyType(anomalyType) {
-  if (anomalyType === "Metal Loss") return METAL_LOSS_BEAMFORMING_MODES;
   if (anomalyType === "Crack-like") return CRACK_BEAMFORMING_MODES;
-  return [];
+  return METAL_LOSS_BEAMFORMING_MODES;
 }
 
 /** Full mode name, including bracketed method. Never truncated for display. */
@@ -225,10 +225,9 @@ export function shortBeamformingType(type) {
   return canonicalBeamformingType(type);
 }
 
-/** Infer Anomaly Type from a beamforming mode so the shortcut can autofill it. */
+/** Only crack modes imply an anomaly type. Surface-detect modes do not. */
 export function anomalyTypeForBeamformingMode(type) {
   const t = canonicalBeamformingType(type);
-  if (METAL_LOSS_BEAMFORMING_MODES.includes(t)) return "Metal Loss";
   if (CRACK_BEAMFORMING_MODES.includes(t)) return "Crack-like";
   return "";
 }

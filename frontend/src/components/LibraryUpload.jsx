@@ -88,6 +88,20 @@ function shortcutMatchesMedia(shortcut, panelTag, beamType) {
   return canonicalBeamformingType(beamType) === canonicalBeamformingType(shortcut.mode);
 }
 
+function formWithInferredAnomalyType(prev, mode) {
+  const inferred = anomalyTypeForBeamformingMode(mode);
+  if (!inferred || prev.anomaly_type === inferred) return prev;
+  const opts = IDENTIFICATION_BY_TYPE[inferred];
+  return {
+    ...prev,
+    anomaly_type: inferred,
+    identification: opts?.includes(prev.identification)
+      ? prev.identification
+      : (IDENTIFICATION_DEFAULTS[inferred] || opts?.[0] || ""),
+    crack_image_angles: inferred === CRACK_TYPE ? prev.crack_image_angles : "",
+  };
+}
+
 function BeamformingModeSelect({ value, onChange }) {
   const selected = value || "";
   const extra = selected && !BEAMFORMING_TYPE_OPTIONS.includes(selected) ? [selected] : [];
@@ -106,7 +120,7 @@ function BeamformingModeSelect({ value, onChange }) {
         {extra.map((type) => (
           <option key={type} value={type}>{type}</option>
         ))}
-        <optgroup label="Metal Loss">
+        <optgroup label="Surface detect">
           {METAL_LOSS_BEAMFORMING_MODES.map((type) => (
             <option key={type} value={type}>{type}</option>
           ))}
@@ -504,18 +518,7 @@ export default function LibraryUpload({
       ...list.map((f) => ({ url: URL.createObjectURL(f), name: f.name })),
     ]);
     if (mode) {
-      const inferred = anomalyTypeForBeamformingMode(mode);
-      if (inferred) {
-        setForm((prev) => {
-          if (prev.anomaly_type) return prev;
-          const opts = IDENTIFICATION_BY_TYPE[inferred];
-          return {
-            ...prev,
-            anomaly_type: inferred,
-            identification: IDENTIFICATION_DEFAULTS[inferred] || opts?.[0] || prev.identification,
-          };
-        });
-      }
+      setForm((prev) => formWithInferredAnomalyType(prev, mode));
     }
   }, []);
 
@@ -551,6 +554,7 @@ export default function LibraryUpload({
 
   const setFileBeamformingType = (idx, type) => {
     setFileBeamformingTypes((prev) => prev.map((t, i) => (i === idx ? type : t)));
+    setForm((prev) => formWithInferredAnomalyType(prev, type));
   };
 
   const removeExistingMedia = (originalIndex) => {
@@ -588,6 +592,7 @@ export default function LibraryUpload({
     setExistingMedia((prev) =>
       prev.map((m) => (m.originalIndex === originalIndex ? { ...m, beamformingType: type } : m))
     );
+    setForm((prev) => formWithInferredAnomalyType(prev, type));
   };
 
   const survivingExisting = existingMedia.filter((m) => !m.removed);
@@ -702,26 +707,6 @@ export default function LibraryUpload({
       reorderShortcuts(from, index);
     }
   };
-
-  const usedNonBeamPanels = new Set(
-    panelShortcuts.filter((s) => s?.panel && !isBeamformingPanel(s.panel)).map((s) => s.panel)
-  );
-
-  const unusedBeamModes = (exceptIndex = -1) => {
-    const used = new Set(
-      panelShortcuts
-        .filter((s, i) => i !== exceptIndex && isBeamformingPanel(s.panel))
-        .map((s) => canonicalBeamformingType(s.mode))
-    );
-    const modes = BEAMFORMING_TYPE_OPTIONS.filter((m) => !used.has(m));
-    if (!used.has("")) modes.unshift("");
-    return modes;
-  };
-
-  const addablePanels = PANEL_TAG_OPTIONS.filter((panel) => {
-    if (isBeamformingPanel(panel)) return unusedBeamModes().length > 0;
-    return !usedNonBeamPanels.has(panel);
-  });
 
   const shortcutAlreadyExists = (panel, mode, exceptIndex = -1) => {
     const key = shortcutComboKey(panel, mode);
@@ -1250,25 +1235,23 @@ export default function LibraryUpload({
                   </div>
                 );
               })}
-              {addablePanels.length > 0 && (
-                <div
-                  className={`panel-shortcut panel-shortcut-add${
-                    shortcutPicker?.mode === "add" || shortcutPicker?.mode === "add-beam-mode" ? " is-open" : ""
-                  }`}
+              <div
+                className={`panel-shortcut panel-shortcut-add${
+                  shortcutPicker?.mode === "add" || shortcutPicker?.mode === "add-beam-mode" ? " is-open" : ""
+                }`}
+              >
+                <button
+                  type="button"
+                  className="panel-shortcut-main"
+                  onClick={(e) =>
+                    toggleShortcutPicker({ mode: "add" }, e.currentTarget.closest(".panel-shortcut"))
+                  }
+                  title="Add a panel shortcut"
                 >
-                  <button
-                    type="button"
-                    className="panel-shortcut-main"
-                    onClick={(e) =>
-                      toggleShortcutPicker({ mode: "add" }, e.currentTarget.closest(".panel-shortcut"))
-                    }
-                    title="Add a panel shortcut"
-                  >
-                    <span className="panel-shortcut-label">+ Add shortcut</span>
-                    <span className="panel-shortcut-hint">Choose a panel</span>
-                  </button>
-                </div>
-              )}
+                  <span className="panel-shortcut-label">+ Add shortcut</span>
+                  <span className="panel-shortcut-hint">Choose a panel</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2082,7 +2065,7 @@ export default function LibraryUpload({
           }
         >
           {shortcutPicker.mode === "add" &&
-            addablePanels.map((option) => (
+            PANEL_TAG_OPTIONS.map((option) => (
               <button
                 key={option}
                 type="button"
@@ -2095,12 +2078,7 @@ export default function LibraryUpload({
           {shortcutPicker.mode === "edit" && (
             <>
               <p className="panel-shortcut-picker-group">Panel</p>
-              {PANEL_TAG_OPTIONS.filter((panel) => {
-                const current = panelShortcuts[shortcutPicker.index];
-                if (isBeamformingPanel(panel)) return true;
-                if (current?.panel === panel) return true;
-                return !usedNonBeamPanels.has(panel);
-              }).map((option) => (
+              {PANEL_TAG_OPTIONS.map((option) => (
                 <button
                   key={option}
                   type="button"
@@ -2114,7 +2092,7 @@ export default function LibraryUpload({
               {isBeamformingPanel(panelShortcuts[shortcutPicker.index]?.panel) && (
                 <>
                   <p className="panel-shortcut-picker-group">Mode</p>
-                  {unusedBeamModes(shortcutPicker.index).map((type) => (
+                  {["", ...BEAMFORMING_TYPE_OPTIONS].map((type) => (
                     <button
                       key={type || "no-mode"}
                       type="button"
@@ -2135,10 +2113,8 @@ export default function LibraryUpload({
           )}
           {(shortcutPicker.mode === "add-beam-mode" || shortcutPicker.mode === "edit-beam-mode") && (
             <>
-              <p className="panel-shortcut-picker-group">Metal Loss</p>
-              {METAL_LOSS_BEAMFORMING_MODES.filter((type) =>
-                unusedBeamModes(shortcutPicker.mode === "edit-beam-mode" ? shortcutPicker.index : -1).includes(type)
-              ).map((type) => (
+              <p className="panel-shortcut-picker-group">Surface detect</p>
+              {METAL_LOSS_BEAMFORMING_MODES.map((type) => (
                 <button
                   key={type}
                   type="button"
@@ -2153,9 +2129,7 @@ export default function LibraryUpload({
                 </button>
               ))}
               <p className="panel-shortcut-picker-group">Crack-like</p>
-              {CRACK_BEAMFORMING_MODES.filter((type) =>
-                unusedBeamModes(shortcutPicker.mode === "edit-beam-mode" ? shortcutPicker.index : -1).includes(type)
-              ).map((type) => (
+              {CRACK_BEAMFORMING_MODES.map((type) => (
                 <button
                   key={type}
                   type="button"
@@ -2169,19 +2143,17 @@ export default function LibraryUpload({
                   {type}
                 </button>
               ))}
-              {unusedBeamModes(shortcutPicker.mode === "edit-beam-mode" ? shortcutPicker.index : -1).includes("") && (
-                <button
-                  type="button"
-                  role="option"
-                  onClick={() =>
-                    shortcutPicker.mode === "edit-beam-mode"
-                      ? replaceBeamformingMode(shortcutPicker.index, "")
-                      : addBeamformingShortcut("")
-                  }
-                >
-                  No mode
-                </button>
-              )}
+              <button
+                type="button"
+                role="option"
+                onClick={() =>
+                  shortcutPicker.mode === "edit-beam-mode"
+                    ? replaceBeamformingMode(shortcutPicker.index, "")
+                    : addBeamformingShortcut("")
+                }
+              >
+                No mode
+              </button>
             </>
           )}
         </ShortcutPickerMenu>

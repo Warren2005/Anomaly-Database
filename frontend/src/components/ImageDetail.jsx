@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { deleteLibraryEntry, resolveImageUrl } from "../api/client";
 import { PANEL_TAG_OPTIONS, STATUS_COLORS } from "../lib/iliConstants";
 import ZoomableImage from "./ZoomableImage";
@@ -43,6 +43,8 @@ export default function ImageDetail({
   const [lightbox, setLightbox] = useState(null);
   const [viewMode, setViewMode] = useState(VIEW_FOCUS);
   const [showRevisions, setShowRevisions] = useState(true);
+  const metaPaneRef = useRef(null);
+  const imagePaneRef = useRef(null);
 
   const canNavigate = typeof currentIndex === "number" && totalCount > 0 && (onPrev || onNext);
   const hasPrev = canNavigate && currentIndex > 0 && typeof onPrev === "function";
@@ -106,6 +108,7 @@ export default function ImageDetail({
     setUnlockInput("");
     setUnlocking(false);
     setUnlockError(null);
+    metaPaneRef.current?.scrollTo({ top: 0 });
   }, [image.id]);
 
   useEffect(() => {
@@ -113,23 +116,59 @@ export default function ImageDetail({
   }, [viewMode, canUsePanels]);
 
   useEffect(() => {
-    if (!canNavigate) return undefined;
-
     const onKeyDown = (e) => {
       if (lightbox) return;
-      if (e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
-      if (e.key === "ArrowLeft" && hasPrev) {
+      const tag = e.target.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+      if (canNavigate && e.key === "ArrowLeft" && hasPrev) {
         e.preventDefault();
         onPrev();
-      } else if (e.key === "ArrowRight" && hasNext) {
+        return;
+      }
+      if (canNavigate && e.key === "ArrowRight" && hasNext) {
         e.preventDefault();
         onNext();
+        return;
+      }
+
+      const pane = metaPaneRef.current;
+      if (!pane) return;
+      const page = Math.max(120, pane.clientHeight * 0.85);
+      if (e.key === "PageDown") {
+        e.preventDefault();
+        pane.scrollBy({ top: page, behavior: "smooth" });
+      } else if (e.key === "PageUp") {
+        e.preventDefault();
+        pane.scrollBy({ top: -page, behavior: "smooth" });
+      } else if (e.key === "Home" && e.ctrlKey) {
+        e.preventDefault();
+        pane.scrollTo({ top: 0, behavior: "smooth" });
+      } else if (e.key === "End" && e.ctrlKey) {
+        e.preventDefault();
+        pane.scrollTo({ top: pane.scrollHeight, behavior: "smooth" });
       }
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [canNavigate, hasPrev, hasNext, onPrev, onNext, lightbox]);
+
+  useEffect(() => {
+    const imagePane = imagePaneRef.current;
+    const metaPane = metaPaneRef.current;
+    if (!imagePane || !metaPane) return undefined;
+
+    const onWheel = (e) => {
+      if (e.ctrlKey || e.metaKey) return;
+      if (e.target.closest(".zoomable-image-wrap")) return;
+      e.preventDefault();
+      metaPane.scrollTop += e.deltaY;
+    };
+
+    imagePane.addEventListener("wheel", onWheel, { passive: false });
+    return () => imagePane.removeEventListener("wheel", onWheel);
+  }, [viewMode, image.id]);
 
   const title =
     image.identification ||
@@ -284,7 +323,10 @@ export default function ImageDetail({
       </div>
 
       <div className="detail-content">
-        <div className={`detail-image-container${viewMode === VIEW_GRID ? " is-grid" : ""}`}>
+        <div
+          ref={imagePaneRef}
+          className={`detail-image-container${viewMode === VIEW_GRID ? " is-grid" : ""}`}
+        >
           {canUsePanels && (
             <div className="detail-image-toolbar">
               <div className="detail-view-toggle" role="group" aria-label="Image layout">
@@ -391,7 +433,12 @@ export default function ImageDetail({
           )}
         </div>
 
-        <div className="detail-metadata">
+        <div
+          className="detail-metadata"
+          ref={metaPaneRef}
+          tabIndex={0}
+          aria-label="Anomaly details"
+        >
           <div className="detail-meta-header">
             <h2>{title}</h2>
             {image.classification_status && (

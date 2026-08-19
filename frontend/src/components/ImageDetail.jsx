@@ -44,6 +44,8 @@ export default function ImageDetail({
   const [lightbox, setLightbox] = useState(null);
   const [viewMode, setViewMode] = useState(VIEW_FOCUS);
   const [showRevisions, setShowRevisions] = useState(true);
+  const [copiedAnomalyId, setCopiedAnomalyId] = useState(false);
+  const copyResetTimerRef = useRef(null);
   const metaPaneRef = useRef(null);
   const imagePaneRef = useRef(null);
 
@@ -110,8 +112,20 @@ export default function ImageDetail({
     setUnlockInput("");
     setUnlocking(false);
     setUnlockError(null);
+    setCopiedAnomalyId(false);
+    if (copyResetTimerRef.current) {
+      clearTimeout(copyResetTimerRef.current);
+      copyResetTimerRef.current = null;
+    }
     metaPaneRef.current?.scrollTo({ top: 0 });
   }, [image.id]);
+
+  useEffect(
+    () => () => {
+      if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+    },
+    []
+  );
 
   useEffect(() => {
     if (viewMode === VIEW_GRID && !canUsePanels) setViewMode(VIEW_FOCUS);
@@ -213,6 +227,35 @@ export default function ImageDetail({
   const openLightbox = (src, alt) => {
     if (!src) return;
     setLightbox({ src, alt: alt || title });
+  };
+
+  const copyAnomalyId = async () => {
+    const value = (image.anomaly_id || "").trim();
+    if (!value) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(value);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = value;
+        ta.setAttribute("readonly", "");
+        ta.style.position = "fixed";
+        ta.style.opacity = "0";
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopiedAnomalyId(true);
+      if (copyResetTimerRef.current) clearTimeout(copyResetTimerRef.current);
+      copyResetTimerRef.current = setTimeout(() => {
+        setCopiedAnomalyId(false);
+        copyResetTimerRef.current = null;
+      }, 1600);
+    } catch {
+      setCopiedAnomalyId(false);
+    }
   };
 
   const currentSrc = resolveImageUrl(media[mediaIdx] || image_url);
@@ -469,7 +512,18 @@ export default function ImageDetail({
                 <span className="ref-card-type">{image.anomaly_type}</span>
               )}
               {image.anomaly_id && (
-                <span className="detail-id-chip">{image.anomaly_id}</span>
+                <span className="detail-id-chip-wrap">
+                  <span className="detail-id-chip">{image.anomaly_id}</span>
+                  <button
+                    type="button"
+                    className="detail-id-copy-btn"
+                    onClick={copyAnomalyId}
+                    aria-label="Copy anomaly ID"
+                    title={copiedAnomalyId ? "Copied" : "Copy anomaly ID"}
+                  >
+                    {copiedAnomalyId ? "Copied" : "Copy"}
+                  </button>
+                </span>
               )}
               {(panelGroups.length > 0 || tags.length > 0) && (
                 <div className="detail-panel-tags">
@@ -535,7 +589,11 @@ export default function ImageDetail({
               <DetailItem label="Identification" value={image.identification} />
               <DetailItem
                 label="Mode"
-                value={isBeamformingPanel(currentGroup?.tag) ? currentBeamformingType : null}
+                value={
+                  isBeamformingPanel(currentGroup?.tag)
+                    ? currentBeamformingType || "N/A"
+                    : "N/A"
+                }
               />
               <DetailItem label="Wall Location" value={image.wall_location} />
               <DetailItem label="Crack Angle" value={formatCrackAngle(image.crack_image_angles)} />

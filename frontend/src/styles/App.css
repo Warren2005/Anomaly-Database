@@ -1142,8 +1142,11 @@ body {
 }
 
 .zoomable-image-wrap.in-lightbox .zoomable-image {
-  max-height: 88vh;
-  max-width: 92vw;
+  /* Fill the lightbox stage; keep the image whole via object-fit: contain. */
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  max-width: none;
 }
 
 .zoomable-image-wrap {
@@ -2697,8 +2700,15 @@ button.badge {
   background: #f7f6f3;
 }
 
-[data-theme="light"] .zoomable-image-wrap.in-lightbox {
-  background: #000;
+[data-theme="light"] .image-lightbox,
+[data-theme="light"] .image-lightbox-stage,
+[data-theme="light"] .zoomable-image-wrap.in-lightbox,
+[data-theme="light"] .zoomable-image-wrap.in-lightbox .detail-image {
+  background: #fff;
+}
+
+[data-theme="light"] .image-lightbox-hint {
+  color: rgba(0, 0, 0, 0.6);
 }
 
 [data-theme="light"] .panel-slot {
@@ -2849,6 +2859,31 @@ button.badge {
   text-transform: uppercase;
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
+}
+
+.detail-id-chip-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.detail-id-copy-btn {
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  border-radius: 7px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.detail-id-copy-btn:hover,
+.detail-id-copy-btn:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  outline: none;
 }
 
 .detail-meta-block {

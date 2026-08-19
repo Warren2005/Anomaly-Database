@@ -396,6 +396,11 @@ export default function ImageDetail({
                   </>
                 )}
               </div>
+              {viewMode === VIEW_FOCUS && currentBeamformingType && (
+                <div className="detail-beam-mode">
+                  <span className="badge badge-beam-type">{currentBeamformingType}</span>
+                </div>
+              )}
               <div className="media-thumbs detail-panel-tabs">
                 {canUsePanels && viewMode === VIEW_FOCUS && panelGroups.map((group) => (
                   <button

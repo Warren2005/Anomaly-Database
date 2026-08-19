@@ -101,6 +101,16 @@ export default function ImageDetail({
 
   const canUsePanels = media.length > 1;
 
+  const latestRevision = useMemo(() => {
+    const history = image.revision_history || [];
+    if (!history.length) return null;
+    return [...history].sort((a, b) => {
+      const ver = (b.version ?? 0) - (a.version ?? 0);
+      if (ver !== 0) return ver;
+      return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+    })[0];
+  }, [image.revision_history]);
+
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
     setMediaIdx(typeof media_index === "number" ? media_index : 0);
@@ -508,7 +518,7 @@ export default function ImageDetail({
             )}
           </div>
 
-          {(image.anomaly_type || image.anomaly_id || panelGroups.length > 0 || tags.length > 0) && (
+          {(image.anomaly_type || image.anomaly_id || panelGroups.length > 0) && (
             <div className="detail-meta-chips">
               {image.anomaly_type && (
                 <span className="ref-card-type">{image.anomaly_type}</span>
@@ -527,32 +537,23 @@ export default function ImageDetail({
                   </button>
                 </span>
               )}
-              {(panelGroups.length > 0 || tags.length > 0) && (
+              {panelGroups.length > 0 && (
                 <div className="detail-panel-tags">
-                  {panelGroups.length > 0 && (
-                    <div className="panel-tag-row">
-                      {panelGroups.map((group) => (
-                        <button
-                          type="button"
-                          key={group.tag}
-                          className={`badge badge-panel${
-                            group.indexes.includes(mediaIdx) ? " badge-panel-current" : ""
-                          }`}
-                          onClick={() => selectPanel(group.tag)}
-                        >
-                          {group.tag}
-                          {group.indexes.length > 1 ? ` (${group.indexes.length})` : ""}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {tags.length > 0 && (
-                    <div className="panel-tag-row">
-                      {tags.map((tag) => (
-                        <span key={tag} className="badge">{tag}</span>
-                      ))}
-                    </div>
-                  )}
+                  <div className="panel-tag-row">
+                    {panelGroups.map((group) => (
+                      <button
+                        type="button"
+                        key={group.tag}
+                        className={`badge badge-panel${
+                          group.indexes.includes(mediaIdx) ? " badge-panel-current" : ""
+                        }`}
+                        onClick={() => selectPanel(group.tag)}
+                      >
+                        {group.tag}
+                        {group.indexes.length > 1 ? ` (${group.indexes.length})` : ""}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
@@ -598,26 +599,28 @@ export default function ImageDetail({
                 }
               />
               <DetailItem label="Wall Location" value={image.wall_location} />
-              <DetailItem label="Crack Angle" value={formatCrackAngle(image.crack_image_angles)} />
-              <DetailItem
-                label="Interacting features"
-                value={
-                  image.interacts_with_other_features === true
-                    ? "Yes"
-                    : image.interacts_with_other_features === false
-                    ? "No"
-                    : null
-                }
-              />
               <DetailItem label="Pipe Angle" value={image.pipe_angle != null ? `${image.pipe_angle}°` : null} />
+              <DetailItem label="Crack Angle" value={formatCrackAngle(image.crack_image_angles)} />
+              {(image.interacts_with_other_features === true
+                || image.interacts_with_other_features === false) && (
+                <div className="detail-item detail-item-interacting">
+                  <dt>Interacting features</dt>
+                  <dd>
+                    <div className="detail-interacting-value">
+                      <span>{image.interacts_with_other_features ? "Yes" : "No"}</span>
+                      {image.interacts_with_other_features
+                        && (image.interaction_related_items || []).length > 0 && (
+                        <div className="detail-interaction-tags">
+                          {image.interaction_related_items.map((item) => (
+                            <span key={item} className="badge badge-interaction">{item}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </dd>
+                </div>
+              )}
             </dl>
-            {image.interacts_with_other_features && (image.interaction_related_items || []).length > 0 && (
-              <div className="panel-tag-row">
-                {image.interaction_related_items.map((item) => (
-                  <span key={item} className="badge">{item}</span>
-                ))}
-              </div>
-            )}
           </div>
 
           <div className="detail-meta-block">
@@ -718,8 +721,30 @@ export default function ImageDetail({
           )}
 
           <div className="detail-meta-footer">
-            <span className="detail-meta-footer-label">Image ID</span>
-            <span className="detail-meta-footer-value">{image.id}</span>
+            {(latestRevision?.name || tags.length > 0) && (
+              <div className="detail-meta-footer-row">
+                {latestRevision?.name && (
+                  <div className="detail-meta-footer-item">
+                    <span className="detail-meta-footer-label">Contributed by</span>
+                    <span className="detail-meta-footer-value">{latestRevision.name}</span>
+                  </div>
+                )}
+                {tags.length > 0 && (
+                  <div className="detail-meta-footer-item">
+                    <span className="detail-meta-footer-label">Tags</span>
+                    <div className="panel-tag-row detail-meta-footer-tags">
+                      {tags.map((tag) => (
+                        <span key={tag} className="badge">{tag}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="detail-meta-footer-item">
+              <span className="detail-meta-footer-label">Image ID</span>
+              <span className="detail-meta-footer-value">{image.id}</span>
+            </div>
           </div>
         </div>
       </div>

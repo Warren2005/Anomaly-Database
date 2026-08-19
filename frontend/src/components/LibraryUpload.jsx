@@ -59,25 +59,32 @@ const FIELD_LABELS = {
   pipe_angle: "Pipe Angle",
 };
 
-function missingFieldLabels(errs) {
-  const labels = [];
+function validationMessages(errs) {
+  const messages = [];
   const seen = new Set();
-  const add = (label) => {
-    if (!seen.has(label)) {
-      seen.add(label);
-      labels.push(label);
+  const add = (text) => {
+    if (!seen.has(text)) {
+      seen.add(text);
+      messages.push(text);
     }
   };
-  for (const key of Object.keys(errs)) {
+  for (const [key, msg] of Object.entries(errs)) {
     if (key.startsWith("panel_") || key.startsWith("existing_")) {
-      add("Panel tag on each image");
-    } else if (key === "file") {
-      add(errs.file.includes("panel tag") ? "Panel tag on each image" : "At least one panel image");
+      add(typeof msg === "string" && !msg.includes("Required") ? msg : "Each image needs a panel tag");
+      continue;
+    }
+    if (key === "file") {
+      add(msg);
+      continue;
+    }
+    const label = FIELD_LABELS[key] || key;
+    if (msg === "Required" || (typeof msg === "string" && msg.startsWith("Required"))) {
+      add(`${label} is required`);
     } else {
-      add(FIELD_LABELS[key] || key);
+      add(`${label}: ${msg}`);
     }
   }
-  return labels;
+  return messages;
 }
 
 const FALLBACK_RUNS = RUN_OPTIONS.map((run) => ({
@@ -975,7 +982,7 @@ export default function LibraryUpload({
     const errs = validate();
     if (Object.keys(errs).length) {
       setFieldErrors(errs);
-      setMissingFields(missingFieldLabels(errs));
+      setMissingFields(validationMessages(errs));
       return;
     }
     setUploading(true);
@@ -1573,7 +1580,7 @@ export default function LibraryUpload({
           </div>
         </div>
 
-        <div className="form-row">
+        <div className="form-row form-row-3">
           <div className="form-field">
             <label className="form-label">Classification Status <span className="req">*</span></label>
             <select
@@ -1596,6 +1603,21 @@ export default function LibraryUpload({
               value={form.zero_angle_frame_index}
               onChange={(e) => handleFormChange("zero_angle_frame_index", e.target.value)}
             />
+          </div>
+          <div className="form-field">
+            <label className="form-label">
+              Pipe Angle <span className="opt">optional</span>
+            </label>
+            <input
+              className={`form-input${fieldErrors.pipe_angle ? " has-error-input" : ""}`}
+              type="text"
+              inputMode="decimal"
+              value={form.pipe_angle}
+              onChange={(e) => handleFormChange("pipe_angle", e.target.value)}
+            />
+            {fieldErrors.pipe_angle && (
+              <p className="add-run-error">{fieldErrors.pipe_angle}</p>
+            )}
           </div>
         </div>
 
@@ -1789,99 +1811,6 @@ export default function LibraryUpload({
           </div>
         </div>
 
-        <div className="form-row">
-          <div className="form-field">
-            <label className="form-label">Tags <span className="opt">optional</span></label>
-            <select
-              className="form-select"
-              value={tagSelectValue}
-              onChange={(e) => handleTagSelect(e.target.value)}
-            >
-              <option value="">— Select existing tag —</option>
-              {tagOptions
-                .filter((opt) => !selectedTags.some((t) => t.toLowerCase() === opt.toLowerCase()))
-                .map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              <option value={ADD_NEW_TAG}>+ Add new tag…</option>
-            </select>
-            {showAddTag && (
-              <div className="add-run-panel">
-                <p className="add-run-title">Add a new tag (admin passkey required)</p>
-                <div className="form-row add-run-actions">
-                  <div className="form-field">
-                    <label className="form-label">Tag</label>
-                    <input
-                      className="form-input"
-                      type="text"
-                      value={newTagName}
-                      onChange={(e) => setNewTagName(e.target.value)}
-                      autoFocus
-                    />
-                  </div>
-                  <div className="form-field">
-                    <label className="form-label">Passkey</label>
-                    <input
-                      className="form-input"
-                      type="password"
-                      value={addTagPasskey}
-                      onChange={(e) => setAddTagPasskey(e.target.value)}
-                      autoComplete="off"
-                    />
-                  </div>
-                  <div className="add-run-buttons">
-                    <button
-                      type="button"
-                      className="btn btn-primary"
-                      disabled={addingTag}
-                      onClick={handleAddTag}
-                    >
-                      {addingTag ? "Saving…" : "Save tag"}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn-secondary"
-                      onClick={resetAddTagForm}
-                      disabled={addingTag}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-                {addTagError && <p className="add-run-error">{addTagError}</p>}
-              </div>
-            )}
-            {selectedTags.length > 0 && (
-              <div className="tag-chip-row">
-                {selectedTags.map((t) => (
-                  <span key={t} className="badge badge-panel tag-chip">
-                    {t}
-                    <button
-                      type="button"
-                      className="tag-chip-remove"
-                      onClick={() => removeTag(t)}
-                      aria-label={`Remove tag ${t}`}
-                    >
-                      ✕
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="form-field">
-            <label className="form-label">
-              {isEditMode ? "Sign this revision" : "Your Name"} <span className="req">*</span>
-            </label>
-            <input
-              className={`form-input${fieldErrors.contributor_name ? " has-error-input" : ""}`}
-              type="text"
-              value={form.contributor_name}
-              onChange={(e) => handleFormChange("contributor_name", e.target.value)}
-            />
-          </div>
-        </div>
-
         <div className="qc-section">
           <label className="checkbox-label">
             <input
@@ -1953,69 +1882,150 @@ export default function LibraryUpload({
           />
         </div>
 
-        <div className="form-row">
-          <div className="form-field orientation-field">
-            <label className="form-label">
-              Orientation Image <span className="opt">optional</span>
-            </label>
-            {(orientationPreview || existingOrientationUrl) ? (
-              <div className="orientation-preview">
-                <button
-                  type="button"
-                  className="orientation-preview-open"
-                  onClick={() =>
-                    openPreviewLightbox(
-                      orientationPreview || resolveImageUrl(existingOrientationUrl),
-                      "Orientation reference"
-                    )
-                  }
-                  aria-label="View orientation image larger"
-                >
-                  <img
-                    src={orientationPreview || resolveImageUrl(existingOrientationUrl)}
-                    alt="Orientation reference"
-                  />
-                </button>
-                <button
-                  type="button"
-                  className="remove-img"
-                  onClick={clearOrientation}
-                  aria-label="Remove orientation image"
-                >
-                  ✕
-                </button>
-              </div>
-            ) : (
+        <div className="form-field orientation-field">
+          <label className="form-label">
+            Orientation Image <span className="opt">optional</span>
+          </label>
+          {(orientationPreview || existingOrientationUrl) ? (
+            <div className="orientation-preview">
               <button
                 type="button"
-                className="btn btn-secondary"
-                onClick={() => orientationInputRef.current?.click()}
+                className="orientation-preview-open"
+                onClick={() =>
+                  openPreviewLightbox(
+                    orientationPreview || resolveImageUrl(existingOrientationUrl),
+                    "Orientation reference"
+                  )
+                }
+                aria-label="View orientation image larger"
               >
-                Choose orientation image…
+                <img
+                  src={orientationPreview || resolveImageUrl(existingOrientationUrl)}
+                  alt="Orientation reference"
+                />
               </button>
-            )}
-            <input
-              ref={orientationInputRef}
-              type="file"
-              accept="image/jpeg,image/png,image/tiff,image/gif,image/webp"
-              style={{ display: "none" }}
-              onChange={(e) => {
-                handleOrientationPick(e.target.files?.[0]);
-                e.target.value = "";
-              }}
-            />
-          </div>
-          <div className="form-field pipe-angle-field">
-            <label className="form-label">
-              Pipe Angle <span className="opt">optional</span>
-            </label>
-            <input
-              className={`form-input${fieldErrors.pipe_angle ? " has-error-input" : ""}`}
-              type="text"
-              inputMode="decimal"
-              value={form.pipe_angle}
-              onChange={(e) => handleFormChange("pipe_angle", e.target.value)}
-            />
+              <button
+                type="button"
+                className="remove-img"
+                onClick={clearOrientation}
+                aria-label="Remove orientation image"
+              >
+                ✕
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => orientationInputRef.current?.click()}
+            >
+              Choose orientation image…
+            </button>
+          )}
+          <input
+            ref={orientationInputRef}
+            type="file"
+            accept="image/jpeg,image/png,image/tiff,image/gif,image/webp"
+            style={{ display: "none" }}
+            onChange={(e) => {
+              handleOrientationPick(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
+        <div className="form-footer-signature">
+          <div className="form-row">
+            <div className="form-field">
+              <label className="form-label">Tags <span className="opt">optional</span></label>
+              <select
+                className="form-select"
+                value={tagSelectValue}
+                onChange={(e) => handleTagSelect(e.target.value)}
+              >
+                <option value="">— Choose tag —</option>
+                {tagOptions
+                  .filter((opt) => !selectedTags.some((t) => t.toLowerCase() === opt.toLowerCase()))
+                  .map((opt) => (
+                    <option key={opt} value={opt}>{opt}</option>
+                  ))}
+                <option value={ADD_NEW_TAG}>+ Add new tag…</option>
+              </select>
+              {showAddTag && (
+                <div className="add-run-panel">
+                  <p className="add-run-title">Add a new tag (admin passkey required)</p>
+                  <div className="form-row add-run-actions">
+                    <div className="form-field">
+                      <label className="form-label">Tag</label>
+                      <input
+                        className="form-input"
+                        type="text"
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        autoFocus
+                      />
+                    </div>
+                    <div className="form-field">
+                      <label className="form-label">Passkey</label>
+                      <input
+                        className="form-input"
+                        type="password"
+                        value={addTagPasskey}
+                        onChange={(e) => setAddTagPasskey(e.target.value)}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className="add-run-buttons">
+                      <button
+                        type="button"
+                        className="btn btn-primary"
+                        disabled={addingTag}
+                        onClick={handleAddTag}
+                      >
+                        {addingTag ? "Saving…" : "Save tag"}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-secondary"
+                        onClick={resetAddTagForm}
+                        disabled={addingTag}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                  {addTagError && <p className="add-run-error">{addTagError}</p>}
+                </div>
+              )}
+              {selectedTags.length > 0 && (
+                <div className="tag-chip-row">
+                  {selectedTags.map((t) => (
+                    <span key={t} className="badge badge-panel tag-chip">
+                      {t}
+                      <button
+                        type="button"
+                        className="tag-chip-remove"
+                        onClick={() => removeTag(t)}
+                        aria-label={`Remove tag ${t}`}
+                      >
+                        ✕
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="form-field">
+              <label className="form-label">
+                {isEditMode ? "Sign this revision" : "Your Name"} <span className="req">*</span>
+              </label>
+              <input
+                className={`form-input${fieldErrors.contributor_name ? " has-error-input" : ""}`}
+                type="text"
+                value={form.contributor_name}
+                onChange={(e) => handleFormChange("contributor_name", e.target.value)}
+              />
+            </div>
           </div>
         </div>
 
@@ -2041,7 +2051,7 @@ export default function LibraryUpload({
         >
           <div className="leave-confirm-modal" onClick={(e) => e.stopPropagation()}>
             <h3 id="missing-fields-title">Can’t save yet</h3>
-            <p>Fill in the missing fields, then try again:</p>
+            <p>Fix these issues before saving:</p>
             <ul className="missing-fields-list">
               {missingFields.map((label) => (
                 <li key={label}>{label}</li>

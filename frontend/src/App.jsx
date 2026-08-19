@@ -398,35 +398,37 @@ export default function App() {
           </button>
         </nav>
         <div className="header-actions">
-          <button
-            type="button"
-            className="btn btn-primary header-image-search"
-            onClick={startImageSearch}
-            aria-label="Search by image"
-            title="Choose a panel type, then upload an image"
-          >
-            <ImageSearchIcon />
-            <span>Search by image</span>
-          </button>
-          <input
-            ref={imageSearchRef}
-            type="file"
-            accept=".jpg,.jpeg,.png,.tiff,.tif,image/jpeg,image/png,image/tiff"
-            className="header-file-input"
-            onChange={handleImageSearchPick}
-          />
           {mode === "search" && state !== "idle" && (
             <button className="btn btn-secondary" onClick={handleNewSearch}>
               Clear
             </button>
           )}
-          <button
-            className="theme-toggle"
-            onClick={() => setIsDark((d) => !d)}
-            aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-          >
-            {isDark ? <SunIcon /> : <MoonIcon />}
-          </button>
+          <div className="header-actions-end">
+            <button
+              type="button"
+              className="btn btn-primary header-image-search"
+              onClick={startImageSearch}
+              aria-label="Search by image"
+              title="Choose a panel type, then upload an image"
+            >
+              <ImageSearchIcon />
+              <span>Search by image</span>
+            </button>
+            <input
+              ref={imageSearchRef}
+              type="file"
+              accept=".jpg,.jpeg,.png,.tiff,.tif,image/jpeg,image/png,image/tiff"
+              className="header-file-input"
+              onChange={handleImageSearchPick}
+            />
+            <button
+              className="theme-toggle"
+              onClick={() => setIsDark((d) => !d)}
+              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+            >
+              {isDark ? <SunIcon /> : <MoonIcon />}
+            </button>
+          </div>
         </div>
       </header>
 

@@ -318,9 +318,6 @@ export default function ImageDetail({
               >
                 {unlocking ? "Checking…" : "Unlock"}
               </button>
-              <p className="detail-unlock-warning">
-                Only delete anomalies you created.
-              </p>
             </form>
           )}
           {allowEdit && adminPasskey && !confirmDelete && (
@@ -345,7 +342,6 @@ export default function ImageDetail({
               }}
             >
               <span>Delete this entry permanently?</span>
-              <span>Only delete anomalies you created.</span>
               <strong className="delete-warning">DELETION CANNOT BE UNDONE</strong>
               <button
                 type="submit"
@@ -396,9 +392,11 @@ export default function ImageDetail({
                   </>
                 )}
               </div>
-              {viewMode === VIEW_FOCUS && currentBeamformingType && (
+              {viewMode === VIEW_FOCUS && (
                 <div className="detail-beam-mode">
-                  <span className="badge badge-beam-type">{currentBeamformingType}</span>
+                  {currentBeamformingType ? (
+                    <span className="badge badge-beam-type">{currentBeamformingType}</span>
+                  ) : null}
                 </div>
               )}
               <div className="media-thumbs detail-panel-tabs">

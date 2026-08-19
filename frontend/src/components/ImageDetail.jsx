@@ -306,7 +306,7 @@ export default function ImageDetail({
               <input
                 type="password"
                 className="form-input delete-passkey-input detail-unlock-input"
-                placeholder="Passkey to edit/delete"
+                placeholder="Admin key to edit/delete"
                 value={unlockInput}
                 onChange={(e) => setUnlockInput(e.target.value)}
                 autoComplete="off"
@@ -318,6 +318,9 @@ export default function ImageDetail({
               >
                 {unlocking ? "Checking…" : "Unlock"}
               </button>
+              <p className="detail-unlock-warning">
+                Only delete anomalies you created.
+              </p>
             </form>
           )}
           {allowEdit && adminPasskey && !confirmDelete && (
@@ -342,6 +345,7 @@ export default function ImageDetail({
               }}
             >
               <span>Delete this entry permanently?</span>
+              <span>Only delete anomalies you created.</span>
               <strong className="delete-warning">DELETION CANNOT BE UNDONE</strong>
               <button
                 type="submit"
@@ -390,11 +394,6 @@ export default function ImageDetail({
                       Grid
                     </button>
                   </>
-                )}
-              </div>
-              <div className="detail-beam-mode">
-                {currentBeamformingType && (
-                  <span className="badge badge-beam-type">{currentBeamformingType}</span>
                 )}
               </div>
               <div className="media-thumbs detail-panel-tabs">

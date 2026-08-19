@@ -1175,7 +1175,7 @@ body {
 .zoomable-hint {
   position: absolute;
   left: 50%;
-  bottom: 10px;
+  top: 10px;
   transform: translateX(-50%);
   font-size: 11px;
   color: rgba(255, 255, 255, 0.75);
@@ -1423,7 +1423,7 @@ body {
 
 .image-lightbox-hint {
   position: fixed;
-  bottom: 18px;
+  top: 18px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 1001;
@@ -2827,6 +2827,13 @@ button.badge {
   letter-spacing: 0.04em;
   line-height: 1.2;
   background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.detail-unlock-warning {
+  margin: 0;
+  width: 100%;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 
 .detail-meta-chips {

@@ -146,7 +146,6 @@ export const ACCEPTED_IMAGE_TYPES = [
 /** Panel / view tags — multi-select on Add Entry (matches ILI Open Panel types) */
 export const PANEL_TAG_OPTIONS = [
   "Beamforming Panel",
-  "Raw Frame",
   "Raw Panel",
   "Plot Panel",
   "Image Panel",
@@ -161,7 +160,7 @@ export const PANEL_TAG_OPTIONS = [
 export const DEFAULT_PANEL_SHORTCUTS = [
   { panel: "Beamforming Panel", mode: "" },
   { panel: "Image Panel", mode: "" },
-  { panel: "Raw Frame", mode: "" },
+  { panel: "Raw Panel", mode: "" },
 ];
 
 export const COMMON_PANEL_TAGS = DEFAULT_PANEL_SHORTCUTS.map((s) => s.panel);
@@ -173,7 +172,9 @@ export const BEAMFORMING_PANEL = "Beamforming Panel";
 
 /** Trim a panel tag. Kept as a helper so callers can pass stored values through. */
 export function canonicalPanelTag(tag) {
-  return (tag || "").trim();
+  const t = (tag || "").trim();
+  // Merge legacy "Raw Frame" into the canonical "Raw Panel".
+  return t === "Raw Frame" ? "Raw Panel" : t;
 }
 
 /** Surface-detect beamforming modes (Direct L-L / Fluid Flood).
@@ -293,7 +294,7 @@ export function loadPanelShortcuts() {
       const parsed = parseStoredShortcuts(current);
       if (parsed) return parsed;
     }
-    // Ignore legacy string layouts; v2 starts from Beamforming (no mode), Image, Raw Frame.
+    // Ignore legacy string layouts; v2 starts from Beamforming (no mode), Image, Raw Panel.
     localStorage.removeItem(LEGACY_SHORTCUTS_KEY);
     return DEFAULT_PANEL_SHORTCUTS.map((s) => ({ ...s }));
   } catch {

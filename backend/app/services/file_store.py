@@ -101,6 +101,14 @@ _NON_IMAGE_FIELDS = {
 def _media_paths_from_record(record: dict) -> list[str]:
     return [record["image_path"], *(record.get("additional_image_paths") or [])]
 
+def _canonical_panel_tag(panel_tag: str) -> str:
+    tag = (panel_tag or "").strip()
+    # Merge legacy "Raw Frame" into the canonical "Raw Panel".
+    return "Raw Panel" if tag == "Raw Frame" else tag
+
+def _panel_tag_matches(stored: str, needle: str) -> bool:
+    return _canonical_panel_tag(stored) == _canonical_panel_tag(needle)
+
 
 def _embedding_for_panel(record: dict, panel_tag: str) -> Optional[tuple[list[float], int]]:
     """Return (embedding, media_index) for the first media tagged with panel_tag."""
@@ -108,7 +116,7 @@ def _embedding_for_panel(record: dict, panel_tag: str) -> Optional[tuple[list[fl
     tags = record.get("panel_tags") or []
     media_embs = record.get("media_embeddings") or []
     for i, tag in enumerate(tags):
-        if tag != needle:
+        if not _panel_tag_matches(tag, needle):
             continue
         if i < len(media_embs) and media_embs[i]:
             return media_embs[i], i
@@ -481,14 +489,14 @@ class FileStoreService:
             changed = False
             for r in records:
                 tags = r.get("panel_tags") or []
-                if needle not in tags:
+                if not any(_panel_tag_matches(tag, needle) for tag in tags):
                     continue
                 paths = _media_paths_from_record(r)
                 media_embs = list(r.get("media_embeddings") or [])
                 while len(media_embs) < len(paths):
                     media_embs.append(None)
                 for i, tag in enumerate(tags):
-                    if i >= len(paths) or tag != needle:
+                    if i >= len(paths) or not _panel_tag_matches(tag, needle):
                         continue
                     if media_embs[i]:
                         continue
@@ -524,12 +532,12 @@ class FileStoreService:
         need_paths: list[str] = []
         for r in records:
             tags = r.get("panel_tags") or []
-            if needle not in tags:
+            if not any(_panel_tag_matches(tag, needle) for tag in tags):
                 continue
             paths = _media_paths_from_record(r)
             media_embs = r.get("media_embeddings") or []
             for i, tag in enumerate(tags):
-                if i >= len(paths) or tag != needle:
+                if i >= len(paths) or not _panel_tag_matches(tag, needle):
                     continue
                 if i < len(media_embs) and media_embs[i]:
                     continue

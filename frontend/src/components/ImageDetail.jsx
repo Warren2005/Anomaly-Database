@@ -61,7 +61,7 @@ export default function ImageDetail({
 
   const panelGroups = useMemo(() => {
     const rank = (tag) => {
-      const idx = PANEL_TAG_OPTIONS.indexOf(tag);
+      const idx = PANEL_TAG_OPTIONS.indexOf(canonicalPanelTag(tag));
       return idx >= 0 ? idx : PANEL_TAG_OPTIONS.length + 1;
     };
     const map = new Map();

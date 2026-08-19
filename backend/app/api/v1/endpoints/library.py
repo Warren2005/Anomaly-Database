@@ -157,7 +157,7 @@ async def upload_to_library(
     parsed_tags: list[str] = []
     if panel_tags:
         parsed_tags = [
-            t.strip()
+            ("Raw Panel" if t.strip() == "Raw Frame" else t.strip())
             for t in panel_tags.replace(";", ",").split(",")
             if t.strip()
         ]
@@ -322,7 +322,11 @@ async def browse_library(
 
     panel_set = set()
     if panel_tags:
-        panel_set.update(t.strip() for t in panel_tags.split(",") if t.strip())
+        panel_set.update(
+            ("Raw Panel" if t.strip() == "Raw Frame" else t.strip())
+            for t in panel_tags.split(",")
+            if t.strip()
+        )
 
     identification_set = set()
     if identifications:
@@ -347,7 +351,10 @@ async def browse_library(
         if type_set and img.anomaly_type not in type_set:
             return False
         if panel_set:
-            tags = set(img.panel_tags or [])
+            tags = {
+                ("Raw Panel" if t == "Raw Frame" else t)
+                for t in (img.panel_tags or [])
+            }
             if not panel_set.intersection(tags):
                 return False
         if identification_set and img.identification not in identification_set:
@@ -747,7 +754,12 @@ async def update_library_entry(
     # list[str] (not nullable), matching how the upload endpoint's own
     # parsing never produces None entries either.
     final_tags: list[str] = (
-        [t.strip() for t in panel_tags.split(",")] if panel_tags else []
+        [
+            ("Raw Panel" if t.strip() == "Raw Frame" else t.strip())
+            for t in panel_tags.split(",")
+        ]
+        if panel_tags
+        else []
     )
     if len(final_tags) < len(final_paths):
         final_tags += [""] * (len(final_paths) - len(final_tags))

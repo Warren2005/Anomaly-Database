@@ -4,7 +4,7 @@ Health check endpoint.
 Checks connectivity to all backend services:
 - Local file store (metadata.json)
 - Local image storage
-- CLIP model
+- Primary embedding model
 """
 
 from fastapi import APIRouter
@@ -38,11 +38,11 @@ async def health_check():
     except Exception:
         service_checks["storage"] = "down"
 
-    # Check CLIP model
+    # Check primary embedding model
     try:
-        service_checks["clip"] = "up" if embedding_service.health_check() else "down"
+        service_checks["embedding_model"] = "up" if embedding_service.health_check() else "down"
     except Exception:
-        service_checks["clip"] = "down"
+        service_checks["embedding_model"] = "down"
 
     # Determine overall status
     external_services = ["storage"]

@@ -13,7 +13,7 @@ The **ILI Reference Library** ("ILI-brary") is a content-based image retrieval s
 It also functions as a browsable, filterable **reference library**: every catalogued anomaly can be searched by structured metadata (type, identification, run, panel, wall location, status) or free text, independent of image similarity search.
 
 **Stack:**
-- **Backend:** FastAPI (Python), CLIP (`open_clip`) for image/text embeddings, a **flat-file storage backend** (no database server) under a configurable data directory.
+- **Backend:** FastAPI (Python), a frozen DINOv2 backbone (`timm`) + a small trained metric-learning head for image embeddings — see §4.3 — a **flat-file storage backend** (no database server) under a configurable data directory.
 - **Frontend:** React 18 + Vite, plain `useState`/`useMemo` (no Redux/Context/state library), optionally wrapped in Electron as a desktop shell.
 - **Deployment:** the backend serves the built frontend directly as static files at `/` — normally a single process, single port.
 
@@ -39,8 +39,8 @@ It also functions as a browsable, filterable **reference library**: every catalo
               ┌───────────────┬──────────┼───────────┬────────────────┐
               ▼               ▼          ▼           ▼                ▼
         embedding.py    file_store.py  local_storage cache.py   event_log.py
-        (CLIP models,   (metadata.json (image files  (embedding (events.jsonl
-        primary+rerank)  + locking +    on disk)      cache)     audit trail)
+        (DINOv2+head,   (metadata.json (image files  (embedding (events.jsonl
+         primary only)   + locking +    on disk)      cache)     audit trail)
                           atomic writes)
 ```
 
@@ -68,8 +68,8 @@ backend/
     services/
       file_store.py             — the "database": metadata.json + locking
       local_storage.py          — image file storage on disk
-      embedding.py               — CLIP model loading, primary + rerank embed
-      reranking.py               — second-pass rerank scoring
+      embedding.py               — primary embedding (DINOv2+head) + legacy CLIP rerank class
+      reranking.py               — second-pass rerank scoring (disabled by default, see §4.3)
       cache.py                   — embedding cache (file-backed)
       event_log.py               — events.jsonl append-only audit log
       run_catalog.py             — runs.json (ILI run catalog) — NOT locked, see §12.2
@@ -90,6 +90,15 @@ backend/
   scripts/
     ingest_custom.py              — bulk image ingestion CLI
     show_stats.py                 — dependency-free events.jsonl dashboard
+    evaluate.py                   — Precision@K/Recall@K/mAP retrieval eval harness,
+                                     against the real library corpus or NEU-DET
+    train_metric_head.py          — trains/cross-validates the metric-learning head
+                                     on top of a frozen backbone (see §4.3, §7.2)
+    migrate_embeddings.py         — re-embeds every entry after a primary-model swap
+  app/ml/
+    projection_head.py            — the trainable head's architecture (shared by
+                                     train_metric_head.py and embedding.py, so
+                                     training and serving can never drift apart)
 
 frontend/
   src/
@@ -115,7 +124,7 @@ frontend/
 There is a single real domain entity: **`Image`** (`backend/app/models/image.py`), a plain dataclass (not an ORM model — there's no ORM). Every catalogued anomaly is one `Image` record. Field groups:
 
 - **Identity/core:** `id` (UUID string), `image_path` (primary media file), `additional_image_paths` (list, other panel images), `panel_tags` (list, aligned index-for-index with `[image_path, *additional_image_paths]` — see §4.3), `orientation_image_path` (structurally separate — never embedded/searched).
-- **Embeddings:** `embedding` (primary CLIP vector), `rerank_embedding` (optional second-model vector), `media_embeddings` (list, per-panel-image vectors, lazily backfilled), `model_tag` (e.g. `"ViT-L-14/openai"`), `rerank_model_tag`.
+- **Embeddings:** `embedding` (primary vector, produced by the DINOv2+head model — see §4.3), `rerank_embedding` (optional second-model vector; currently unused, see §4.3), `media_embeddings` (list, per-panel-image vectors, lazily backfilled), `model_tag` (e.g. `"vit_base_patch14_dinov2.lvd142m+dinov2_base_head_v1"`), `rerank_model_tag`.
 - **Inspection metadata:** `anomaly_type`, `identification`, `anomaly_id`, `anomaly_description` (the "Run ID" display field, derived from the run), `signal_description`, `differential_diagnosis`, `limitations_uncertainty`, `classification_status`, `wall_location`, `crack_image_angles`, `depth`, `width`, `length`, `run_number`, `zero_angle_frame_index`, `pipe_angle`.
 - **QC fields:** `is_qc_flag`, `qc_raised_by`, `qc_reviewer`, `qc_decision_rationale`.
 - **Interaction fields:** `interacts_with_other_features` (bool), `interaction_related_items` (list).
@@ -134,23 +143,29 @@ There is a single real domain entity: **`Image`** (`backend/app/models/image.py`
 
 This pattern (lock + atomic replace) is used consistently in `file_store.py` and `event_log.py`. **It is not used in `run_catalog.py`** — a real, currently-unaddressed inconsistency (see §12.2).
 
-Key `FileStoreService` methods: `search` (vector similarity over all records), `get_image`, `get_raw_record`, `find_by_anomaly_id`, `upsert_image`, `delete_image`, `get_rerank_embeddings` (batch fetch for the rerank pass, filterable by model tag), `get_model_tag_counts`, `get_distinct` / `get_distinct_list_field` (powers filter dropdowns), `ensure_panel_media_embeddings` (lazy per-panel embedding backfill), `get_cached_embedding` / `set_cached_embedding`.
+Key `FileStoreService` methods: `search` (vector similarity over all records), `get_image`, `get_raw_record`, `find_by_anomaly_id`, `upsert_image`, `delete_image`, `get_rerank_embeddings` (batch fetch for the rerank pass — unused while `rerank_enabled=False`, see §4.3), `get_model_tag_counts` (used by `scripts/migrate_embeddings.py` to confirm a migration's coverage), `get_distinct` / `get_distinct_list_field` (powers filter dropdowns), `ensure_panel_media_embeddings` (lazy per-panel embedding backfill), `get_cached_embedding` / `set_cached_embedding`.
 
 **`local_storage.py`** stores the actual image bytes on disk (not in the metadata file), keyed by path convention: `library/{uuid}.ext` for user-uploaded library images, `custom/{label}/{filename}` for bulk-ingested datasets.
 
-**Dead-but-present artifact:** `feedback.json` and a `get_net_votes`-style helper are fully gone from the code (the voting feature was removed in an earlier change) — only a stale `.env.example` comment and a stale on-disk `backend/data/library/feedback.json` file remain. Safe to delete the stray file; nothing reads it.
+**Feedback/voting was removed and then reintroduced.** An earlier change fully removed a vote-based feedback feature; a later change re-added it (`app/models/feedback.py`, `feedback.json`, `FileStoreService.add_feedback`/`get_net_votes`, and a small vote-weighted score adjustment in `search.py`). There is currently no frontend UI to actually cast a vote, so `feedback.json` stays empty and the adjustment is a no-op in practice — but the code path is live. Confirm with the team whether this is an intentional restart of the feature before building anything further on it.
 
 ### 4.3 Embedding & Search
 
-**Dual-model cascade** (`embedding.py`, `reranking.py`, `core/config.py`):
-- **Primary model:** ViT-L/14, `openai` pretrained weights — computes the embedding used for the initial coarse search across the whole corpus.
-- **Rerank model:** ViT-H-14, `laion2b_s32b_b79k` pretrained — heavier, more accurate, only run against the **top `rerank_candidates` (default 50)** results from the primary search, not the whole corpus. Toggleable via `Settings.rerank_enabled`.
-- Every embedding is tagged with the exact model+checkpoint that produced it (`model_tag`, e.g. `"ViT-L-14/openai"`; `rerank_model_tag` likewise). Search and rerank **filter out any embedding whose tag doesn't match the currently-configured model** — this is what prevents a model swap from silently comparing incompatible vector spaces. Images ingested under an old model that haven't been re-embedded simply fall back to their primary-search score during rerank rather than being dropped (see `reranking.py`'s docstring).
-- A **model registry log** records which model/checkpoint combination has been used, so future model swaps are tracked, plus an empirically-measured pgvector-style upgrade trigger is documented for if/when corpus size outgrows the flat-file search (see prior commit `93357d1`).
+**Primary model: frozen DINOv2 backbone + a trained metric-learning head** (`embedding.py`'s `Dinov2HeadEmbeddingService`, `app/ml/projection_head.py`, `core/config.py`):
+- **Backbone:** `vit_base_patch14_dinov2.lvd142m` (Meta's DINOv2, loaded via `timm`) — self-supervised, trained on pure visual structure with **no text/caption alignment at all**, unlike CLIP. Always frozen; never fine-tuned.
+- **Head:** a small trainable projection (`ProjectionHead`: Linear → ReLU → Dropout → Linear, ~230K parameters, L2-normalized output) sitting on top of the frozen backbone's features, trained with a triplet-margin loss on the labeled anomaly library (`anomaly_type`/`identification` as supervision). Weights are stored at `LIBRARY_DATA_DIR/models/dinov2_base_head_v1.pt` (`Settings.metric_head_path`) — data, not code, so it lives alongside `metadata.json` and gets the same Dropbox-backed versioning for free (see §7.1).
+- **Why not CLIP:** measured, not assumed — `scripts/evaluate.py` and `scripts/train_metric_head.py` benchmarked this against the previous CLIP ViT-L/14 → ViT-H/14 cascade directly on the real, labeled anomaly corpus (not a public benchmark) and it won on every ranking-quality metric. The full, dated record of every evaluation run — including the numbers that justified this — is in `model_registry.json`.
+- **Why not fine-tune the backbone:** with a labeled corpus in the tens-to-low-hundreds, fine-tuning a multi-hundred-million-parameter transformer would mostly memorize the training set. A small trainable head on frozen features is a much better fit for this much data — see §7.2.
+- **Cost:** DINOv2 has no text encoder, so there is no shared text/image embedding space anymore. `POST /search/text` now fails cleanly with a `503 ServiceUnavailableError` (`Dinov2HeadEmbeddingService.get_text_embedding` raises explicitly, caught by the same global exception-handler middleware as every other `AppException`) rather than crashing — see §12 for whether this matters given the endpoint's frontend usage.
+- Every embedding is tagged with the exact backbone+head that produced it (`model_tag`, e.g. `"vit_base_patch14_dinov2.lvd142m+dinov2_base_head_v1"`). Search **filters out any embedding whose tag doesn't match the currently-configured model** — this is what prevents a model swap from silently comparing incompatible vector spaces. After any primary-model change, `scripts/migrate_embeddings.py` must be run to re-embed every existing entry (with retry-on-`OSError` built in — Dropbox's own sync client can transiently lock `metadata.json` between rapid successive writes) or the whole library simply stops appearing in search results.
+
+**Rerank cascade — present in code, disabled by default** (`reranking.py`, `Settings.rerank_enabled = False`): the CLIP ViT-H/14 second-stage reranker that used to sit behind the old CLIP primary is still fully implemented (`EmbeddingService`, the original CLIP-based class, unchanged) but not loaded at startup, since it was specifically the model DINOv2+head was measured against and beat — there is no evidence it still helps paired with the new primary, because that combination has never been evaluated. Re-enable only after measuring it (`scripts/evaluate.py --cascade` supports arbitrary model-key pairings for exactly this).
+
+A **model registry log** (`model_registry.json`) records every evaluation run and every deployment event (which model went live, when, and why) — anyone can check it to see what accuracy was actually verified for the model currently in production, not just trust a config value.
 
 **Panel-scoped search** — the ability to search *within a specific ILI Open Panel view type* (Beamforming, Raw, Plot, Image, Heatmap, Multi Section, Cross-Section, Dent Sizing, Tool Pose — the canonical list lives in `frontend/src/lib/iliConstants.js`'s `PANEL_TAG_OPTIONS`, mirrored conceptually on the backend):
 - Each `Image` can have multiple media files (`image_path` + `additional_image_paths`), each tagged with which panel view it represents (`panel_tags`, index-aligned).
-- `media_embeddings` holds a **separate CLIP embedding per panel image**, not just one embedding for the primary image. This means a "Beamforming Panel" search compares the query against the Beamforming screenshot specifically, not against whichever image happens to be primary.
+- `media_embeddings` holds a **separate embedding per panel image**, not just one embedding for the primary image. This means a "Beamforming Panel" search compares the query against the Beamforming screenshot specifically, not against whichever image happens to be primary.
 - These per-panel embeddings are **lazily backfilled** (`ensure_panel_media_embeddings`) — older records without them get embedded on first access rather than requiring a bulk migration.
 - **Panel-scoped queries always skip the rerank cascade** (`search.py`) — rerank embeddings are only computed/stored for the primary image, not per-panel, so there's nothing to rerank against for a non-primary panel query.
 
@@ -182,20 +197,20 @@ All routes are mounted under `/api/v1` (`router.py`). Endpoint-by-endpoint:
 
 **`search.py`** — image similarity search (`POST /search/similar` in current frontend usage). Flow: embed the uploaded image (checking the cache first) → if a `panel_tag` filter is present, ensure per-panel media embeddings exist (lazy backfill) → decide whether to run the rerank cascade (skipped for panel-scoped queries) → compute per-result URL and `media_index` → log a `search` event to `events.jsonl`. Rate-limited to **30 requests/minute per client IP** (`slowapi`, the only rate-limited endpoint in the system).
 
-**`text_search.py`** — same shape as image search but embeds a text query instead of an image; otherwise reuses the same cascade/rerank logic.
+**`text_search.py`** — same shape as image search but embeds a text query instead of an image. **Currently non-functional**: the primary embedding model (DINOv2) has no text encoder, so `embedding_service.get_text_embedding()` raises a `ServiceUnavailableError` (503) — no code change needed to keep this endpoint failing cleanly, since the global exception handler already catches it. Was already unused by the frontend before this (`searchByText` in `client.js` is a dead export, no UI calls it) — see §12.
 
 **`batch_search.py`** — accepts multiple images, runs search for each, tracked via an **in-memory job store**. Confirmed **not called from any frontend code** — it's a deliberate API-only capability, not dead code, but the in-memory job store means jobs don't survive a restart and aren't safe across multiple worker processes. Treat as single-worker/dev-tool-grade unless that's addressed.
 
 **`images.py`** — image detail lookup by ID. Has its own URL-building logic that duplicates similar logic in `library.py` (a minor cross-cutting inconsistency, not a bug — see §12.4).
 
-**`health.py`** — `GET /health`. Reports overall status plus a `clip` sub-status; the `clip` field is **cosmetic** — it doesn't currently affect the overall health verdict, so a broken CLIP model load wouldn't flip health to unhealthy.
+**`health.py`** — `GET /health`. Reports overall status plus an `embedding_model` sub-status (renamed from `clip` when the primary model stopped being CLIP); it's **cosmetic** — it doesn't currently affect the overall health verdict, so a broken embedding-model load wouldn't flip health to unhealthy.
 
 **`ws_search.py`** — WebSocket search endpoint. **Confirmed broken** — see §12.1.
 
 ### 4.5 Middleware & Startup
 
 `main.py` — app construction and lifespan:
-- **Startup sequence:** connect file store → connect event log → connect local image storage → load primary CLIP model → (if `rerank_enabled`) load rerank CLIP model → connect cache service. Each step's failure is **logged but does not prevent startup** — the app will come up even with a broken storage/model layer, surfacing the problem via `/health` instead of a crash-on-boot. This is a deliberate degrade-gracefully choice, but means a silent misconfiguration can look "up" while actually non-functional; check `/health` after any config change.
+- **Startup sequence:** connect file store → connect event log → connect local image storage → load primary embedding model (DINOv2 backbone + trained head) → (if `rerank_enabled`, off by default) load the legacy CLIP rerank model → connect cache service. Each step's failure is **logged but does not prevent startup** — the app will come up even with a broken storage/model layer, surfacing the problem via `/health` instead of a crash-on-boot. This is a deliberate degrade-gracefully choice, but means a silent misconfiguration can look "up" while actually non-functional; check `/health` after any config change.
 - **Middleware order:** CORS (fully open — `allow_origins=["*"]`) → Prometheus metrics middleware → exception handlers (`AppException`, `RequestValidationError`, Starlette `HTTPException`, `RateLimitExceeded`, catch-all `Exception`).
 - **Every error response of any kind is also written to `events.jsonl`** via the error-handler middleware, not just successful operations — so `show_stats.py`'s error-rate figure is trustworthy without extra instrumentation.
 - **Static frontend mount:** `frontend/dist/` (if it exists) is mounted at `/`, so the backend alone serves the whole app on one port; this mount is skipped gracefully if the frontend hasn't been built (dev-backend-only or CI).
@@ -213,10 +228,13 @@ All environment-driven, loaded from `.env`, case-insensitive:
 | `environment` | `"development"` | `development \| production \| test` |
 | `api_host` / `api_port` | `0.0.0.0` / `8000` | |
 | `library_data_dir` | `./data/library` | **The** storage root — metadata.json, images/, tags.json, runs.json, events.jsonl, embedding cache all live under here. In production this is pointed at a synced Dropbox folder for free versioning/backup — see RUNNING_INSTRUCTIONS.md. |
-| `clip_model_name` / `clip_pretrained` | `ViT-L/14` / `openai` | Primary embedding model |
-| `clip_device` | `cpu` | `cpu` or `cuda` |
+| `primary_backbone_name` | `vit_base_patch14_dinov2.lvd142m` | Frozen DINOv2 backbone (`timm`) for the primary embedding model |
+| `metric_head_path` | `models/dinov2_base_head_v1.pt` | Trained head weights, relative to `library_data_dir` |
+| `metric_head_hidden_dim` / `metric_head_embed_dim` | `256` / `128` | Head architecture — must match the checkpoint it loads |
+| `clip_model_name` / `clip_pretrained` | `ViT-L/14` / `openai` | Legacy CLIP settings — only used by the (disabled-by-default) rerank model below, not the primary |
+| `clip_device` | `cpu` | `cpu` or `cuda` — used by both the primary and rerank models |
 | `inference_workers` | `4` | |
-| `rerank_enabled` | `True` | Toggle the second-pass model off for A/B comparison against primary-only search |
+| `rerank_enabled` | `False` | Off by default — the CLIP cascade this used to sit behind is exactly what DINOv2+head was measured against and beat; that pairing has never been evaluated. See §4.3 |
 | `rerank_model_name` / `rerank_pretrained` | `ViT-H-14` / `laion2b_s32b_b79k` | |
 | `rerank_candidates` | `50` | Shortlist size the rerank model re-scores |
 | `cache_ttl_days` | `7` | Embedding cache entry lifetime |
@@ -225,7 +243,7 @@ All environment-driven, loaded from `.env`, case-insensitive:
 
 ### 4.7 Event Logging & Observability
 
-`event_log.py` appends one JSON line per event to `LIBRARY_DATA_DIR/logs/events.jsonl`, using the same lock+atomic-write pattern as `file_store.py`. Confirmed live event types emitted by current code: `upload`, `update`, `delete`, `search`, `error`. (No `feedback` event is emitted — consistent with that feature's full removal.) `scripts/show_stats.py` reads this file to report p50/p95 search latency, error rate, and embedding cache hit rate over a time window — deliberately dependency-free (no Prometheus/Grafana required), though the Prometheus `/metrics` endpoint still exists alongside it.
+`event_log.py` appends one JSON line per event to `LIBRARY_DATA_DIR/logs/events.jsonl`, using the same lock+atomic-write pattern as `file_store.py`. Confirmed live event types emitted by current code: `upload`, `update`, `delete`, `search`, `error`. `scripts/show_stats.py` reads this file to report p50/p95 search latency, error rate, and embedding cache hit rate over a time window — deliberately dependency-free (no Prometheus/Grafana required), though the Prometheus `/metrics` endpoint still exists alongside it.
 
 ### 4.8 Errors
 
@@ -369,8 +387,8 @@ The shared taxonomy: `ANOMALY_TYPES`, `COMPONENT_OPTIONS`, `INTERACTION_OPTIONS`
 ### 7.1 File-Based Storage Instead of a Database
 Chosen to fit a small-team, low-write-concurrency tool with zero infrastructure to operate: no Postgres/Qdrant/MinIO/Redis to run, patch, or back up. `LIBRARY_DATA_DIR` is pointed at a Dropbox-synced folder in the current production setup, which gives free version history and delete-recovery with zero custom backup code. The tradeoff, explicitly documented in `RUNNING_INSTRUCTIONS.md`, is that this only works safely with **one backend instance at a time** against a given shared folder — cross-machine write races aren't coordinated by the in-process file locks.
 
-### 7.2 Dual-Model Embedding Cascade with Model Tagging
-A cheap primary model searches the whole corpus; an expensive rerank model only re-scores a small shortlist. Every embedding is tagged with its exact model+checkpoint so a future model upgrade can't silently produce nonsense similarity scores by comparing incompatible vector spaces — mismatched embeddings are filtered out rather than compared.
+### 7.2 A Frozen Self-Supervised Backbone + a Small Trained Head, Not Fine-Tuning
+CLIP's caption-alignment training doesn't transfer well to industrial-inspection imagery it never saw anything like during pretraining (beamforming panels, UT plots, corrosion heatmaps); a self-supervised backbone with no text bottleneck (DINOv2) measurably fit this domain better. But the labeled corpus is small — tens to low hundreds of images — nowhere near enough to fine-tune a multi-hundred-million-parameter transformer without it just memorizing the training set. The chosen middle ground: freeze the backbone entirely, train only a small (~230K-parameter) projection head on top with a triplet loss, evaluated with K-fold cross-validation (not a single train/test split, given how thin some classes are) so the reported numbers reflect genuine generalization, not memorization. Every embedding is tagged with its exact backbone+head identity (`model_tag`) so a future model swap can't silently produce nonsense similarity scores by comparing incompatible vector spaces — mismatched embeddings are filtered out rather than compared. `model_registry.json` keeps the full, dated history of every evaluation and every deployment.
 
 ### 7.3 Optimistic Concurrency on Edits
 `Image.updated_at` doubles as a version token. Edits can optionally supply `expected_updated_at`; a mismatch raises `409 ConflictError`. This is intentionally lightweight (no locking/reservation system) — appropriate for a tool where edit conflicts are rare but costly (silent data loss) rather than frequent.
@@ -440,7 +458,9 @@ Start in `frontend/src/lib/iliConstants.js` — add to the relevant array (`ANOM
 
 **Add a new admin-passkey-gated action** (like Add Run / Add Tag): follow the existing pattern in `library.py` — check `X-Delete-Passkey` against `settings.library_delete_passkey`, raise `ForbiddenError` on mismatch. Remember this is a single shared secret with no per-user distinction (§12.7) — don't build anything that assumes it identifies *who* made a change (that's what `contributor_name`/revision history is for).
 
-**Swap or upgrade the CLIP model:** change `clip_model_name`/`clip_pretrained` (or the rerank equivalents) in `.env`. Existing embeddings keep their old `model_tag` and are automatically excluded from comparison against the new model's queries (§4.3/§7.2) — they won't error, they'll just stop matching until re-embedded. Check the model registry log and the pgvector-style upgrade trigger mentioned in commit `93357d1` before doing this against the real production corpus, and budget time to re-run ingestion (`scripts/ingest_custom.py`, which is resumable via its checkpoint file) to backfill embeddings under the new model.
+**Evaluate a candidate model change before adopting it:** run `python -m scripts.evaluate` (grouped by `anomaly_type` and/or `identification`) to benchmark any `open_clip` or `timm` backbone against the real labeled corpus via leave-one-out Precision@K/Recall@K/mAP — this is what actually justified the current DINOv2+head choice, not a guess. To test whether a trained head helps a candidate backbone, use `python -m scripts.train_metric_head`, which K-fold cross-validates so the numbers reflect real generalization. Both append every run to `model_registry.json`.
+
+**Swap or upgrade the primary embedding model:** change `Settings.primary_backbone_name`/`metric_head_path` (or `clip_model_name`/`clip_pretrained` for the legacy rerank model) in `.env`, train/save a new head if needed, restart the backend, then run `python -m scripts.migrate_embeddings` — existing embeddings keep their old `model_tag` and are automatically excluded from comparison against the new model's queries (§4.3/§7.2) until re-embedded, so without this step the whole library simply stops appearing in search results, not just returns worse results. The script backs up `metadata.json` first and retries transient `OSError`s (Dropbox's sync client can momentarily lock the file between rapid successive writes).
 
 **Investigate a production issue:** start with `LIBRARY_DATA_DIR/logs/events.jsonl` and `python -m scripts.show_stats`. Every error response is logged there regardless of source, so it's the fastest way to see what's actually failing before diving into code.
 
@@ -460,7 +480,8 @@ Documented here deliberately — a maintenance-focused document should not hide 
 8. **Legacy dermatology-era search parameters** (`diagnosis`, `tissue_type`, `benign_malignant`) are still accepted by `search.py`/`text_search.py`'s filter schema from before this system was repurposed from a dermatology demo to an industrial-inspection tool — they're accepted but don't correspond to any real current data field. Candidates for removal per `CLAUDE.md`'s "retire features completely" guidance, though confirm nothing external still sends them before deleting.
 9. **`batch_search.py` is API-only** (no frontend caller) with an in-memory, non-restart-safe job store — a deliberate capability per earlier research, not abandoned code, but not production-hardened for multi-worker deployment either.
 10. **Numeric field type inconsistency**: dimension fields (`depth`/`width`/`length`) are handled as strings on both create and update paths in the frontend payload, but there's a str-vs-float inconsistency between the create and update backend schemas worth double-checking if you're debugging a dimension-field save issue.
-11. **A stray `backend/data/library/feedback.json`** may still exist on disk from the removed voting feature — safe to delete, nothing reads it.
+11. **`POST /search/text` is now non-functional** — the primary embedding model (DINOv2) has no text encoder, so it fails with a clean `503`. It had no frontend caller even before this (`searchByText` in `client.js` is a dead export), so nothing user-visible broke, but the endpoint should either be removed or rebuilt on a CLIP-family text encoder kept alongside DINOv2 specifically for this, if text search is ever wanted.
+12. **Feedback/voting's re-addition** (see §4.2) has no frontend UI — confirm intent before extending it further.
 
 ---
 
@@ -470,6 +491,8 @@ Documented here deliberately — a maintenance-focused document should not hide 
 - **Panel / Panel Tag** — one of the distinct visualization views a single inspection tool run can produce for the same anomaly (Beamforming, Raw, Plot, Image, Heatmap, Multi Section, Cross-Section, Dent Sizing, Tool Pose).
 - **Orientation Image** — a reference image showing pipe orientation, structurally kept separate from searchable panel media.
 - **Rerank** — the second-pass, heavier-model re-scoring of a coarse shortlist from the primary search.
-- **Model Tag** — a string identifying exactly which CLIP model+checkpoint produced a given embedding (e.g. `ViT-L-14/openai`), used to prevent comparing incompatible vector spaces.
+- **Model Tag** — a string identifying exactly which backbone+head (or CLIP model+checkpoint, for the legacy rerank model) produced a given embedding (e.g. `vit_base_patch14_dinov2.lvd142m+dinov2_base_head_v1`), used to prevent comparing incompatible vector spaces.
+- **DINOv2** — Meta's self-supervised vision backbone (no text/caption training), the current primary embedding model's frozen feature extractor.
+- **Metric-Learning Head** — the small trainable projection (`app/ml/projection_head.py`) on top of the frozen DINOv2 backbone, trained with a triplet loss on the labeled anomaly library.
 - **Revision History** — the append-only audit trail of edits to a single library entry, each entry signed with a contributor name/comment/timestamp.
 - **Passkey** — the single shared secret gating destructive/admin actions (delete, edit, add run, add tag). Not a real authentication system.

@@ -35,7 +35,24 @@ class Settings(BaseSettings):
     # app/services/local_storage.py.
     library_data_dir: str = "./data/library"
 
-    # CLIP Model Settings
+    # Primary embedding model: a frozen DINOv2 backbone (self-supervised,
+    # no text/caption training) plus a small trained metric-learning head.
+    # Adopted after scripts/evaluate.py + scripts/train_metric_head.py
+    # measured it against the previous CLIP ViT-L/14 -> ViT-H/14 cascade on
+    # the real anomaly library (not just a public benchmark) and it won on
+    # every ranking-quality metric — see model_registry.json for the full,
+    # dated record of every evaluation run that led here.
+    primary_backbone_name: str = "vit_base_patch14_dinov2.lvd142m"
+    # Path to the trained head's weights, relative to library_data_dir (so
+    # it lives alongside metadata.json — versioned/backed up the same way,
+    # via the shared Dropbox folder, with zero extra backup code).
+    metric_head_path: str = "models/dinov2_base_head_v1.pt"
+    metric_head_hidden_dim: int = 256
+    metric_head_embed_dim: int = 128
+
+    # CLIP settings — used only by the (currently disabled, see
+    # rerank_enabled) second-stage rerank model below, not by the primary
+    # embedding above.
     clip_model_name: str = "ViT-L/14"
     clip_pretrained: str = "openai"
     clip_device: str = "cpu"  # or "cuda" if GPU available
@@ -43,8 +60,12 @@ class Settings(BaseSettings):
 
     # Re-ranking: a second, heavier model re-scores only the top
     # `rerank_candidates` results from the primary search, rather than
-    # the whole corpus. Toggle off to A/B compare against primary-only.
-    rerank_enabled: bool = True
+    # the whole corpus. Disabled by default: the CLIP L/14->H/14 cascade
+    # this used to sit behind is exactly what the DINOv2+head primary was
+    # measured against and beat outright, so there's no evidence this
+    # still helps paired with the new primary — that combination has
+    # never been evaluated. Re-enable only after measuring it.
+    rerank_enabled: bool = False
     rerank_model_name: str = "ViT-H-14"
     rerank_pretrained: str = "laion2b_s32b_b79k"
     rerank_candidates: int = 50

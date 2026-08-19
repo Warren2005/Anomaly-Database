@@ -6,7 +6,7 @@ from pydantic import BaseModel
 class ServiceStatus(BaseModel):
     api: str
     storage: str
-    clip: str
+    embedding_model: str
 
 
 class HealthResponse(BaseModel):

@@ -481,7 +481,7 @@ def test_health_endpoint_reports_all_services():
     services = data["services"]
     assert "api" in services
     assert "storage" in services
-    assert "clip" in services
+    assert "embedding_model" in services
 
 
 def test_health_healthy_when_all_up():

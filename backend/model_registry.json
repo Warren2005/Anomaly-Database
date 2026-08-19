@@ -80,5 +80,561 @@
       "map_within_shortlist": 0.9795946947717783,
       "n_queries": 1770
     }
+  },
+  {
+    "timestamp": "2026-08-19T20:19:36.989102+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 61,
+    "n_classes": 4,
+    "device": "cuda",
+    "shortlist_size": 50,
+    "models": {
+      "l14": {
+        "name": "ViT-L-14",
+        "backend": "open_clip",
+        "pretrained": "openai",
+        "label": "ViT-L/14 (production primary)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.819672131147541,
+            "3": 0.7923497267759562,
+            "5": 0.7704918032786885
+          },
+          "recall_at_k": {
+            "1": 0.056791569086651054,
+            "3": 0.16635441061670572,
+            "5": 0.27193598750975795
+          },
+          "map": 0.6412301684346322,
+          "n_queries": 61
+        }
+      },
+      "h14": {
+        "name": "ViT-H-14",
+        "backend": "open_clip",
+        "pretrained": "laion2b_s32b_b79k",
+        "label": "ViT-H/14 (production rerank)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.9016393442622951,
+            "3": 0.8306010928961749,
+            "5": 0.7901639344262293
+          },
+          "recall_at_k": {
+            "1": 0.06073380171740827,
+            "3": 0.17107728337236533,
+            "5": 0.2741608118657299
+          },
+          "map": 0.6338623718073905,
+          "n_queries": 61
+        }
+      },
+      "dinov2-base": {
+        "name": "vit_base_patch14_dinov2.lvd142m",
+        "backend": "timm",
+        "pretrained": "",
+        "label": "DINOv2 ViT-B/14 (86M, self-supervised)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.9180327868852459,
+            "3": 0.8907103825136611,
+            "5": 0.8688524590163934
+          },
+          "recall_at_k": {
+            "1": 0.06159250585480094,
+            "3": 0.18075722092115534,
+            "5": 0.29597970335675244
+          },
+          "map": 0.713914833864736,
+          "n_queries": 61
+        }
+      },
+      "dinov2-large": {
+        "name": "vit_large_patch14_dinov2.lvd142m",
+        "backend": "timm",
+        "pretrained": "",
+        "label": "DINOv2 ViT-L/14 (300M, self-supervised)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.9180327868852459,
+            "3": 0.912568306010929,
+            "5": 0.8459016393442622
+          },
+          "recall_at_k": {
+            "1": 0.061631537861046054,
+            "3": 0.1840359094457455,
+            "5": 0.29035909445745506
+          },
+          "map": 0.7000536997814444,
+          "n_queries": 61
+        }
+      }
+    },
+    "cascade": {
+      "precision_at_k": {
+        "1": 0.9016393442622951,
+        "3": 0.8306010928961749,
+        "5": 0.7901639344262293
+      },
+      "recall_at_k": {
+        "1": 0.06580864730131339,
+        "3": 0.18563896078995307,
+        "5": 0.2977375131818617
+      },
+      "shortlist_recall": 0.9163503019844695,
+      "map_within_shortlist": 0.6837607456413627,
+      "n_queries": 61
+    }
+  },
+  {
+    "timestamp": "2026-08-19T20:24:10.839721+00:00",
+    "source": "library",
+    "label_field": "identification",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 61,
+    "n_classes": 7,
+    "device": "cuda",
+    "shortlist_size": 50,
+    "models": {
+      "l14": {
+        "name": "ViT-L-14",
+        "backend": "open_clip",
+        "pretrained": "openai",
+        "label": "ViT-L/14 (production primary)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.6721311475409836,
+            "3": 0.6666666666666666,
+            "5": 0.6557377049180327
+          },
+          "recall_at_k": {
+            "1": 0.06405684479454969,
+            "3": 0.186386700730963,
+            "5": 0.3006617699240649
+          },
+          "map": 0.5702020081320727,
+          "n_queries": 61
+        }
+      },
+      "h14": {
+        "name": "ViT-H-14",
+        "backend": "open_clip",
+        "pretrained": "laion2b_s32b_b79k",
+        "label": "ViT-H/14 (production rerank)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.8360655737704918,
+            "3": 0.7377049180327869,
+            "5": 0.6819672131147541
+          },
+          "recall_at_k": {
+            "1": 0.08448359472949635,
+            "3": 0.20453066969460407,
+            "5": 0.30743618858372945
+          },
+          "map": 0.5792237949306591,
+          "n_queries": 61
+        }
+      },
+      "dinov2-base": {
+        "name": "vit_base_patch14_dinov2.lvd142m",
+        "backend": "timm",
+        "pretrained": "",
+        "label": "DINOv2 ViT-B/14 (86M, self-supervised)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.8524590163934426,
+            "3": 0.7978142076502732,
+            "5": 0.7508196721311475
+          },
+          "recall_at_k": {
+            "1": 0.08757362855723509,
+            "3": 0.22108674567690953,
+            "5": 0.33791959406713495
+          },
+          "map": 0.6532518119424643,
+          "n_queries": 61
+        }
+      },
+      "dinov2-large": {
+        "name": "vit_large_patch14_dinov2.lvd142m",
+        "backend": "timm",
+        "pretrained": "",
+        "label": "DINOv2 ViT-L/14 (300M, self-supervised)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.8688524590163934,
+            "3": 0.8142076502732242,
+            "5": 0.7377049180327869
+          },
+          "recall_at_k": {
+            "1": 0.0904359756818773,
+            "3": 0.22642703380408294,
+            "5": 0.335515577318856
+          },
+          "map": 0.6547391164030434,
+          "n_queries": 61
+        }
+      }
+    },
+    "cascade": {
+      "precision_at_k": {
+        "1": 0.85,
+        "3": 0.75,
+        "5": 0.6933333333333332
+      },
+      "recall_at_k": {
+        "1": 0.11000000000000001,
+        "3": 0.2454166666666667,
+        "5": 0.36136904761904753
+      },
+      "shortlist_recall": 0.935,
+      "map_within_shortlist": 0.656558692527723,
+      "n_queries": 61
+    }
+  },
+  {
+    "timestamp": "2026-08-19T20:34:28.612106+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 61,
+    "n_classes": 4,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 200,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.9180327868852459,
+        "3": 0.8907103825136612,
+        "5": 0.8688524590163933
+      },
+      "recall_at_k": {
+        "1": 0.06159250585480094,
+        "3": 0.18075722092115534,
+        "5": 0.2959797033567525
+      },
+      "map": 0.7139148338647361,
+      "n_queries": 61
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.8524590163934426,
+        "3": 0.8797814207650273,
+        "5": 0.881967213114754
+      },
+      "recall_at_k": {
+        "1": 0.05835284933645589,
+        "3": 0.17907884465261514,
+        "5": 0.29902419984387196
+      },
+      "map": 0.8591217804423169,
+      "n_queries": 61
+    }
+  },
+  {
+    "timestamp": "2026-08-19T20:34:43.581081+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 61,
+    "n_classes": 4,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 50,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.9180327868852459,
+        "3": 0.8907103825136612,
+        "5": 0.8688524590163933
+      },
+      "recall_at_k": {
+        "1": 0.06159250585480094,
+        "3": 0.18075722092115534,
+        "5": 0.2959797033567525
+      },
+      "map": 0.7139148338647361,
+      "n_queries": 61
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.8688524590163934,
+        "3": 0.8524590163934425,
+        "5": 0.8557377049180326
+      },
+      "recall_at_k": {
+        "1": 0.05913348946135831,
+        "3": 0.1750975800156128,
+        "5": 0.29258391881342694
+      },
+      "map": 0.8374555119658587,
+      "n_queries": 61
+    }
+  },
+  {
+    "timestamp": "2026-08-19T20:34:52.099792+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 61,
+    "n_classes": 4,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 100,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.9180327868852459,
+        "3": 0.8907103825136612,
+        "5": 0.8688524590163933
+      },
+      "recall_at_k": {
+        "1": 0.06159250585480094,
+        "3": 0.18075722092115534,
+        "5": 0.2959797033567525
+      },
+      "map": 0.7139148338647361,
+      "n_queries": 61
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.819672131147541,
+        "3": 0.8469945355191255,
+        "5": 0.8622950819672132
+      },
+      "recall_at_k": {
+        "1": 0.056791569086651054,
+        "3": 0.17427790788446526,
+        "5": 0.29422326307572205
+      },
+      "map": 0.8449019259448792,
+      "n_queries": 61
+    }
+  },
+  {
+    "timestamp": "2026-08-19T20:35:02.846037+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 61,
+    "n_classes": 4,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 300,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.9180327868852459,
+        "3": 0.8907103825136612,
+        "5": 0.8688524590163933
+      },
+      "recall_at_k": {
+        "1": 0.06159250585480094,
+        "3": 0.18075722092115534,
+        "5": 0.2959797033567525
+      },
+      "map": 0.7139148338647361,
+      "n_queries": 61
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.8688524590163934,
+        "3": 0.8797814207650273,
+        "5": 0.8885245901639344
+      },
+      "recall_at_k": {
+        "1": 0.05913348946135832,
+        "3": 0.17903981264637,
+        "5": 0.30058548009367675
+      },
+      "map": 0.8691216591082205,
+      "n_queries": 61
+    }
+  },
+  {
+    "timestamp": "2026-08-19T20:35:29.080050+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 61,
+    "n_classes": 4,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 500,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.9180327868852459,
+        "3": 0.8907103825136612,
+        "5": 0.8688524590163933
+      },
+      "recall_at_k": {
+        "1": 0.06159250585480094,
+        "3": 0.18075722092115534,
+        "5": 0.2959797033567525
+      },
+      "map": 0.7139148338647361,
+      "n_queries": 61
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.8360655737704918,
+        "3": 0.8743169398907105,
+        "5": 0.881967213114754
+      },
+      "recall_at_k": {
+        "1": 0.057572209211553475,
+        "3": 0.17829820452771272,
+        "5": 0.29906323185011713
+      },
+      "map": 0.8605271953516054,
+      "n_queries": 61
+    }
+  },
+  {
+    "timestamp": "2026-08-19T20:36:03.390622+00:00",
+    "source": "library",
+    "label_field": "identification",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 61,
+    "n_classes": 7,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 300,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.8524590163934426,
+        "3": 0.7978142076502731,
+        "5": 0.7508196721311474
+      },
+      "recall_at_k": {
+        "1": 0.08757362855723512,
+        "3": 0.22108674567690956,
+        "5": 0.33791959406713495
+      },
+      "map": 0.6532518119424645,
+      "n_queries": 61
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.819672131147541,
+        "3": 0.7814207650273225,
+        "5": 0.7672131147540984
+      },
+      "recall_at_k": {
+        "1": 0.07755541362098738,
+        "3": 0.20716533011614977,
+        "5": 0.33460778747663994
+      },
+      "map": 0.7499194263894781,
+      "n_queries": 61
+    }
+  },
+  {
+    "timestamp": "2026-08-19T21:40:16.995298+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 61,
+    "n_classes": 4,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 300,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.9180327868852459,
+        "3": 0.8907103825136612,
+        "5": 0.8688524590163933
+      },
+      "recall_at_k": {
+        "1": 0.06159250585480094,
+        "3": 0.18075722092115534,
+        "5": 0.2959797033567525
+      },
+      "map": 0.7139148338647361,
+      "n_queries": 61
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.8688524590163934,
+        "3": 0.8797814207650273,
+        "5": 0.8885245901639344
+      },
+      "recall_at_k": {
+        "1": 0.05913348946135832,
+        "3": 0.17903981264637,
+        "5": 0.30058548009367675
+      },
+      "map": 0.8691216591082205,
+      "n_queries": 61
+    }
+  },
+  {
+    "timestamp": "2026-08-19T22:05:11.200123+00:00",
+    "event": "deployment",
+    "primary_model_tag": "vit_base_patch14_dinov2.lvd142m+dinov2_base_head_v1",
+    "previous_primary_model_tag": "ViT-L-14/openai",
+    "rerank_enabled": false,
+    "previous_rerank_model_tag": "ViT-H-14/laion2b_s32b_b79k",
+    "note": "Adopted DINOv2-Base (frozen) + a trained metric-learning head as the sole primary embedding model, replacing the CLIP ViT-L/14->ViT-H/14 cascade, after Step 0-2 evaluation on the real 61-anomaly library showed it winning on every ranking-quality metric (see the step2_metric_head entries above for the measured numbers). All 61 existing entries were re-embedded via scripts/migrate_embeddings.py. Rerank cascade disabled (Settings.rerank_enabled=False) \u2014 never evaluated paired with the new primary. Text search (/search/text) is now unavailable: DINOv2 has no text encoder / shared text-image space.",
+    "migration": {
+      "entries_migrated": 61,
+      "entries_total": 61
+    }
   }
 ]

@@ -14,13 +14,41 @@ narrows to a shortlist, a second/heavier model re-scores it) — the same
 shape as the production rerank cascade in app/services/reranking.py — so
 the cascade itself gets evaluated, not just each model in isolation.
 
-Dataset format: a directory of images where the class label is the
-filename prefix before the last "_<number>" (e.g. "crazing_12.jpg" ->
-class "crazing"). This matches NEU-DET's layout out of the box.
+Two dataset sources:
+  --source library (default) — the real, in-production anomaly library.
+    Reads directly from LIBRARY_DATA_DIR/metadata.json + its images/
+    directory, labeled by an actual metadata field (--label-field
+    anomaly_type or identification). This is what should drive real
+    model-selection decisions — the NEU-DET numbers below are a sanity
+    check against a public benchmark, not a stand-in for this.
+  --source neu-det — a directory of images where the class label is the
+    filename prefix before the last "_<number>" (e.g. "crazing_12.jpg" ->
+    class "crazing"). Matches NEU-DET's layout out of the box. Useful as
+    a second opinion / sanity check, but NEU-DET is steel-surface-defect
+    photography, not ILI beamforming/UT imagery — a model that wins here
+    is not guaranteed to win on the real library, which is why --source
+    library is the default and the one that should gate any real decision.
+
+Two model backends:
+  open_clip — the CLIP checkpoints already used in production (and any
+    other open_clip checkpoint).
+  timm      — everything else, e.g. DINOv2 (facebookresearch, self-
+    supervised, no text/caption alignment) via `timm.create_model(...)`.
+    Both backends are L2-normalized and cosine-compared identically, so
+    numbers are directly comparable across backends.
 
 Usage:
-    python -m scripts.evaluate --dataset-dir ./data/eval/NEU-DET/images
-    python -m scripts.evaluate --dataset-dir ./data/eval/NEU-DET/images --limit 300
+    # Real library corpus (default), current production models + DINOv2
+    python -m scripts.evaluate
+
+    # Same, but group by the finer (and much thinner) identification field
+    python -m scripts.evaluate --label-field identification
+
+    # Only specific models
+    python -m scripts.evaluate --models l14,dinov2-large
+
+    # Original NEU-DET sanity check
+    python -m scripts.evaluate --source neu-det --dataset-dir ./data/eval/NEU-DET/images
 """
 
 import argparse
@@ -35,6 +63,7 @@ from typing import Optional
 
 import numpy as np
 import open_clip
+import timm
 import torch
 from PIL import Image as PILImage
 
@@ -55,6 +84,7 @@ def append_to_registry(entry: dict, registry_path: Path = REGISTRY_PATH) -> None
     registry_path.write_text(json.dumps(history, indent=2))
     print(f"Recorded evaluation run in {registry_path}")
 
+
 LABEL_PATTERN = re.compile(r"^(.*)_\d+\.(jpg|jpeg|png)$", re.IGNORECASE)
 
 
@@ -63,34 +93,138 @@ def label_from_filename(filename: str) -> Optional[str]:
     return match.group(1).lower() if match else None
 
 
+def load_neu_det_corpus(dataset_dir: Path, limit: Optional[int]) -> tuple[list[Path], list[str]]:
+    all_paths = (
+        sorted(dataset_dir.glob("*.jpg"))
+        + sorted(dataset_dir.glob("*.jpeg"))
+        + sorted(dataset_dir.glob("*.png"))
+    )
+    paths: list[Path] = []
+    labels: list[str] = []
+    per_class_count: dict[str, int] = {}
+    for path in all_paths:
+        label = label_from_filename(path.name)
+        if label is None:
+            continue
+        if limit and per_class_count.get(label, 0) >= limit:
+            continue
+        paths.append(path)
+        labels.append(label)
+        per_class_count[label] = per_class_count.get(label, 0) + 1
+    return paths, labels
+
+
+def load_library_corpus(
+    data_dir: Path, label_field: str, limit: Optional[int]
+) -> tuple[list[Path], list[str]]:
+    """Load the real, in-production anomaly library — one image (its
+    primary/searchable image) per anomaly, labeled by an actual metadata
+    field. This is app/services/file_store.py's metadata.json read
+    directly off disk, not through the running API, so this can be run
+    standalone without the backend up."""
+    records = json.loads((data_dir / "metadata.json").read_text(encoding="utf-8"))
+    images_dir = data_dir / "images"
+
+    paths: list[Path] = []
+    labels: list[str] = []
+    per_class_count: dict[str, int] = {}
+    skipped_no_label = 0
+    skipped_missing_file = 0
+    for record in records:
+        if record.get("dataset_source") != "library":
+            continue
+        label = record.get(label_field)
+        if not label:
+            skipped_no_label += 1
+            continue
+        image_path = images_dir / record["image_path"]
+        if not image_path.exists():
+            skipped_missing_file += 1
+            continue
+        if limit and per_class_count.get(label, 0) >= limit:
+            continue
+        paths.append(image_path)
+        labels.append(label)
+        per_class_count[label] = per_class_count.get(label, 0) + 1
+
+    if skipped_no_label:
+        print(f"  (skipped {skipped_no_label} entries with no '{label_field}' set)")
+    if skipped_missing_file:
+        print(f"  (skipped {skipped_missing_file} entries whose image file is missing on disk)")
+
+    return paths, labels
+
+
 @dataclass
 class ModelConfig:
+    key: str
+    backend: str  # "open_clip" | "timm"
     name: str
-    pretrained: str
+    pretrained: str  # open_clip only; ignored for timm
     label: str  # display name
+
+
+# Every model this script knows how to evaluate. --models selects a subset.
+# DINOv2 (timm) has no text/caption training at all — pure self-supervised
+# visual structure — which is why it's the first non-CLIP candidate worth
+# testing: it may pick up on ILI imagery's texture/pattern better than a
+# model trained on web photo+caption pairs that never included anything
+# like a beamforming panel or a UT plot.
+MODEL_REGISTRY: dict[str, ModelConfig] = {
+    "b32": ModelConfig("b32", "open_clip", "ViT-B-32", "openai", "ViT-B/32 (old baseline)"),
+    "l14": ModelConfig("l14", "open_clip", "ViT-L-14", "openai", "ViT-L/14 (production primary)"),
+    "h14": ModelConfig("h14", "open_clip", "ViT-H-14", "laion2b_s32b_b79k", "ViT-H/14 (production rerank)"),
+    "dinov2-base": ModelConfig(
+        "dinov2-base", "timm", "vit_base_patch14_dinov2.lvd142m", "", "DINOv2 ViT-B/14 (86M, self-supervised)"
+    ),
+    "dinov2-large": ModelConfig(
+        "dinov2-large", "timm", "vit_large_patch14_dinov2.lvd142m", "", "DINOv2 ViT-L/14 (300M, self-supervised)"
+    ),
+}
+DEFAULT_LIBRARY_MODELS = ["l14", "h14", "dinov2-base", "dinov2-large"]
+DEFAULT_NEU_DET_MODELS = ["b32", "l14", "h14"]
 
 
 async def embed_dataset(image_paths: list[Path], config: ModelConfig, device: str) -> np.ndarray:
     """Embed every image with one model. Returns an (N, D) array, row order
-    matching image_paths."""
-    model, _, preprocess = open_clip.create_model_and_transforms(
-        config.name, pretrained=config.pretrained, device=device
-    )
-    model.eval()
+    matching image_paths. Every backend is L2-normalized identically so
+    cosine similarity is directly comparable across models."""
+    if config.backend == "open_clip":
+        model, _, preprocess = open_clip.create_model_and_transforms(
+            config.name, pretrained=config.pretrained, device=device
+        )
+        model.eval()
 
-    def _embed_one(path: Path) -> list[float]:
-        image = PILImage.open(path).convert("RGB")
-        tensor = preprocess(image).unsqueeze(0).to(device)
-        with torch.no_grad():
-            emb = model.encode_image(tensor)
-            emb = emb / emb.norm(dim=-1, keepdim=True)
-        return emb.squeeze().cpu().tolist()
+        def _embed_one(path: Path) -> list[float]:
+            image = PILImage.open(path).convert("RGB")
+            tensor = preprocess(image).unsqueeze(0).to(device)
+            with torch.no_grad():
+                emb = model.encode_image(tensor)
+                emb = emb / emb.norm(dim=-1, keepdim=True)
+            return emb.squeeze().cpu().tolist()
+
+    elif config.backend == "timm":
+        model = timm.create_model(config.name, pretrained=True, num_classes=0).to(device)
+        model.eval()
+        data_cfg = timm.data.resolve_data_config({}, model=model)
+        transform = timm.data.create_transform(**data_cfg)
+
+        def _embed_one(path: Path) -> list[float]:
+            image = PILImage.open(path).convert("RGB")
+            tensor = transform(image).unsqueeze(0).to(device)
+            with torch.no_grad():
+                emb = model(tensor)
+                emb = emb / emb.norm(dim=-1, keepdim=True)
+            return emb.squeeze().cpu().tolist()
+
+    else:
+        raise ValueError(f"Unknown backend: {config.backend}")
 
     embeddings = []
     start = time.time()
     for i, path in enumerate(image_paths):
         embeddings.append(await asyncio.to_thread(_embed_one, path))
-        if (i + 1) % 200 == 0:
+        if (i + 1) % 50 == 0:
             elapsed = time.time() - start
             print(f"    embedded {i + 1}/{len(image_paths)} ({elapsed:.0f}s elapsed)")
     del model
@@ -127,7 +261,7 @@ def leave_one_out_metrics(
         num_relevant = int(relevant.sum())  # all same-class images besides self
 
         if num_relevant == 0:
-            continue  # no ground truth to check for this query (shouldn't happen with balanced classes)
+            continue  # no ground truth to check for this query (e.g. a singleton class)
 
         for k in k_values:
             top_k_relevant = int(relevant[:k].sum())
@@ -158,7 +292,7 @@ def cascade_rescore(
     k_values: list[int],
     shortlist_size: int,
 ) -> dict:
-    """Evaluate the two-stage cascade: primary model produces a shortlist,
+    """Evaluate a two-stage cascade: primary model produces a shortlist,
     rerank model's embeddings determine the final order within it — same
     shape as app/services/reranking.py's rerank().
 
@@ -166,17 +300,15 @@ def cascade_rescore(
     because standard AP assumes the full corpus gets ranked — but the
     cascade only ever ranks `shortlist_size` candidates per query. Scoring
     it against the full corpus's relevant-item count mechanically caps AP
-    at roughly shortlist_size / num_relevant regardless of ranking quality
-    (e.g. ~50/294 ≈ 17% here), which looks like a bug in the *system*, not
-    the metric — it isn't. So this reports the two stages' actual jobs
-    separately, matching how L/14 (coverage) and H/14 (ordering) are
-    described in production:
+    at roughly shortlist_size / num_relevant regardless of ranking quality,
+    which looks like a bug in the *system*, not the metric — it isn't. So
+    this reports the two stages' actual jobs separately:
       - shortlist_recall: coverage — of all truly-relevant items in the
         whole corpus, what fraction did the primary-model cut even let
-        through to the shortlist? (L/14's job)
+        through to the shortlist? (the primary model's job)
       - map_within_shortlist: ranking quality of what did make it through,
         AP computed with the shortlist itself as the candidate pool, not
-        the full corpus (H/14's job).
+        the full corpus (the rerank model's job)
     """
     n = len(labels)
     labels_arr = np.array(labels)
@@ -240,47 +372,72 @@ def print_metrics(label: str, metrics: dict, k_values: list[int]):
     if "map" in metrics:
         print(f"    mAP={metrics['map']:.1%}  (n={metrics['n_queries']} queries)\n")
     else:
-        print(f"    shortlist recall={metrics['shortlist_recall']:.1%}  (coverage: L/14's job)")
-        print(f"    mAP-within-shortlist={metrics['map_within_shortlist']:.1%}  (ranking: H/14's job)")
+        print(f"    shortlist recall={metrics['shortlist_recall']:.1%}  (coverage: primary model's job)")
+        print(f"    mAP-within-shortlist={metrics['map_within_shortlist']:.1%}  (ranking: rerank model's job)")
         print(f"    (n={metrics['n_queries']} queries)\n")
 
 
 async def main():
-    parser = argparse.ArgumentParser(description="Evaluate retrieval quality against a real labeled dataset")
-    parser.add_argument("--dataset-dir", required=True, help="Directory of labeled images (filename-prefix labels)")
+    parser = argparse.ArgumentParser(description="Evaluate retrieval quality against a labeled dataset")
+    parser.add_argument(
+        "--source", choices=["library", "neu-det"], default="library",
+        help="library = the real, in-production anomaly corpus (default); "
+             "neu-det = the public steel-surface-defect sanity-check dataset",
+    )
+    parser.add_argument(
+        "--library-data-dir", default=None,
+        help="Override LIBRARY_DATA_DIR (defaults to Settings.library_data_dir from .env)",
+    )
+    parser.add_argument(
+        "--label-field", default="anomaly_type", choices=["anomaly_type", "identification"],
+        help="library source only: which metadata field to group by. anomaly_type has "
+             "fewer, larger, more balanced classes; identification is finer-grained but "
+             "some classes currently have only 1-2 examples.",
+    )
+    parser.add_argument("--dataset-dir", default=None, help="neu-det source only: directory of labeled images")
     parser.add_argument("--limit", type=int, default=None, help="Cap number of images per class (for a quick run)")
     parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--shortlist-size", type=int, default=50, help="Cascade shortlist size (matches production rerank_candidates)")
+    parser.add_argument(
+        "--models", default=None,
+        help=f"Comma-separated model keys from {list(MODEL_REGISTRY)} "
+             f"(default: {DEFAULT_LIBRARY_MODELS} for library, {DEFAULT_NEU_DET_MODELS} for neu-det)",
+    )
+    parser.add_argument(
+        "--cascade", default="l14:h14",
+        help="primary_key:rerank_key to evaluate as a two-stage cascade (matches production's "
+             "design by default). Pass 'none' to skip cascade evaluation.",
+    )
     args = parser.parse_args()
 
-    dataset_dir = Path(args.dataset_dir)
-    all_paths = sorted(dataset_dir.glob("*.jpg")) + sorted(dataset_dir.glob("*.jpeg")) + sorted(dataset_dir.glob("*.png"))
+    if args.source == "library":
+        if args.library_data_dir:
+            data_dir = Path(args.library_data_dir)
+        else:
+            from app.core.config import settings
+            data_dir = Path(settings.library_data_dir)
+        print(f"Library data dir: {data_dir}")
+        labeled_paths, labels = load_library_corpus(data_dir, args.label_field, args.limit)
+        model_keys = (args.models or ",".join(DEFAULT_LIBRARY_MODELS)).split(",")
+    else:
+        if not args.dataset_dir:
+            parser.error("--dataset-dir is required for --source neu-det")
+        labeled_paths, labels = load_neu_det_corpus(Path(args.dataset_dir), args.limit)
+        model_keys = (args.models or ",".join(DEFAULT_NEU_DET_MODELS)).split(",")
 
-    labeled_paths = []
-    labels = []
     per_class_count: dict[str, int] = {}
-    for path in all_paths:
-        label = label_from_filename(path.name)
-        if label is None:
-            continue
-        if args.limit and per_class_count.get(label, 0) >= args.limit:
-            continue
-        labeled_paths.append(path)
-        labels.append(label)
+    for label in labels:
         per_class_count[label] = per_class_count.get(label, 0) + 1
 
     print(f"Dataset: {len(labeled_paths)} labeled images across {len(per_class_count)} classes")
     for label, count in sorted(per_class_count.items()):
-        print(f"  {label}: {count}")
+        flag = "  <- too few for a meaningful leave-one-out score" if count <= 2 else ""
+        print(f"  {label}: {count}{flag}")
     print(f"Device: {args.device}\n")
 
     k_values = [1, 3, 5]
 
-    configs = {
-        "b32": ModelConfig("ViT-B-32", "openai", "ViT-B/32 (old baseline)"),
-        "l14": ModelConfig("ViT-L-14", "openai", "ViT-L/14 (new primary, alone)"),
-        "h14": ModelConfig("ViT-H-14", "laion2b_s32b_b79k", "ViT-H/14 (rerank model, alone)"),
-    }
+    configs = {key: MODEL_REGISTRY[key] for key in model_keys}
 
     embeddings = {}
     for key, config in configs.items():
@@ -294,20 +451,32 @@ async def main():
         print_metrics(config.label, metrics, k_values)
         per_model_metrics[key] = {
             "name": config.name,
+            "backend": config.backend,
             "pretrained": config.pretrained,
             "label": config.label,
             "metrics": metrics,
         }
 
-    print("=== Cascade: ViT-L/14 shortlist -> ViT-H/14 rerank (production design) ===\n")
-    cascade_metrics = cascade_rescore(
-        embeddings["l14"], embeddings["h14"], labels, k_values, args.shortlist_size
-    )
-    print_metrics(f"L/14 -> H/14 cascade (shortlist={args.shortlist_size})", cascade_metrics, k_values)
+    cascade_metrics = None
+    if args.cascade.lower() != "none":
+        primary_key, _, rerank_key = args.cascade.partition(":")
+        if primary_key in embeddings and rerank_key in embeddings:
+            print(f"=== Cascade: {configs[primary_key].label} shortlist -> {configs[rerank_key].label} rerank ===\n")
+            cascade_metrics = cascade_rescore(
+                embeddings[primary_key], embeddings[rerank_key], labels, k_values, args.shortlist_size
+            )
+            print_metrics(
+                f"{primary_key} -> {rerank_key} cascade (shortlist={args.shortlist_size})",
+                cascade_metrics, k_values,
+            )
+        else:
+            print(f"Skipping cascade: '{primary_key}' or '{rerank_key}' not in --models {model_keys}\n")
 
     append_to_registry({
         "timestamp": datetime.now(timezone.utc).isoformat(),
-        "dataset": str(dataset_dir),
+        "source": args.source,
+        "label_field": args.label_field if args.source == "library" else None,
+        "dataset": str(data_dir if args.source == "library" else args.dataset_dir),
         "n_images": len(labeled_paths),
         "n_classes": len(per_class_count),
         "device": args.device,

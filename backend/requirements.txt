@@ -28,6 +28,13 @@ open-clip-torch==2.24.0
 Pillow==10.2.0
 numpy>=1.24.0
 
+# ML - DINOv2 backbone for the primary embedding model (app/services/
+# embedding.py's Dinov2HeadEmbeddingService), and used by the retrieval
+# evaluation harness / training script to benchmark backbones. Already
+# pulled in transitively by open-clip-torch; pinned explicitly here since
+# it's now imported directly by production code.
+timm==1.0.28
+
 # Rate Limiting
 slowapi==0.1.9
 

@@ -33,7 +33,7 @@ def test_health_check_endpoint():
     assert data["status"] == "healthy"
     assert data["services"]["api"] == "up"
     assert data["services"]["storage"] == "up"
-    assert data["services"]["clip"] == "up"
+    assert data["services"]["embedding_model"] == "up"
 
 
 def test_health_check_response_structure():

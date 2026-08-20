@@ -27,9 +27,9 @@ export const INTERACTION_OPTIONS = [...new Set([...ANOMALY_TYPES, ...COMPONENT_O
 
 export const CLASSIFICATION_STATUS_OPTIONS = [
   "Confirmed",
-  "Edge Case",
-  "QC-Resolved",
-  "Under Discussion",
+  "Under QC",
+  "Needs Discovery",
+  "Poor Data Quality",
 ];
 
 export const WALL_LOCATION_OPTIONS = [
@@ -130,9 +130,9 @@ export const IDENTIFICATION_DEFAULTS = {
 
 export const STATUS_COLORS = {
   Confirmed: "#34d399",
-  "Edge Case": "#fbbf24",
-  "QC-Resolved": "#60a5fa",
-  "Under Discussion": "#f87171",
+  "Under QC": "#60a5fa",
+  "Needs Discovery": "#f87171",
+  "Poor Data Quality": "#fbbf24",
 };
 
 export const ACCEPTED_IMAGE_TYPES = [

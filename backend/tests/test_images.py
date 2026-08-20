@@ -67,7 +67,7 @@ class TestGetFilters:
                     ["Metal Loss", "Crack"],        # anomaly_type
                     ["Run 42"],                     # run_number
                     ["Approved"],                   # anomaly_status
-                    ["Confirmed", "Edge Case"],     # classification_status
+                    ["Confirmed", "Under QC"],       # classification_status
                     ["Corrosion", "Grinding"],      # identification
                     ["External", "N/A"],             # wall_location
                 ]

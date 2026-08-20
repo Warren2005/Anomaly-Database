@@ -202,7 +202,10 @@
       "Bash(venv/Scripts/python.exe -m scripts.train_metric_head --label-field anomaly_type --epochs 300)",
       "Bash(venv/Scripts/python.exe -m scripts.train_metric_head --label-field anomaly_type --epochs 300 --final-output 'F:/DarkVision Dropbox/Analysis-ILI/Defect Library/ILI DA Co-op Project - Anomaly Search/models/dinov2_base_head_v2.pt')",
       "Bash(taskkill //PID 45360 //F)",
-      "Bash(curl -s \"http://localhost:8001/api/v1/library/browse?anomaly_types=Crack-like\")"
+      "Bash(curl -s \"http://localhost:8001/api/v1/library/browse?anomaly_types=Crack-like\")",
+      "Read(//c/Users/warred2/Coop Project/backend/app/api/v1/endpoints/**)",
+      "Read(//c/Users/warred2/Coop Project/**)",
+      "Bash(taskkill //PID 21428 //F)"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

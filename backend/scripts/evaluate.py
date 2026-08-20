@@ -18,7 +18,10 @@ Two dataset sources:
   --source library (default) — the real, in-production anomaly library.
     Reads directly from LIBRARY_DATA_DIR/metadata.json + its images/
     directory, labeled by an actual metadata field (--label-field
-    anomaly_type or identification). This is what should drive real
+    anomaly_type or identification). Includes EVERY stored image per
+    anomaly (primary + additional panel images), not just the primary —
+    see load_library_corpus()'s docstring for why that's valid data and
+    not near-duplicate padding. This is what should drive real
     model-selection decisions — the NEU-DET numbers below are a sanity
     check against a public benchmark, not a stand-in for this.
   --source neu-det — a directory of images where the class label is the
@@ -93,7 +96,7 @@ def label_from_filename(filename: str) -> Optional[str]:
     return match.group(1).lower() if match else None
 
 
-def load_neu_det_corpus(dataset_dir: Path, limit: Optional[int]) -> tuple[list[Path], list[str]]:
+def load_neu_det_corpus(dataset_dir: Path, limit: Optional[int]) -> tuple[list[Path], list[str], list[str]]:
     all_paths = (
         sorted(dataset_dir.glob("*.jpg"))
         + sorted(dataset_dir.glob("*.jpeg"))
@@ -101,6 +104,7 @@ def load_neu_det_corpus(dataset_dir: Path, limit: Optional[int]) -> tuple[list[P
     )
     paths: list[Path] = []
     labels: list[str] = []
+    anomaly_ids: list[str] = []  # NEU-DET has no multi-image-per-item concept — every image is its own "anomaly"
     per_class_count: dict[str, int] = {}
     for path in all_paths:
         label = label_from_filename(path.name)
@@ -110,24 +114,43 @@ def load_neu_det_corpus(dataset_dir: Path, limit: Optional[int]) -> tuple[list[P
             continue
         paths.append(path)
         labels.append(label)
+        anomaly_ids.append(str(path))
         per_class_count[label] = per_class_count.get(label, 0) + 1
-    return paths, labels
+    return paths, labels, anomaly_ids
 
 
 def load_library_corpus(
     data_dir: Path, label_field: str, limit: Optional[int]
-) -> tuple[list[Path], list[str]]:
-    """Load the real, in-production anomaly library — one image (its
-    primary/searchable image) per anomaly, labeled by an actual metadata
-    field. This is app/services/file_store.py's metadata.json read
-    directly off disk, not through the running API, so this can be run
-    standalone without the backend up."""
+) -> tuple[list[Path], list[str], list[str]]:
+    """Load the real, in-production anomaly library — EVERY stored image
+    per anomaly (primary + additional panel images), labeled by an actual
+    metadata field. This is app/services/file_store.py's metadata.json
+    read directly off disk, not through the running API, so this can be
+    run standalone without the backend up.
+
+    Most anomalies' extra images are genuinely different panel
+    visualizations of the same physical anomaly (Beamforming vs. Image
+    vs. Raw — confirmed: 49/62 anomalies' images span different panel
+    types, and even the 13 with a repeated panel type mostly turn out to
+    have a different beamforming sub-mode), not near-duplicates — so
+    they're valid additional examples of the class, not redundant data.
+
+    Returns (paths, labels, anomaly_ids). Callers that train on this data
+    must treat anomaly_ids as a hard constraint, not just metadata: two
+    images sharing an anomaly_id can look substantially different from
+    each other, so they must never be used as a "positive pair" (that
+    would fight the model's real visual-similarity signal), and a
+    held-out evaluation query's own anomaly_id must never appear in the
+    training split (see train_metric_head.py's anomaly-level K-fold and
+    same-anomaly-excluded triplet sampling).
+    """
     records = json.loads((data_dir / "metadata.json").read_text(encoding="utf-8"))
     images_dir = data_dir / "images"
 
     paths: list[Path] = []
     labels: list[str] = []
-    per_class_count: dict[str, int] = {}
+    anomaly_ids: list[str] = []
+    per_class_count: dict[str, int] = {}  # counts anomalies, not images, so --limit keeps its old meaning
     skipped_no_label = 0
     skipped_missing_file = 0
     for record in records:
@@ -137,22 +160,29 @@ def load_library_corpus(
         if not label:
             skipped_no_label += 1
             continue
-        image_path = images_dir / record["image_path"]
-        if not image_path.exists():
-            skipped_missing_file += 1
-            continue
         if limit and per_class_count.get(label, 0) >= limit:
             continue
-        paths.append(image_path)
-        labels.append(label)
-        per_class_count[label] = per_class_count.get(label, 0) + 1
+        anomaly_id = record.get("anomaly_id") or record["id"]
+        media_paths = [record["image_path"], *(record.get("additional_image_paths") or [])]
+        added_any = False
+        for rel_path in media_paths:
+            image_path = images_dir / rel_path
+            if not image_path.exists():
+                skipped_missing_file += 1
+                continue
+            paths.append(image_path)
+            labels.append(label)
+            anomaly_ids.append(anomaly_id)
+            added_any = True
+        if added_any:
+            per_class_count[label] = per_class_count.get(label, 0) + 1
 
     if skipped_no_label:
         print(f"  (skipped {skipped_no_label} entries with no '{label_field}' set)")
     if skipped_missing_file:
-        print(f"  (skipped {skipped_missing_file} entries whose image file is missing on disk)")
+        print(f"  (skipped {skipped_missing_file} images whose file is missing on disk)")
 
-    return paths, labels
+    return paths, labels, anomaly_ids
 
 
 @dataclass
@@ -417,22 +447,26 @@ async def main():
             from app.core.config import settings
             data_dir = Path(settings.library_data_dir)
         print(f"Library data dir: {data_dir}")
-        labeled_paths, labels = load_library_corpus(data_dir, args.label_field, args.limit)
+        labeled_paths, labels, anomaly_ids = load_library_corpus(data_dir, args.label_field, args.limit)
         model_keys = (args.models or ",".join(DEFAULT_LIBRARY_MODELS)).split(",")
     else:
         if not args.dataset_dir:
             parser.error("--dataset-dir is required for --source neu-det")
-        labeled_paths, labels = load_neu_det_corpus(Path(args.dataset_dir), args.limit)
+        labeled_paths, labels, anomaly_ids = load_neu_det_corpus(Path(args.dataset_dir), args.limit)
         model_keys = (args.models or ",".join(DEFAULT_NEU_DET_MODELS)).split(",")
 
     per_class_count: dict[str, int] = {}
-    for label in labels:
+    per_class_anomalies: dict[str, set] = {}
+    for label, anomaly_id in zip(labels, anomaly_ids):
         per_class_count[label] = per_class_count.get(label, 0) + 1
+        per_class_anomalies.setdefault(label, set()).add(anomaly_id)
 
-    print(f"Dataset: {len(labeled_paths)} labeled images across {len(per_class_count)} classes")
+    n_anomalies = len(set(anomaly_ids))
+    print(f"Dataset: {len(labeled_paths)} labeled images ({n_anomalies} distinct anomalies) across {len(per_class_count)} classes")
     for label, count in sorted(per_class_count.items()):
-        flag = "  <- too few for a meaningful leave-one-out score" if count <= 2 else ""
-        print(f"  {label}: {count}{flag}")
+        n_a = len(per_class_anomalies[label])
+        flag = "  <- too few for a meaningful leave-one-out score" if n_a <= 2 else ""
+        print(f"  {label}: {count} images ({n_a} anomalies){flag}")
     print(f"Device: {args.device}\n")
 
     k_values = [1, 3, 5]
@@ -478,6 +512,7 @@ async def main():
         "label_field": args.label_field if args.source == "library" else None,
         "dataset": str(data_dir if args.source == "library" else args.dataset_dir),
         "n_images": len(labeled_paths),
+        "n_anomalies": n_anomalies,
         "n_classes": len(per_class_count),
         "device": args.device,
         "shortlist_size": args.shortlist_size,

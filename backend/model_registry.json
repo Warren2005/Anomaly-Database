@@ -636,5 +636,274 @@
       "entries_migrated": 61,
       "entries_total": 61
     }
+  },
+  {
+    "timestamp": "2026-08-20T15:05:02.959195+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 183,
+    "n_anomalies": 63,
+    "n_classes": 4,
+    "device": "cuda",
+    "shortlist_size": 50,
+    "models": {
+      "l14": {
+        "name": "ViT-L-14",
+        "backend": "open_clip",
+        "pretrained": "openai",
+        "label": "ViT-L/14 (production primary)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.7923497267759563,
+            "3": 0.7522768670309653,
+            "5": 0.7213114754098361
+          },
+          "recall_at_k": {
+            "1": 0.018599467358562164,
+            "3": 0.05338985810411256,
+            "5": 0.08527931836252556
+          },
+          "map": 0.43690776542275883,
+          "n_queries": 183
+        }
+      },
+      "h14": {
+        "name": "ViT-H-14",
+        "backend": "open_clip",
+        "pretrained": "laion2b_s32b_b79k",
+        "label": "ViT-H/14 (production rerank)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.8360655737704918,
+            "3": 0.7668488160291438,
+            "5": 0.73224043715847
+          },
+          "recall_at_k": {
+            "1": 0.019288584158476025,
+            "3": 0.05414357960401834,
+            "5": 0.08626561099345066
+          },
+          "map": 0.4341922593074388,
+          "n_queries": 183
+        }
+      },
+      "dinov2-base": {
+        "name": "vit_base_patch14_dinov2.lvd142m",
+        "backend": "timm",
+        "pretrained": "",
+        "label": "DINOv2 ViT-B/14 (86M, self-supervised)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.8032786885245902,
+            "3": 0.7759562841530054,
+            "5": 0.751912568306011
+          },
+          "recall_at_k": {
+            "1": 0.018670577392928274,
+            "3": 0.05427884569462644,
+            "5": 0.0879526055637035
+          },
+          "map": 0.47156822969303136,
+          "n_queries": 183
+        }
+      },
+      "dinov2-large": {
+        "name": "vit_large_patch14_dinov2.lvd142m",
+        "backend": "timm",
+        "pretrained": "",
+        "label": "DINOv2 ViT-L/14 (300M, self-supervised)",
+        "metrics": {
+          "precision_at_k": {
+            "1": 0.825136612021858,
+            "3": 0.8069216757741348,
+            "5": 0.7584699453551913
+          },
+          "recall_at_k": {
+            "1": 0.019067851433503615,
+            "3": 0.056107517619397855,
+            "5": 0.0886101363963834
+          },
+          "map": 0.46954123239729834,
+          "n_queries": 183
+        }
+      }
+    },
+    "cascade": {
+      "precision_at_k": {
+        "1": 0.8360655737704918,
+        "3": 0.7668488160291438,
+        "5": 0.73224043715847
+      },
+      "recall_at_k": {
+        "1": 0.019840525523835723,
+        "3": 0.055736871282506574,
+        "5": 0.08878301717706003
+      },
+      "shortlist_recall": 0.34304685448475075,
+      "map_within_shortlist": 0.6711267761733158,
+      "n_queries": 183
+    }
+  },
+  {
+    "timestamp": "2026-08-20T15:07:06.227074+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 186,
+    "n_anomalies": 64,
+    "n_classes": 5,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "fold_level": "anomaly",
+    "positive_sampling": "same_class_different_anomaly_only",
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 300,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.7903225806451613,
+        "3": 0.7616487455197132,
+        "5": 0.7344086021505376
+      },
+      "recall_at_k": {
+        "1": 0.018369439047881048,
+        "3": 0.05331068485379727,
+        "5": 0.086086427885111
+      },
+      "map": 0.4578603675502738,
+      "n_queries": 186
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.8333333333333334,
+        "3": 0.8315412186379929,
+        "5": 0.8344086021505376
+      },
+      "recall_at_k": {
+        "1": 0.01893620635547149,
+        "3": 0.05638972329156764,
+        "5": 0.09436807381701351
+      },
+      "map": 0.8369682855707371,
+      "n_queries": 186
+    }
+  },
+  {
+    "timestamp": "2026-08-20T15:08:18.823994+00:00",
+    "source": "library",
+    "label_field": "identification",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 186,
+    "n_anomalies": 64,
+    "n_classes": 8,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "fold_level": "anomaly",
+    "positive_sampling": "same_class_different_anomaly_only",
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 300,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.6720430107526881,
+        "3": 0.6415770609318996,
+        "5": 0.6193548387096773
+      },
+      "recall_at_k": {
+        "1": 0.021983807370485844,
+        "3": 0.06155648718700808,
+        "5": 0.09936943353136359
+      },
+      "map": 0.3874857399502414,
+      "n_queries": 186
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.7419354838709677,
+        "3": 0.7365591397849462,
+        "5": 0.7419354838709677
+      },
+      "recall_at_k": {
+        "1": 0.025069237688267732,
+        "3": 0.06863042885901574,
+        "5": 0.1121835808679144
+      },
+      "map": 0.7561164019444221,
+      "n_queries": 186
+    }
+  },
+  {
+    "timestamp": "2026-08-20T15:08:56.375878+00:00",
+    "source": "library",
+    "label_field": "anomaly_type",
+    "dataset": "F:\\DarkVision Dropbox\\Analysis-ILI\\Defect Library\\ILI DA Co-op Project - Anomaly Search",
+    "n_images": 186,
+    "n_anomalies": 64,
+    "n_classes": 5,
+    "device": "cuda",
+    "step": "step2_metric_head",
+    "backbone": "dinov2-base",
+    "folds": 5,
+    "fold_level": "anomaly",
+    "positive_sampling": "same_class_different_anomaly_only",
+    "head_config": {
+      "hidden_dim": 256,
+      "embed_dim": 128,
+      "epochs": 300,
+      "lr": 0.001,
+      "margin": 0.2
+    },
+    "raw_metrics": {
+      "precision_at_k": {
+        "1": 0.7903225806451613,
+        "3": 0.7616487455197132,
+        "5": 0.7344086021505376
+      },
+      "recall_at_k": {
+        "1": 0.018369439047881048,
+        "3": 0.05331068485379727,
+        "5": 0.086086427885111
+      },
+      "map": 0.4578603675502738,
+      "n_queries": 186
+    },
+    "head_metrics": {
+      "precision_at_k": {
+        "1": 0.8333333333333334,
+        "3": 0.8315412186379929,
+        "5": 0.8344086021505376
+      },
+      "recall_at_k": {
+        "1": 0.01893620635547149,
+        "3": 0.05638972329156764,
+        "5": 0.09436807381701351
+      },
+      "map": 0.8369682855707371,
+      "n_queries": 186
+    }
+  },
+  {
+    "timestamp": "2026-08-20T15:20:12.131610+00:00",
+    "event": "deployment",
+    "primary_model_tag": "vit_base_patch14_dinov2.lvd142m+dinov2_base_head_v2",
+    "previous_primary_model_tag": "vit_base_patch14_dinov2.lvd142m+dinov2_base_head_v1",
+    "note": "Replaced the v1 head (trained on primary images only, 61 anomalies) with v2, trained on every stored panel image per anomaly (186 images, 64 anomalies at training time), after confirming the naive plan to reuse an anomaly siblings images as positive training pairs was wrong: 49/62 anomalies span genuinely different panel types, and 12/13 of the remaining same-panel-type duplicates turned out to have different beamforming sub-modes -- so same-anomaly images are usually visually distinct, not near-duplicates. v2 uses all images as an expanded per-class pool but never pairs same-anomaly images as triplet positives, and K-fold splits by anomaly (not image) to prevent a held-out querys own sibling from ever being in its training set. Measured a clean win over the v1 approach on the same corrected protocol: anomaly_type mAP 45.8%->83.7% (+37.9pts) and P@1 79.0%->83.3% (+4.3pts); identification mAP 38.7%->75.6% (+36.9pts) and P@1 67.2%->74.2% (+7.0pts) -- both metrics improved together, unlike v1 which traded P@1 for mAP. All 65 entries re-embedded via scripts/migrate_embeddings.py.",
+    "migration": {
+      "entries_migrated": 65,
+      "entries_total": 65
+    }
   }
 ]

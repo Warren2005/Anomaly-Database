@@ -31,6 +31,24 @@ Two numbers are reported side by side for a fair comparison:
     is attributable to the head, not to a different evaluation protocol.
   - "DINOv2 + trained head"         — the actual Step 2 result.
 
+Uses every stored image per anomaly (primary + additional panel images),
+not just the primary — see load_library_corpus()'s docstring. Two rules
+follow from that, both load-bearing, not cosmetic:
+  - K-fold splits by ANOMALY, not by individual image — every image
+    belonging to one anomaly always lands in the same fold, so a held-out
+    query's own sibling images are never in the training set that
+    produced the head scoring it.
+  - Triplet positives are never drawn from the anchor's own anomaly, even
+    within a training split. Two images of the same anomaly can look
+    substantially different from each other (different panel type, or
+    the same panel type but a different beamforming sub-mode — confirmed
+    against the real corpus: 12 of the 13 anomalies with a repeated panel
+    tag turned out to have different beamforming_types) — forcing them
+    together as a "positive pair" would fight the model's real
+    visual-similarity signal rather than reinforce it. A positive must
+    come from a genuinely different anomaly that happens to share the
+    same label.
+
 Usage:
     python -m scripts.train_metric_head
     python -m scripts.train_metric_head --label-field identification --folds 5
@@ -56,21 +74,35 @@ from scripts.evaluate import (
 )
 
 
-def stratified_kfold_indices(labels: list[str], k: int, seed: int) -> list[list[int]]:
-    """Hand-rolled stratified K-fold (no sklearn dependency): each class's
-    indices are shuffled and dealt round-robin into k folds, so every fold
-    gets a proportional share of every class."""
+def stratified_kfold_anomaly_indices(
+    labels: list[str], anomaly_ids: list[str], k: int, seed: int
+) -> list[list[int]]:
+    """Hand-rolled stratified K-fold (no sklearn dependency), at the
+    ANOMALY level: every image belonging to one anomaly is dealt to the
+    same fold together, so a held-out query's own sibling panel images
+    can never have been part of the training set that produced the head
+    scoring it. Stratification (proportional share of every class per
+    fold) happens over anomalies, not raw images, so an anomaly with 4
+    images doesn't get 4x the say in balancing a fold that an anomaly
+    with 2 images gets."""
     rng = random.Random(seed)
-    by_class: dict[str, list[int]] = {}
-    for i, label in enumerate(labels):
-        by_class.setdefault(label, []).append(i)
+
+    anomaly_label: dict[str, str] = {}
+    anomaly_image_idxs: dict[str, list[int]] = {}
+    for i, (label, anomaly_id) in enumerate(zip(labels, anomaly_ids)):
+        anomaly_label.setdefault(anomaly_id, label)
+        anomaly_image_idxs.setdefault(anomaly_id, []).append(i)
+
+    by_class_anomalies: dict[str, list[str]] = {}
+    for anomaly_id, label in anomaly_label.items():
+        by_class_anomalies.setdefault(label, []).append(anomaly_id)
 
     folds: list[list[int]] = [[] for _ in range(k)]
-    for indices in by_class.values():
-        shuffled = indices[:]
+    for anomaly_ids_in_class in by_class_anomalies.values():
+        shuffled = anomaly_ids_in_class[:]
         rng.shuffle(shuffled)
-        for pos, idx in enumerate(shuffled):
-            folds[pos % k].append(idx)
+        for pos, anomaly_id in enumerate(shuffled):
+            folds[pos % k].extend(anomaly_image_idxs[anomaly_id])
     return folds
 
 
@@ -78,11 +110,23 @@ def cosine_distance(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return 1.0 - F.cosine_similarity(x, y)
 
 
-def sample_triplets(train_idx: list[int], labels: list[str], rng: random.Random) -> tuple[list[int], list[int], list[int]]:
+def sample_triplets(
+    train_idx: list[int], labels: list[str], anomaly_ids: list[str], rng: random.Random
+) -> tuple[list[int], list[int], list[int]]:
     """One anchor per training image per call; a random same-class positive
-    (excluding the anchor itself) and a random different-class negative.
-    Called fresh each epoch, so different pairs get sampled over training —
-    the small-dataset equivalent of exhausting the triplet space."""
+    and a random different-class negative. Called fresh each epoch, so
+    different pairs get sampled over training — the small-dataset
+    equivalent of exhausting the triplet space.
+
+    The positive is drawn from the same class but a DIFFERENT anomaly —
+    never a sibling image of the anchor's own anomaly, even though a
+    sibling technically shares the label. Two images of the same anomaly
+    can look substantially different (different panel type, or the same
+    panel type but a different beamforming sub-mode), so treating them as
+    a positive pair would train the head to pull apart-looking images
+    together purely because of shared bookkeeping, not shared appearance
+    — fighting the model's real visual signal instead of reinforcing it.
+    """
     by_class: dict[str, list[int]] = {}
     for i in train_idx:
         by_class.setdefault(labels[i], []).append(i)
@@ -90,13 +134,15 @@ def sample_triplets(train_idx: list[int], labels: list[str], rng: random.Random)
     anchors, positives, negatives = [], [], []
     classes = list(by_class.keys())
     for a in train_idx:
-        same_class = [i for i in by_class[labels[a]] if i != a]
-        if not same_class:
-            continue  # this fold has no other example of this class — skip as an anchor
+        same_class_other_anomaly = [
+            i for i in by_class[labels[a]] if anomaly_ids[i] != anomaly_ids[a]
+        ]
+        if not same_class_other_anomaly:
+            continue  # this fold has no other anomaly of this class — skip as an anchor
         other_classes = [c for c in classes if c != labels[a]]
         if not other_classes:
             continue
-        pos = rng.choice(same_class)
+        pos = rng.choice(same_class_other_anomaly)
         neg_class = rng.choice(other_classes)
         neg = rng.choice(by_class[neg_class])
         anchors.append(a)
@@ -108,6 +154,7 @@ def sample_triplets(train_idx: list[int], labels: list[str], rng: random.Random)
 def train_head_for_fold(
     frozen_embeddings: torch.Tensor,
     labels: list[str],
+    anomaly_ids: list[str],
     train_idx: list[int],
     in_dim: int,
     hidden_dim: int,
@@ -125,7 +172,7 @@ def train_head_for_fold(
 
     head.train()
     for _epoch in range(epochs):
-        anchors, positives, negatives = sample_triplets(train_idx, labels, rng)
+        anchors, positives, negatives = sample_triplets(train_idx, labels, anomaly_ids, rng)
         if not anchors:
             continue
         a_emb = head(frozen_embeddings[anchors])
@@ -221,15 +268,19 @@ async def main_async(args):
         data_dir = Path(settings.library_data_dir)
 
     print(f"Library data dir: {data_dir}")
-    labeled_paths, labels = load_library_corpus(data_dir, args.label_field, None)
+    labeled_paths, labels, anomaly_ids = load_library_corpus(data_dir, args.label_field, None)
 
     per_class_count: dict[str, int] = {}
-    for label in labels:
+    per_class_anomalies: dict[str, set] = {}
+    for label, anomaly_id in zip(labels, anomaly_ids):
         per_class_count[label] = per_class_count.get(label, 0) + 1
-    print(f"Dataset: {len(labeled_paths)} labeled images across {len(per_class_count)} classes")
+        per_class_anomalies.setdefault(label, set()).add(anomaly_id)
+    n_anomalies = len(set(anomaly_ids))
+    print(f"Dataset: {len(labeled_paths)} labeled images ({n_anomalies} distinct anomalies) across {len(per_class_count)} classes")
     for label, count in sorted(per_class_count.items()):
-        flag = f"  <- fewer than {args.folds} examples: won't appear in every fold" if count < args.folds else ""
-        print(f"  {label}: {count}{flag}")
+        n_a = len(per_class_anomalies[label])
+        flag = f"  <- fewer than {args.folds} anomalies: won't appear in every fold" if n_a < args.folds else ""
+        print(f"  {label}: {count} images ({n_a} anomalies){flag}")
 
     backbone_config = MODEL_REGISTRY[args.backbone]
     device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -239,14 +290,14 @@ async def main_async(args):
     in_dim = frozen.shape[1]
 
     k_values = [1, 3, 5]
-    folds = stratified_kfold_indices(labels, args.folds, args.seed)
-    print(f"\n{args.folds}-fold split sizes: {[len(f) for f in folds]}\n")
+    folds = stratified_kfold_anomaly_indices(labels, anomaly_ids, args.folds, args.seed)
+    print(f"\n{args.folds}-fold split sizes (images): {[len(f) for f in folds]}\n")
 
     raw_fold_results = []
     head_fold_results = []
     for fold_i, held_out in enumerate(folds):
         train_idx = [i for i in range(len(labels)) if i not in held_out]
-        print(f"Fold {fold_i + 1}/{args.folds}: {len(held_out)} held out, {len(train_idx)} training")
+        print(f"Fold {fold_i + 1}/{args.folds}: {len(held_out)} images held out, {len(train_idx)} training")
 
         # Baseline: raw frozen embeddings, scored under the same k-fold
         # query accounting (isolates the head's effect from the eval protocol).
@@ -256,7 +307,7 @@ async def main_async(args):
 
         # Train a fresh head using only this fold's training images.
         head = train_head_for_fold(
-            frozen, labels, train_idx,
+            frozen, labels, anomaly_ids, train_idx,
             in_dim=in_dim, hidden_dim=args.hidden_dim, out_dim=args.embed_dim,
             epochs=args.epochs, lr=args.lr, margin=args.margin, seed=args.seed + fold_i,
         )
@@ -283,11 +334,14 @@ async def main_async(args):
         "label_field": args.label_field,
         "dataset": str(data_dir),
         "n_images": len(labeled_paths),
+        "n_anomalies": n_anomalies,
         "n_classes": len(per_class_count),
         "device": device,
         "step": "step2_metric_head",
         "backbone": args.backbone,
         "folds": args.folds,
+        "fold_level": "anomaly",
+        "positive_sampling": "same_class_different_anomaly_only",
         "head_config": {"hidden_dim": args.hidden_dim, "embed_dim": args.embed_dim, "epochs": args.epochs, "lr": args.lr, "margin": args.margin},
         "raw_metrics": raw_metrics,
         "head_metrics": head_metrics,
@@ -299,10 +353,10 @@ async def main_async(args):
         # model to actually ship. This trains one more head, identical in
         # every other way, using every labeled image as training data, and
         # saves it for the embedding service to load at startup.
-        print(f"\nTraining final production head on all {len(labels)} images...")
+        print(f"\nTraining final production head on all {len(labels)} images ({n_anomalies} anomalies)...")
         all_idx = list(range(len(labels)))
         final_head = train_head_for_fold(
-            frozen, labels, all_idx,
+            frozen, labels, anomaly_ids, all_idx,
             in_dim=in_dim, hidden_dim=args.hidden_dim, out_dim=args.embed_dim,
             epochs=args.epochs, lr=args.lr, margin=args.margin, seed=args.seed,
         )
@@ -316,7 +370,9 @@ async def main_async(args):
             "embed_dim": args.embed_dim,
             "trained_on": {
                 "n_images": len(labels),
+                "n_anomalies": n_anomalies,
                 "label_field": args.label_field,
+                "positive_sampling": "same_class_different_anomaly_only",
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             },
             # This head was cross-validated (above) using anomaly_type/

@@ -197,7 +197,12 @@
       "Bash(curl -s -X POST http://localhost:8001/api/v1/search/similar -F \"file=@/tmp/query_test2.png;type=image/png\" -w \"\\\\nstatus:%{http_code}\\\\n\")",
       "Bash(cd /tmp)",
       "Bash(curl -s -X POST http://localhost:8001/api/v1/search/similar -F \"file=@query_test2.png;type=image/png\" -w \"\\\\nstatus:%{http_code}\\\\n\")",
-      "Bash(curl -s -X POST http://localhost:8001/api/v1/search/similar -F \"file=@query_test2.png;type=image/png\")"
+      "Bash(curl -s -X POST http://localhost:8001/api/v1/search/similar -F \"file=@query_test2.png;type=image/png\")",
+      "Bash(venv/Scripts/python.exe -m scripts.evaluate --label-field anomaly_type --models l14,h14,dinov2-base,dinov2-large --cascade l14:h14)",
+      "Bash(venv/Scripts/python.exe -m scripts.train_metric_head --label-field anomaly_type --epochs 300)",
+      "Bash(venv/Scripts/python.exe -m scripts.train_metric_head --label-field anomaly_type --epochs 300 --final-output 'F:/DarkVision Dropbox/Analysis-ILI/Defect Library/ILI DA Co-op Project - Anomaly Search/models/dinov2_base_head_v2.pt')",
+      "Bash(taskkill //PID 45360 //F)",
+      "Bash(curl -s \"http://localhost:8001/api/v1/library/browse?anomaly_types=Crack-like\")"
     ],
     "additionalDirectories": [
       "C:\\Users\\warred2\\OneDrive - kochind.com\\Desktop"

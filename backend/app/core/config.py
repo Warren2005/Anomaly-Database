@@ -46,7 +46,14 @@ class Settings(BaseSettings):
     # Path to the trained head's weights, relative to library_data_dir (so
     # it lives alongside metadata.json — versioned/backed up the same way,
     # via the shared Dropbox folder, with zero extra backup code).
-    metric_head_path: str = "models/dinov2_base_head_v1.pt"
+    # v2 (over v1): trained on every stored panel image per anomaly, not
+    # just the primary, with same-anomaly image pairs explicitly excluded
+    # from the triplet loss's positives (two panels of one anomaly can
+    # look substantially different — different panel type, or the same
+    # panel type but a different beamforming sub-mode — so pairing them
+    # would fight the model's real visual signal). Measured a clean win
+    # over v1's approach on both mAP and P@1 — see model_registry.json.
+    metric_head_path: str = "models/dinov2_base_head_v2.pt"
     metric_head_hidden_dim: int = 256
     metric_head_embed_dim: int = 128
 

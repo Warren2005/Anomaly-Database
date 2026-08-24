@@ -679,6 +679,152 @@ class TestOrientationImage:
             assert response.status_code == 200
             mock_local.delete_image.assert_any_call("library/orientation_to_clean.jpg")
 
+    def test_delete_entry_also_removes_video_files(self):
+        image_id = uuid4()
+        deleted_image = _make_image(
+            image_id, video_paths=["library/vid_0.mp4", "library/vid_1.mov"]
+        )
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+        ):
+            mock_store.delete_image = AsyncMock(return_value=deleted_image)
+            mock_local.delete_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.delete(
+                f"/api/v1/library/{image_id}",
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            mock_local.delete_image.assert_any_call("library/vid_0.mp4")
+            mock_local.delete_image.assert_any_call("library/vid_1.mov")
+
+
+class TestVideos:
+    """Videos are playback-only — never embedded/searched (see
+    Image.video_paths) — so uploading one must never call embedding_service."""
+
+    def _valid_data(self, **overrides):
+        data = {
+            "identification": "Corrosion Pitting",
+            "anomaly_id": "VID-2026-001",
+            "contributor_name": "Tester",
+        }
+        data.update(overrides)
+        return data
+
+    def test_upload_with_video_stores_it_and_skips_embedding(self):
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+            patch("app.api.v1.endpoints.library.embedding_service") as mock_embed,
+        ):
+            _no_conflict(mock_store)
+            mock_local.upload_image = AsyncMock()
+            mock_embed.get_embedding = AsyncMock(return_value=[0.1, 0.2])
+            mock_embed.model_tag = "ViT-L-14/openai"
+            mock_store.upsert_image = AsyncMock()
+
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data=self._valid_data(),
+                files=[
+                    ("files", ("a.jpg", b"fake-bytes", "image/jpeg")),
+                    ("videos", ("clip.mp4", b"fake-video-bytes", "video/mp4")),
+                ],
+            )
+
+            assert response.status_code == 200
+            assert response.json()["video_urls"] == [
+                f"/api/v1/images/{response.json()['image']['id']}/video/0"
+            ]
+            # One upload_image call for the image, one for the video — never
+            # an embedding call using the video's bytes.
+            video_calls = [
+                c for c in mock_local.upload_image.call_args_list
+                if c.args[2] == "video/mp4"
+            ]
+            assert len(video_calls) == 1
+            assert mock_embed.get_embedding.call_count == 1  # only the primary image
+
+    def test_upload_rejects_unsupported_video_type(self):
+        with patch("app.api.v1.endpoints.library.file_store_service") as mock_store:
+            _no_conflict(mock_store)
+            client = TestClient(app)
+            response = client.post(
+                "/api/v1/library/upload",
+                data=self._valid_data(),
+                files=[
+                    ("files", ("a.jpg", b"fake-bytes", "image/jpeg")),
+                    ("videos", ("clip.exe", b"not-a-video", "application/octet-stream")),
+                ],
+            )
+            assert response.status_code == 400
+            assert "video" in response.json()["error"]["message"].lower()
+
+    def test_update_adds_a_video(self):
+        image_id = uuid4()
+        existing = _make_image(image_id, video_paths=[])
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            mock_local.upload_image = AsyncMock()
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={"contributor_name": "Tester"},
+                files={"new_videos": ("clip.mp4", b"new-video-bytes", "video/mp4")},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            assert response.json()["video_urls"] == [f"/api/v1/images/{image_id}/video/0"]
+
+    def test_update_removes_a_video(self):
+        image_id = uuid4()
+        existing = _make_image(
+            image_id, video_paths=["library/vid_0.mp4", "library/vid_1.mov"]
+        )
+        raw_record = {
+            "embedding": [0.1], "rerank_embedding": None,
+            "embedding_model": "ViT-L-14/openai", "rerank_embedding_model": None,
+        }
+        with (
+            patch("app.api.v1.endpoints.library.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.library.local_storage_service") as mock_local,
+        ):
+            mock_store.get_image = AsyncMock(return_value=existing)
+            mock_store.get_raw_record = AsyncMock(return_value=raw_record)
+            mock_store.upsert_image = AsyncMock(return_value=existing)
+            mock_local.delete_image = AsyncMock()
+            _no_conflict(mock_store)
+
+            client = TestClient(app)
+            response = client.put(
+                f"/api/v1/library/{image_id}",
+                data={"remove_videos": "0", "contributor_name": "Tester"},
+                headers={"X-Delete-Passkey": "admin123"},
+            )
+
+            assert response.status_code == 200
+            mock_local.delete_image.assert_any_call("library/vid_0.mp4")
+            # Second video survives — passed through in the upsert call
+            upsert_call = mock_store.upsert_image.call_args
+            assert upsert_call.args[0].video_paths == ["library/vid_1.mov"]
+
 
 class TestUpdateLibraryEntryTags:
     def test_update_replaces_tags_with_submitted_list(self):

@@ -32,7 +32,7 @@ export default function ImageDetail({
   onPrev = null,
   onNext = null,
 }) {
-  const { image, similarity_score, image_url, media_urls, media_index, orientation_image_url } = result;
+  const { image, similarity_score, image_url, media_urls, media_storage_paths, media_index, orientation_image_url, video_urls } = result;
   const media = (media_urls && media_urls.length ? media_urls : [image_url]).filter(Boolean);
   const [mediaIdx, setMediaIdx] = useState(0);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -43,7 +43,10 @@ export default function ImageDetail({
   const [unlockError, setUnlockError] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [viewMode, setViewMode] = useState(VIEW_FOCUS);
-  const [showRevisions, setShowRevisions] = useState(true);
+  // Collapsed by default — who last touched this entry and when is always
+  // visible in the footer regardless (see latestRevision below); the full
+  // history is opt-in so it doesn't clutter every anomaly by default.
+  const [showRevisions, setShowRevisions] = useState(false);
   const [copiedAnomalyId, setCopiedAnomalyId] = useState(false);
   const copyResetTimerRef = useRef(null);
   const metaPaneRef = useRef(null);
@@ -99,6 +102,19 @@ export default function ImageDetail({
     setMediaIdx(currentGroup.indexes[next]);
   };
 
+  // Left/Right cycles through ALL of this anomaly's images (Raw,
+  // Beamforming, Image, etc. — the full `media` array), not just within
+  // one panel group like stepPanelImage above. Kept as a separate function
+  // since "see every image" and "step within one panel's sub-images" are
+  // different asks with different key bindings (Left/Right vs the ‹ ›
+  // buttons under the image).
+  const stepMedia = (dir) => {
+    if (media.length < 2) return;
+    const next = mediaIdx + dir;
+    if (next < 0 || next >= media.length) return;
+    setMediaIdx(next);
+  };
+
   const canUsePanels = media.length > 1;
 
   const latestRevision = useMemo(() => {
@@ -116,7 +132,7 @@ export default function ImageDetail({
     setMediaIdx(typeof media_index === "number" ? media_index : 0);
     setViewMode(VIEW_FOCUS);
     setLightbox(null);
-    setShowRevisions(true);
+    setShowRevisions(false);
     setConfirmDelete(false);
     setDeleteError(null);
     setUnlockInput("");
@@ -147,12 +163,42 @@ export default function ImageDetail({
       const tag = e.target.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
-      if (canNavigate && e.key === "ArrowLeft" && hasPrev) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        // Layered: close whatever's on top first, only fall through to
+        // "leave this anomaly entirely" once nothing else is active.
+        if (unlockError || deleteError) {
+          setUnlockError(null);
+          setDeleteError(null);
+        } else if (confirmDelete) {
+          setConfirmDelete(false);
+          setDeleteError(null);
+        } else {
+          onBack();
+        }
+        return;
+      }
+
+      // Left/Right: step through this anomaly's own images (Raw,
+      // Beamforming, Image, etc). Up/Down: move to the previous/next
+      // anomaly in the list (what Left/Right used to do) — kept on
+      // separate keys so neither action steals the other's shortcut.
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        stepMedia(-1);
+        return;
+      }
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        stepMedia(1);
+        return;
+      }
+      if (canNavigate && e.key === "ArrowUp" && hasPrev) {
         e.preventDefault();
         onPrev();
         return;
       }
-      if (canNavigate && e.key === "ArrowRight" && hasNext) {
+      if (canNavigate && e.key === "ArrowDown" && hasNext) {
         e.preventDefault();
         onNext();
         return;
@@ -178,7 +224,10 @@ export default function ImageDetail({
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [canNavigate, hasPrev, hasNext, onPrev, onNext, lightbox]);
+  }, [
+    canNavigate, hasPrev, hasNext, onPrev, onNext, lightbox,
+    unlockError, deleteError, confirmDelete, onBack, stepMedia,
+  ]);
 
   useEffect(() => {
     const imagePane = imagePaneRef.current;
@@ -270,6 +319,7 @@ export default function ImageDetail({
 
   const currentSrc = resolveImageUrl(media[mediaIdx] || image_url);
   const currentAlt = title;
+  const currentStoragePath = media_storage_paths?.[mediaIdx] || null;
 
   return (
     <div className="image-detail">
@@ -288,7 +338,7 @@ export default function ImageDetail({
               onClick={onPrev}
               disabled={!hasPrev}
               aria-label="Previous entry"
-              title="Previous (←)"
+              title="Previous (↑)"
             >
               ‹
             </button>
@@ -301,7 +351,7 @@ export default function ImageDetail({
               onClick={onNext}
               disabled={!hasNext}
               aria-label="Next entry"
-              title="Next (→)"
+              title="Next (↓)"
             >
               ›
             </button>
@@ -460,13 +510,26 @@ export default function ImageDetail({
             </div>
           ) : (
             <>
-              <div className="detail-image-viewport">
+              <div
+                className="detail-image-viewport"
+                title={media.length > 1 ? "Use ← → to browse this anomaly's images" : undefined}
+              >
                 <ZoomableImage
                   src={currentSrc}
                   alt={currentAlt}
                   onOpen={() => openLightbox(currentSrc, currentAlt)}
                 />
               </div>
+              {currentStoragePath && (
+                <div className="detail-storage-note">
+                  <span className="detail-storage-path" title={currentStoragePath}>
+                    Stored in Dropbox at: {currentStoragePath}
+                  </span>
+                  <a href={currentSrc} download className="btn btn-secondary detail-storage-download">
+                    Download
+                  </a>
+                </div>
+              )}
               {canStepPanelImage && (
                 <div className="detail-image-footer">
                   <div className="media-nav">
@@ -583,6 +646,29 @@ export default function ImageDetail({
               >
                 <img src={resolveImageUrl(orientation_image_url)} alt="Orientation reference" />
               </button>
+            </div>
+          )}
+
+          {video_urls?.length > 0 && (
+            <div className="detail-meta-block detail-video-block">
+              <div className="detail-meta-heading">
+                Videos
+                {video_urls.length > 1 ? ` (${video_urls.length})` : ""}
+              </div>
+              <ul className="video-list">
+                {video_urls.map((url, i) => (
+                  <li key={url} className="video-list-item">
+                    <a
+                      href={resolveImageUrl(url)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="video-list-link"
+                    >
+                      Video {i + 1}
+                    </a>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
@@ -725,8 +811,13 @@ export default function ImageDetail({
               <div className="detail-meta-footer-row">
                 {latestRevision?.name && (
                   <div className="detail-meta-footer-item">
-                    <span className="detail-meta-footer-label">Contributed by</span>
-                    <span className="detail-meta-footer-value">{latestRevision.name}</span>
+                    <span className="detail-meta-footer-label">Last updated by</span>
+                    <span className="detail-meta-footer-value">
+                      {latestRevision.name}
+                      {latestRevision.timestamp
+                        ? ` · ${new Date(latestRevision.timestamp).toLocaleDateString()}`
+                        : ""}
+                    </span>
                   </div>
                 )}
                 {tags.length > 0 && (

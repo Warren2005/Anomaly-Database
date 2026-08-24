@@ -93,5 +93,11 @@ class Image:
     orientation_image_path: Optional[str] = None
     # Pipe angle in degrees, associated with the orientation image.
     pipe_angle: Optional[float] = None
+    # Supporting video clips for this anomaly (e.g. a scan pass recording).
+    # Deliberately NOT embedded/searched, same reasoning as
+    # orientation_image_path — stored and served purely for playback, via
+    # their own upload/serve paths, never touched by the CLIP/DINOv2
+    # pipeline. Multiple videos per anomaly are supported.
+    video_paths: Optional[list] = field(default_factory=list)
     created_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))

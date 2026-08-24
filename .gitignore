@@ -89,3 +89,10 @@ htmlcov/
 
 # Project docs not for version control
 RESUME.md
+
+# Technical architecture doc: keep only the Markdown source under version
+# control. The LaTeX source and everything pdflatex generates from it
+# (PDF output + build byproducts: .aux/.log/.out/.toc/etc.) are local,
+# regeneratable artifacts, not something to commit.
+TECHNICAL_ARCHITECTURE.*
+!TECHNICAL_ARCHITECTURE.md

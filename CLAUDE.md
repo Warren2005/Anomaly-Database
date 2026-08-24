@@ -6,6 +6,21 @@ Guidance for Claude Code when working in this repository.
 
 Inspection Image Search — a content-based image retrieval system (FastAPI + CLIP + Qdrant + PostgreSQL + MinIO + Redis backend, React/Vite frontend, optional Electron shell). See `README.md` for the quickstart and `LEARNING.md` for a full architecture/concepts walkthrough. Run everything with `docker compose up -d --build`.
 
+## Dev vs. team-preview instances — DO NOT TOUCH team-preview
+
+There are two running instances of this app on this machine, deliberately isolated from each other:
+
+| | Dev instance (default working area) | Team-preview instance |
+|---|---|---|
+| Code | `C:\Users\warred2\Coop Project\medical-microscopy` (this checkout, branch `master`) | `C:\Users\warred2\Coop Project\medical-microscopy-team-preview` (a separate `git worktree`, branch `team-preview`) |
+| Data | `...\ILI DA Co-op Project - Anomaly Search` (the real data) | `...\ILI DA Co-op Project - Anomaly Search - TEAM PREVIEW` (a one-time duplicate, frozen at the point it was copied) |
+| Backend port | 8002 | 8001 (the link already shared with the team) |
+| Who uses it | The user, for active development | The team, for hands-on testing/feedback |
+
+**Default to working only in the dev instance/checkout** (edit code, `npm run build`, restart the port-8002 backend, etc.) unless the user explicitly asks to push an update to the team. Never edit files in the `medical-microscopy-team-preview` worktree, never write to the `TEAM PREVIEW` data folder, and never restart the port-8001 process as a side effect of other work — the whole point of this split is that the team's instance stays stable and untouched while dev work happens elsewhere, so an accidental touch defeats the purpose.
+
+The one exception: the user explicitly asking to "push," "deploy," "release," or "update what the team sees" — that means merging `master` into `team-preview` inside that worktree, rebuilding its frontend, and restarting only the port-8001 process. Confirm this is really what's being asked before doing it, since it's the one action in this whole setup that affects the team.
+
 ## Keeping the codebase clean
 
 This project has previously accumulated real cruft from dataset/feature pivots (a dermatology demo repurposed into an industrial-inspection tool) and from local manual-setup artifacts. When adding, changing, or retiring anything here, actively guard against these recurring failure modes:

@@ -124,6 +124,7 @@ frontend/
 There is a single real domain entity: **`Image`** (`backend/app/models/image.py`), a plain dataclass (not an ORM model — there's no ORM). Every catalogued anomaly is one `Image` record. Field groups:
 
 - **Identity/core:** `id` (UUID string), `image_path` (primary media file), `additional_image_paths` (list, other panel images), `panel_tags` (list, aligned index-for-index with `[image_path, *additional_image_paths]` — see §4.3), `orientation_image_path` (structurally separate — never embedded/searched).
+- **Video clips:** `video_paths` (list, zero or more supporting video files per anomaly) — same structural-separation principle as the orientation image: never embedded, never searched, purely for playback/download. Multiple videos per anomaly are supported; each gets its own path (`library/{uuid}_video_{n}.ext`) and its own serving URL (`/api/v1/images/{id}/video/{n}`).
 - **Embeddings:** `embedding` (primary vector, produced by the DINOv2+head model — see §4.3), `rerank_embedding` (optional second-model vector; currently unused, see §4.3), `media_embeddings` (list, per-panel-image vectors, lazily backfilled), `model_tag` (e.g. `"vit_base_patch14_dinov2.lvd142m+dinov2_base_head_v2"`), `rerank_model_tag`.
 - **Inspection metadata:** `anomaly_type`, `identification`, `anomaly_id`, `anomaly_description` (the "Run ID" display field, derived from the run), `signal_description`, `differential_diagnosis`, `limitations_uncertainty`, `classification_status`, `wall_location`, `crack_image_angles`, `depth`, `width`, `length`, `run_number`, `zero_angle_frame_index`, `pipe_angle`.
 - **QC fields:** `is_qc_flag`, `qc_raised_by`, `qc_reviewer`, `qc_decision_rationale`.
@@ -172,6 +173,10 @@ A **model registry log** (`model_registry.json`) records every evaluation run an
 
 **Embedding cache** (`cache.py`): file-backed, keyed by image content hash + model tag, pruned by `Settings.cache_ttl_days` (default 7) on write since there's no Redis TTL. Shared across the primary-search cache-hit/cache-miss accounting reported in `events.jsonl`.
 
+**Video support** — playback only, structurally outside the search pipeline entirely (`library.py`'s video upload/edit handling, `images.py`'s `GET /{image_id}/video/{index}`): validated against `ALLOWED_VIDEO_CONTENT_TYPES` (MP4/MOV/WebM/AVI) and a 500MB size cap, written straight to the same `LIBRARY_DATA_DIR/images/` blob store as everything else, and served via `FileResponse` (streams from disk in chunks rather than loading the whole file into memory first — cheaper for a large file). One caveat worth knowing before relying on it for large files: this Starlette version's `FileResponse` does **not** implement HTTP range-request handling — verified empirically, a ranged request still gets a full `200` with the entire body, not `206 Partial Content` — so there's no seek-without-downloading-the-whole-file support yet. Fine for "open the link and play/download it," not yet suited to scrubbing through a large video in-page.
+
+**Storage-path transparency** — every media item's response (`ImageDetailResponse`, `SearchResult`, `LibraryUploadResponse`) includes `media_storage_paths`, an absolute on-disk path per entry in `media_urls` (same index alignment), purely for display ("here's exactly where this lives in Dropbox"). It's never used to actually read/write the file — `local_storage_service`'s own relative-path resolution does that. The frontend shows this next to the currently-viewed image along with a **Download** button that uses the existing HTTP endpoint — deliberately *not* a clickable `file://` link, since browsers block navigation to `file://` URLs from an http(s)-served page.
+
 ### 4.4 API Endpoint Layer
 
 All routes are mounted under `/api/v1` (`router.py`). Endpoint-by-endpoint:
@@ -182,7 +187,7 @@ All routes are mounted under `/api/v1` (`router.py`). Endpoint-by-endpoint:
 - `GET /library/runs`, `POST /library/runs` — the run catalog; `POST` is passkey-gated.
 - `GET /library/tags`, `POST /library/tags` — the tag catalog; `POST` is passkey-gated.
 - `POST /library/verify-passkey` — no-side-effect passkey check, used by the frontend to gate the Edit/Delete UI *before* the user fills out a form (see §5.3/§7.4).
-- `POST /library/upload` — create a new entry (multipart: files + orientation image + metadata form fields).
+- `POST /library/upload` — create a new entry (multipart: files + orientation image + optional `videos` + metadata form fields).
 - `PUT /library/{image_id}` — edit an existing entry. This is the most complex single endpoint in the system. Validation/side-effect order:
   1. Passkey check (`X-Delete-Passkey` header) → `ForbiddenError` (403) if wrong.
   2. Not-found check → `NotFoundError` (404), with the message *"This entry no longer exists — it may have been deleted by someone else. Please reload the library."*
@@ -193,8 +198,9 @@ All routes are mounted under `/api/v1` (`router.py`). Endpoint-by-endpoint:
   7. Interaction-fields validation.
   8. Media reorder/removal logic — **the "can't remove the last image" guard is checked before any file I/O happens**, so a doomed request fails cleanly without touching disk.
   9. Orientation-image replace/remove logic.
-  10. Embedding reuse-vs-recompute logic (unchanged media keeps its existing embedding; new/replaced media gets re-embedded).
-- `DELETE /library/{image_id}` — passkey-gated hard delete.
+  10. New/removed video handling (`new_videos`/`remove_videos`, same survivor-plus-new-uploads convention as image media, but with no primary/reorder concept — see §4.3).
+  11. Embedding reuse-vs-recompute logic (unchanged media keeps its existing embedding; new/replaced media gets re-embedded).
+- `DELETE /library/{image_id}` — passkey-gated hard delete; cleans up every stored file (`image_path`, `additional_image_paths`, `orientation_image_path`, `video_paths`).
 
 **`search.py`** — image similarity search (`POST /search/similar` in current frontend usage). Flow: embed the uploaded image (checking the cache first) → if a `panel_tag` filter is present, ensure per-panel media embeddings exist (lazy backfill) → decide whether to run the rerank cascade (skipped for panel-scoped queries) → compute per-result URL and `media_index` → log a `search` event to `events.jsonl`. Rate-limited to **30 requests/minute per client IP** (`slowapi`, the only rate-limited endpoint in the system).
 
@@ -202,7 +208,7 @@ All routes are mounted under `/api/v1` (`router.py`). Endpoint-by-endpoint:
 
 **`batch_search.py`** — accepts multiple images, runs search for each, tracked via an **in-memory job store**. Confirmed **not called from any frontend code** — it's a deliberate API-only capability, not dead code, but the in-memory job store means jobs don't survive a restart and aren't safe across multiple worker processes. Treat as single-worker/dev-tool-grade unless that's addressed.
 
-**`images.py`** — image detail lookup by ID. Has its own URL-building logic that duplicates similar logic in `library.py` (a minor cross-cutting inconsistency, not a bug — see §12.4).
+**`images.py`** — image detail lookup by ID, plus the raw-byte serving routes: `GET /{id}/file`, `/media/{index}`, `/orientation`, `/video/{index}`. The image-serving routes set `Cache-Control: no-store` on purpose — these are stable, index-based URLs whose underlying bytes can change after an edit reorders/replaces media, so without that header a browser could keep serving stale bytes under a since-changed panel label. Has its own URL-building logic that duplicates similar logic in `library.py` (a minor cross-cutting inconsistency, not a bug — see §12.4).
 
 **`health.py`** — `GET /health`. Reports overall status plus an `embedding_model` sub-status (renamed from `clip` when the primary model stopped being CLIP); it's **cosmetic** — it doesn't currently affect the overall health verdict, so a broken embedding-model load wouldn't flip health to unhealthy.
 
@@ -296,6 +302,7 @@ The largest component (~1500 lines). A single `form` state object holds every me
 
 - **Media handling:** new files and (in edit mode) existing media are managed as parallel arrays with a shared combined-index space — surviving existing images first, then new uploads, matching the order the backend expects (`library.py`'s media-reorder logic). Each image gets its own panel-tag `<select>` and a "Make primary" toggle. Removing an existing image marks it `removed: true` rather than splicing the array, so the original index stays stable for the backend's `remove_media` index list.
 - **Orientation image:** entirely separate file state/input from the main media picker — structurally impossible for it to end up as searchable media (per an explicit code comment in `client.js`).
+- **Videos:** another separate, parallel file state (`videoFiles` for new uploads, `existingVideos` for edit mode) — multiple allowed, no panel tag or primary concept (unlike images). Each shows as a filename in a simple list with a remove (✕) button; existing videos link out to their playback/download URL directly from the form. Not fed into `isDirty` differently from any other field — adding/removing a video marks the form dirty like anything else.
 - **Tags:** a real `<select>` of existing tags (filtered to exclude already-selected ones) plus a synthetic "+ Add new tag…" option that opens a small passkey-gated mini-form (`addTag`, admin-passkey-gated backend call) — this is the "real dropdown, not just free text" behavior from a recent change.
 - **Runs:** same pattern — a `<select>` with a passkey-gated "add new run" mini-form; picking a run auto-fills the read-only "Run ID" field.
 - **Interaction fields:** a Yes/No control; selecting "Yes" reveals a chip multi-select (deduped union of anomaly types + component types) and requires at least one selection.
@@ -313,6 +320,8 @@ Three view modes: **Focus** (single zoomable image, default), **Panels** (mosaic
 **Edit/Delete gate:** shown only once `adminPasskey` is set (passed down as a prop from `LibraryBrowser`); before that, a single inline unlock form is shown instead of the buttons. This is deliberately upfront — the passkey is checked *before* a user invests time filling out an edit form, not buried at the bottom of it (see §7.4). Delete requires an explicit "DELETION CANNOT BE UNDONE" confirmation step.
 
 **Reuse across two call sites** with materially different prop sets — see the table in §5.1: the search-result detail view passes no `allowEdit`/`allowDelete`/`adminPasskey` props at all (fully read-only), while the library-browse detail view wires all of them plus delete/edit callbacks.
+
+**Videos and storage-path display:** if the anomaly has any `video_urls`, a "Videos" metadata block lists each as a link opening/downloading it directly (no in-page player — deliberate, see §4.3). Separately, right below the currently-displayed image, a small "Stored in Dropbox at: `<absolute path>`" caption plus a **Download** button reflects `media_storage_paths[mediaIdx]` — it updates as the user steps between panel images, always describing whichever image is currently in view.
 
 ### 5.5 `ResultsGrid.jsx` / `ReferenceCard.jsx`
 
@@ -429,6 +438,16 @@ See §4.1. A deliberate API design choice that lets partial-field edits work cor
 
 **Observability:** `LIBRARY_DATA_DIR/logs/events.jsonl` (upload/update/delete/search/error events) + `python -m scripts.show_stats [--hours N]` for a p50/p95 latency, error-rate, cache-hit-rate summary. The Prometheus `/metrics` endpoint is additive, not primary.
 
+**Dev vs. team-preview: two isolated instances on one machine.** During active development, two independent backend processes run side by side, each with its own code checkout, data folder, and port — deliberately isolated so ongoing dev work can never disturb what the team is testing:
+
+| | Dev instance | Team-preview instance |
+|---|---|---|
+| Code | The primary checkout, `master` branch | A separate `git worktree` (same repo, same `.git` history, different working directory) on a `team-preview` branch |
+| Data | The real `LIBRARY_DATA_DIR` | A one-time duplicate of that folder, frozen at the point it was copied, in the same parent Dropbox directory |
+| Port | e.g. 8002 | e.g. 8001 (the port actually shared with the team) |
+
+This split exists because of a subtlety in how the frontend is served (§4.5): `StaticFiles`/`FileResponse` read straight from disk on every request — nothing is cached at startup. Two backend *processes* alone don't isolate the frontend if they both point at the same `frontend/dist/` directory: rebuilding it for dev purposes would instantly change what *both* processes serve, mid-session, with no restart involved. A `git worktree` gives the team-preview instance its own physical `frontend/dist/`, so a dev-checkout rebuild can never leak into what the team sees. Pushing an update to the team is a deliberate step — merge `master` into `team-preview` inside that worktree, rebuild its frontend, restart only that one process — never an accidental side effect of normal dev work.
+
 ---
 
 ## 10. Testing
@@ -483,6 +502,7 @@ Documented here deliberately — a maintenance-focused document should not hide 
 10. **Numeric field type inconsistency**: dimension fields (`depth`/`width`/`length`) are handled as strings on both create and update paths in the frontend payload, but there's a str-vs-float inconsistency between the create and update backend schemas worth double-checking if you're debugging a dimension-field save issue.
 11. **`POST /search/text` is now non-functional** — the primary embedding model (DINOv2) has no text encoder, so it fails with a clean `503`. It had no frontend caller even before this (`searchByText` in `client.js` is a dead export), so nothing user-visible broke, but the endpoint should either be removed or rebuilt on a CLIP-family text encoder kept alongside DINOv2 specifically for this, if text search is ever wanted.
 12. **Feedback/voting's re-addition** (see §4.2) has no frontend UI — confirm intent before extending it further.
+13. **Video playback has no HTTP range-request support** (see §4.3) — a large video must fully download before playback starts, and there's no seek-without-downloading-the-whole-file. Fine for the current "open the link and play/download it" use case; would need manual `Range` header handling to support in-page scrubbing of large files.
 
 ---
 

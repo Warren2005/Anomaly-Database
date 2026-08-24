@@ -12,6 +12,7 @@ DELETE /api/v1/library/{image_id}
 """
 
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Optional
 from uuid import UUID, uuid4
 
@@ -48,6 +49,24 @@ CONTENT_TYPE_EXT = {
     "image/webp": ".webp",
 }
 
+# Supporting video clips — stored/served for playback only, never embedded
+# or searched (same reasoning as the orientation image). Larger size cap
+# than images since a scan-pass recording is routinely much bigger than a
+# panel screenshot.
+ALLOWED_VIDEO_CONTENT_TYPES = {
+    "video/mp4",
+    "video/quicktime",
+    "video/webm",
+    "video/x-msvideo",
+}
+MAX_VIDEO_FILE_SIZE = 500 * 1024 * 1024  # 500 MB
+VIDEO_CONTENT_TYPE_EXT = {
+    "video/mp4": ".mp4",
+    "video/quicktime": ".mov",
+    "video/webm": ".webm",
+    "video/x-msvideo": ".avi",
+}
+
 
 def _media_urls(image_id: UUID, image: Image) -> list[str]:
     urls = [f"/api/v1/images/{image_id}/file"]
@@ -57,8 +76,26 @@ def _media_urls(image_id: UUID, image: Image) -> list[str]:
     return urls
 
 
+def _storage_path(relative_path: str) -> str:
+    """Absolute on-disk path for a stored file, for display purposes (e.g.
+    "here's exactly where this lives in the synced Dropbox folder") — not
+    used for actually reading/writing; local_storage_service does that via
+    its own relative-path resolution."""
+    return str(Path(settings.library_data_dir) / "images" / relative_path)
+
+
+def _media_storage_paths(image: Image) -> list[str]:
+    paths = [image.image_path, *(image.additional_image_paths or [])]
+    return [_storage_path(p) for p in paths]
+
+
 def _orientation_url(image_id: UUID, image: Image) -> Optional[str]:
     return f"/api/v1/images/{image_id}/orientation" if image.orientation_image_path else None
+
+
+def _video_urls(image_id: UUID, image: Image) -> list[str]:
+    videos = image.video_paths or []
+    return [f"/api/v1/images/{image_id}/video/{i}" for i in range(len(videos))]
 
 
 def _detail(image: Image) -> ImageDetailResponse:
@@ -66,32 +103,53 @@ def _detail(image: Image) -> ImageDetailResponse:
         image=ImageResponse.model_validate(image),
         image_url=f"/api/v1/images/{image.id}/file",
         media_urls=_media_urls(image.id, image),
+        media_storage_paths=_media_storage_paths(image),
         orientation_image_url=_orientation_url(image.id, image),
+        video_urls=_video_urls(image.id, image),
     )
 
 
-async def _store_upload(upload: UploadFile, object_name: str) -> bytes:
-    if upload.content_type not in ALLOWED_CONTENT_TYPES:
+async def _store_upload(
+    upload: UploadFile,
+    object_name: str,
+    allowed_types: set = ALLOWED_CONTENT_TYPES,
+    max_size: int = MAX_FILE_SIZE,
+    error_message: str = "Unsupported file type. Use JPEG, PNG, TIFF, GIF, or WebP.",
+    default_content_type: str = "image/jpeg",
+) -> bytes:
+    if upload.content_type not in allowed_types:
         raise ValidationError(
-            "Unsupported file type. Use JPEG, PNG, TIFF, GIF, or WebP.",
+            error_message,
             details={"content_type": upload.content_type, "filename": upload.filename},
         )
-    image_bytes = await upload.read()
-    if len(image_bytes) > MAX_FILE_SIZE:
+    data = await upload.read()
+    if len(data) > max_size:
         raise ValidationError(
-            f"File too large. Maximum size is {MAX_FILE_SIZE // (1024 * 1024)}MB.",
-            details={"size_bytes": len(image_bytes), "filename": upload.filename},
+            f"File too large. Maximum size is {max_size // (1024 * 1024)}MB.",
+            details={"size_bytes": len(data), "filename": upload.filename},
         )
     await local_storage_service.upload_image(
-        object_name, image_bytes, upload.content_type or "image/jpeg"
+        object_name, data, upload.content_type or default_content_type
     )
-    return image_bytes
+    return data
+
+
+async def _store_video_upload(upload: UploadFile, object_name: str) -> None:
+    await _store_upload(
+        upload,
+        object_name,
+        allowed_types=ALLOWED_VIDEO_CONTENT_TYPES,
+        max_size=MAX_VIDEO_FILE_SIZE,
+        error_message="Unsupported video type. Use MP4, MOV, WebM, or AVI.",
+        default_content_type="video/mp4",
+    )
 
 
 @router.post("/upload", response_model=LibraryUploadResponse)
 async def upload_to_library(
     files: list[UploadFile] = File(...),
     orientation_image: Optional[UploadFile] = File(None),
+    videos: list[UploadFile] = File(default=[]),
     pipe_angle: Optional[float] = Form(None),
     anomaly_description: Optional[str] = Form(None),
     anomaly_status: Optional[str] = Form(None),
@@ -210,6 +268,15 @@ async def upload_to_library(
         orientation_path = f"library/{image_id}_orientation{ext}"
         await _store_upload(orientation_image, orientation_path)
 
+    # Supporting video clips — playback only, never embedded/searched (see
+    # Image.video_paths). Multiple allowed per anomaly.
+    video_paths: list[str] = []
+    for i, video in enumerate([v for v in videos if v.filename]):
+        ext = VIDEO_CONTENT_TYPE_EXT.get(video.content_type or "", ".mp4")
+        video_path = f"library/{image_id}_video_{i}{ext}"
+        await _store_video_upload(video, video_path)
+        video_paths.append(video_path)
+
     # Embed every searchable media file so panel-scoped search can compare
     # against the Beamforming (etc.) screenshot, not only the primary.
     all_media_bytes = [primary_bytes, *additional_bytes]
@@ -261,6 +328,7 @@ async def upload_to_library(
         additional_image_paths=additional_paths,
         orientation_image_path=orientation_path,
         pipe_angle=pipe_angle,
+        video_paths=video_paths,
     )
     await file_store_service.upsert_image(
         record,
@@ -287,7 +355,9 @@ async def upload_to_library(
         image=ImageResponse.model_validate(record),
         image_url=media[0],
         media_urls=media,
+        media_storage_paths=_media_storage_paths(record),
         orientation_image_url=_orientation_url(image_id, record),
+        video_urls=_video_urls(image_id, record),
         message="Image saved to library",
     )
 
@@ -602,6 +672,8 @@ async def update_library_entry(
     new_files: list[UploadFile] = File(default=[]),
     new_orientation_image: Optional[UploadFile] = File(None),
     remove_orientation_image: Optional[bool] = Form(None),
+    new_videos: list[UploadFile] = File(default=[]),
+    remove_videos: Optional[str] = Form(None),
     pipe_angle: Optional[str] = Form(None),
     panel_tags: Optional[str] = Form(None),
     beamforming_types: Optional[str] = Form(None),
@@ -711,6 +783,20 @@ async def update_library_entry(
         p for i, p in enumerate(current_paths) if i not in remove_indices
     ]
 
+    # Videos have no primary/reorder concept — just survivors + newly
+    # uploaded, indices into the CURRENT video_paths list (same convention
+    # as remove_media).
+    current_video_paths = list(existing.video_paths or [])
+    remove_video_indices: set[int] = set()
+    if remove_videos:
+        for tok in remove_videos.split(","):
+            tok = tok.strip()
+            if tok.isdigit():
+                remove_video_indices.add(int(tok))
+    surviving_videos = [
+        p for i, p in enumerate(current_video_paths) if i not in remove_video_indices
+    ]
+
     if not surviving and not new_files:
         raise ValidationError(
             "An anomaly must have at least one image — add a replacement "
@@ -749,6 +835,16 @@ async def update_library_entry(
             pass
         orientation_path = None
 
+    # New video uploads — playback only, appended after survivors, never
+    # embedded/searched (see Image.video_paths).
+    new_video_paths: list[str] = []
+    for i, video in enumerate([v for v in new_videos if v.filename]):
+        ext = VIDEO_CONTENT_TYPE_EXT.get(video.content_type or "", ".mp4")
+        video_path = f"library/{image_id}_video_{uuid4().hex[:8]}_{i}{ext}"
+        await _store_video_upload(video, video_path)
+        new_video_paths.append(video_path)
+    final_video_paths = surviving_videos + new_video_paths
+
     final_paths = surviving + new_paths
     # Padded with "" rather than None: ImageResponse's panel_tags is
     # list[str] (not nullable), matching how the upload endpoint's own
@@ -783,6 +879,15 @@ async def update_library_entry(
     # failure never leaves an entry with zero retrievable images).
     removed_paths = [p for i, p in enumerate(current_paths) if i in remove_indices]
     for p in removed_paths:
+        try:
+            await local_storage_service.delete_image(p)
+        except Exception:
+            pass
+
+    removed_video_paths = [
+        p for i, p in enumerate(current_video_paths) if i in remove_video_indices
+    ]
+    for p in removed_video_paths:
         try:
             await local_storage_service.delete_image(p)
         except Exception:
@@ -904,6 +1009,7 @@ async def update_library_entry(
         additional_image_paths=new_additional_paths,
         orientation_image_path=orientation_path,
         pipe_angle=_resolved_num(pipe_angle, existing.pipe_angle, float),
+        video_paths=final_video_paths,
         created_at=existing.created_at,
     )
 
@@ -928,7 +1034,9 @@ async def update_library_entry(
         image=ImageResponse.model_validate(updated),
         image_url=media[0],
         media_urls=media,
+        media_storage_paths=_media_storage_paths(updated),
         orientation_image_url=_orientation_url(image_id, updated),
+        video_urls=_video_urls(image_id, updated),
         message="Entry updated",
     )
 
@@ -955,6 +1063,7 @@ async def delete_library_entry(image_id: UUID, x_delete_passkey: Optional[str] =
         deleted.image_path,
         *(deleted.additional_image_paths or []),
         deleted.orientation_image_path,
+        *(deleted.video_paths or []),
     ]
     for path in paths:
         if path:

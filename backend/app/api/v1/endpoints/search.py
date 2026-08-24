@@ -9,6 +9,7 @@ scores.
 """
 
 import time
+from pathlib import Path
 from typing import Optional
 
 from fastapi import APIRouter, File, Query, Request, UploadFile
@@ -29,6 +30,14 @@ limiter = Limiter(key_func=get_remote_address)
 
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/tiff"}
 MAX_FILE_SIZE = 50 * 1024 * 1024  # 50MB
+
+
+def _media_storage_paths(image) -> list[str]:
+    """Absolute on-disk path per media file, for display only — see
+    ImageDetailResponse.media_storage_paths' docstring."""
+    root = Path(settings.library_data_dir) / "images"
+    paths = [image.image_path, *(image.additional_image_paths or [])]
+    return [str(root / p) for p in paths]
 
 
 @router.post("/similar", response_model=SearchResponse)
@@ -140,6 +149,11 @@ async def search_similar(
                     if image.orientation_image_path
                     else None
                 ),
+                video_urls=[
+                    f"/api/v1/images/{image.id}/video/{i}"
+                    for i in range(len(image.video_paths or []))
+                ],
+                media_storage_paths=_media_storage_paths(image),
             )
         )
 

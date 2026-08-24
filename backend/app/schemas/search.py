@@ -18,6 +18,8 @@ class SearchResult(BaseModel):
     # real panel tag instead of assuming index 0.
     media_index: Optional[int] = None
     orientation_image_url: Optional[str] = None
+    video_urls: list[str] = []
+    media_storage_paths: list[str] = []
 
 
 class SearchResponse(BaseModel):
@@ -33,7 +35,12 @@ class ImageDetailResponse(BaseModel):
     image: ImageResponse
     image_url: str
     media_urls: list[str] = []
+    # Absolute on-disk path per media_urls entry (same order/index) — for
+    # display only ("here's exactly where this lives in Dropbox"), never
+    # used to actually fetch the file (media_urls/the API endpoints do that).
+    media_storage_paths: list[str] = []
     orientation_image_url: Optional[str] = None
+    video_urls: list[str] = []
 
 
 class FiltersResponse(BaseModel):

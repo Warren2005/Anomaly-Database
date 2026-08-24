@@ -273,6 +273,17 @@ function existingMediaFromDetail(detail) {
   }));
 }
 
+function existingVideosFromDetail(detail) {
+  if (!detail) return [];
+  const urls = detail.video_urls || [];
+  return urls.map((url, i) => ({
+    originalIndex: i,
+    url,
+    name: `Video ${i + 1}`,
+    removed: false,
+  }));
+}
+
 export default function LibraryUpload({
   onSuccess,
   onDirtyChange,
@@ -310,6 +321,9 @@ export default function LibraryUpload({
   const [orientationPreview, setOrientationPreview] = useState(null);
   const [orientationRemoved, setOrientationRemoved] = useState(false);
   const orientationInputRef = useRef(null);
+  const [videoFiles, setVideoFiles] = useState([]);
+  const [existingVideos, setExistingVideos] = useState(() => existingVideosFromDetail(editingImage));
+  const videoInputRef = useRef(null);
   const [showAddRun, setShowAddRun] = useState(false);
   const [newRunName, setNewRunName] = useState("");
   const [newRunId, setNewRunId] = useState("");
@@ -356,6 +370,8 @@ export default function LibraryUpload({
     || selectedTags.some((t) => !initialTags.includes(t))
     || Boolean(orientationFile)
     || orientationRemoved
+    || videoFiles.length > 0
+    || existingVideos.some((v) => v.removed)
     || Object.keys(EMPTY_FORM).some((key) => form[key] !== initialForm[key])
   );
 
@@ -505,6 +521,32 @@ export default function LibraryUpload({
     }
     if (orientationInputRef.current) orientationInputRef.current.value = "";
   };
+
+  const ACCEPTED_VIDEO_TYPES = ["video/mp4", "video/quicktime", "video/webm", "video/x-msvideo"];
+
+  const addVideos = (incoming) => {
+    const list = Array.from(incoming || []).filter(
+      (f) => ACCEPTED_VIDEO_TYPES.includes(f.type) || f.type.startsWith("video/")
+    );
+    if (!list.length) {
+      setError("Please use MP4, MOV, WebM, or AVI for videos.");
+      return;
+    }
+    setError(null);
+    setVideoFiles((prev) => [...prev, ...list]);
+  };
+
+  const removeVideoFile = (idx) => {
+    setVideoFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const removeExistingVideo = (originalIndex) => {
+    setExistingVideos((prev) =>
+      prev.map((v) => (v.originalIndex === originalIndex ? { ...v, removed: true } : v))
+    );
+  };
+
+  const survivingExistingVideos = existingVideos.filter((v) => !v.removed);
 
   const runIdFor = useCallback(
     (run) => {
@@ -1020,6 +1062,7 @@ export default function LibraryUpload({
       }
 
       if (isEditMode) {
+        const removeVideoIndices = existingVideos.filter((v) => v.removed).map((v) => v.originalIndex);
         const removeIndices = existingMedia.filter((m) => m.removed).map((m) => m.originalIndex);
         // Final image order matches the backend: surviving existing first, then new uploads.
         const panelTags = [
@@ -1047,6 +1090,8 @@ export default function LibraryUpload({
             primaryIndex,
             newOrientationImage: orientationFile,
             removeOrientationImage: orientationRemoved,
+            newVideos: videoFiles,
+            removeVideoIndices,
           },
           payload,
           adminPasskey
@@ -1064,7 +1109,7 @@ export default function LibraryUpload({
           )
           .join(",");
         payload.primary_index = String(primaryIndex);
-        const result = await uploadToLibrary(files, payload, orientationFile);
+        const result = await uploadToLibrary(files, payload, orientationFile, videoFiles);
         setSuccess(result);
         if (onSuccess) onSuccess();
       }
@@ -1091,6 +1136,7 @@ export default function LibraryUpload({
     setOrientationFile(null);
     setOrientationPreview(null);
     setOrientationRemoved(false);
+    setVideoFiles([]);
     setSuccess(null);
     setError(null);
     setFieldErrors({});
@@ -1785,6 +1831,7 @@ export default function LibraryUpload({
               className={`form-textarea${fieldErrors.signal_description ? " has-error-input" : ""}`}
               value={form.signal_description}
               onChange={(e) => handleFormChange("signal_description", e.target.value)}
+              placeholder="Describe how the anomaly looks in each relevant panel. Example: Image Panel: xxx — Fluid Flood: abc — Complex L-L: ghj"
             />
           </div>
 
@@ -1796,6 +1843,7 @@ export default function LibraryUpload({
               className={`form-textarea${fieldErrors.differential_diagnosis ? " has-error-input" : ""}`}
               value={form.differential_diagnosis}
               onChange={(e) => handleFormChange("differential_diagnosis", e.target.value)}
+              placeholder="What could this be confused with?"
             />
           </div>
 
@@ -1807,6 +1855,7 @@ export default function LibraryUpload({
               className={`form-textarea${fieldErrors.limitations_uncertainty ? " has-error-input" : ""}`}
               value={form.limitations_uncertainty}
               onChange={(e) => handleFormChange("limitations_uncertainty", e.target.value)}
+              placeholder="Include a classification confidence (High, Medium, Low) and explain what drives it"
             />
           </div>
         </div>
@@ -1929,6 +1978,70 @@ export default function LibraryUpload({
             style={{ display: "none" }}
             onChange={(e) => {
               handleOrientationPick(e.target.files?.[0]);
+              e.target.value = "";
+            }}
+          />
+        </div>
+
+        <div className="form-field videos-field">
+          <label className="form-label">
+            Videos <span className="opt">optional — multiple allowed</span>
+          </label>
+          {(survivingExistingVideos.length > 0 || videoFiles.length > 0) && (
+            <ul className="video-list">
+              {survivingExistingVideos.map((v) => (
+                <li key={`existing-${v.originalIndex}`} className="video-list-item">
+                  <a
+                    href={resolveImageUrl(v.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="video-list-link"
+                  >
+                    {v.name}
+                  </a>
+                  <button
+                    type="button"
+                    className="remove-img video-list-remove"
+                    onClick={() => removeExistingVideo(v.originalIndex)}
+                    aria-label={`Remove ${v.name}`}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+              {videoFiles.map((f, i) => (
+                <li key={`new-${i}`} className="video-list-item">
+                  <span className="video-list-link video-list-pending">{f.name}</span>
+                  <button
+                    type="button"
+                    className="remove-img video-list-remove"
+                    onClick={() => removeVideoFile(i)}
+                    aria-label={`Remove ${f.name}`}
+                  >
+                    ✕
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => videoInputRef.current?.click()}
+          >
+            Add video…
+          </button>
+          <p className="form-hint">
+            Not played inline — open the link above to play/download it wherever it's saved.
+          </p>
+          <input
+            ref={videoInputRef}
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,video/x-msvideo"
+            multiple
+            style={{ display: "none" }}
+            onChange={(e) => {
+              addVideos(e.target.files);
               e.target.value = "";
             }}
           />

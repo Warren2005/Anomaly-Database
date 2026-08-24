@@ -6,13 +6,17 @@ GET /api/v1/images/{image_id} — single image metadata + proxy URL
 GET /api/v1/images/{image_id}/file — raw image bytes
 GET /api/v1/images/{image_id}/orientation — the optional reference-only
     orientation image (never part of search — see Image.orientation_image_path)
+GET /api/v1/images/{image_id}/video/{index} — a supporting video clip
+    (never part of search — see Image.video_paths)
 """
 
+from pathlib import Path
 from uuid import UUID
 
 from fastapi import APIRouter
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 
+from app.core.config import settings
 from app.core.errors import NotFoundError
 from app.schemas.image import ImageResponse
 from app.schemas.search import FiltersResponse, ImageDetailResponse
@@ -21,6 +25,21 @@ from app.services.local_storage import local_storage_service
 from app.services.tag_catalog import tag_catalog_service
 
 router = APIRouter()
+
+def _media_storage_paths(image) -> list[str]:
+    """Absolute on-disk path per media file, for display only — see
+    ImageDetailResponse.media_storage_paths' docstring."""
+    root = Path(settings.library_data_dir) / "images"
+    paths = [image.image_path, *(image.additional_image_paths or [])]
+    return [str(root / p) for p in paths]
+
+
+VIDEO_MEDIA_TYPES = {
+    "mp4": "video/mp4",
+    "mov": "video/quicktime",
+    "webm": "video/webm",
+    "avi": "video/x-msvideo",
+}
 
 # These endpoints are stable, index-based URLs (.../file, .../media/{n})
 # whose underlying bytes change whenever an entry's images are reordered,
@@ -134,6 +153,43 @@ async def get_image_orientation(image_id: UUID):
     return Response(content=data, media_type=media_type, headers=NO_CACHE_HEADERS)
 
 
+@router.get("/{image_id}/video/{index}")
+async def get_image_video(image_id: UUID, index: int):
+    """Serve a supporting video clip — never part of the searchable media
+    set (see Image.video_paths). Uses FileResponse (not Response, unlike
+    the image endpoints above) so the file streams from disk in chunks
+    instead of being fully read into memory first — cheaper for a large
+    video. NOTE: this Starlette version's FileResponse does NOT honor
+    Range headers (verified empirically — a ranged request still gets a
+    full 200 with the whole body, not 206 Partial Content), so there's no
+    seek/scrub-without-downloading-the-whole-file support yet; a client
+    has to fetch the full file before playback. Fine for "open the link
+    and play/download it," not yet suited to in-page scrubbing of large
+    files — revisit with manual Range-header handling if that's needed."""
+    image = await file_store_service.get_image(image_id)
+    if not image:
+        raise NotFoundError(
+            f"Image {image_id} not found",
+            details={"image_id": str(image_id)},
+        )
+    videos = image.video_paths or []
+    if index < 0 or index >= len(videos):
+        raise NotFoundError(
+            f"Video index {index} not found for image {image_id}",
+            details={"image_id": str(image_id), "index": index},
+        )
+    path = videos[index]
+    suffix = path.rsplit(".", 1)[-1].lower()
+    media_type = VIDEO_MEDIA_TYPES.get(suffix, "video/mp4")
+    file_path = local_storage_service.get_path(path)
+    if not file_path.exists():
+        raise NotFoundError(
+            f"Video file missing on disk for {image_id}",
+            details={"image_id": str(image_id), "index": index},
+        )
+    return FileResponse(file_path, media_type=media_type, headers=NO_CACHE_HEADERS)
+
+
 @router.get("/{image_id}", response_model=ImageDetailResponse)
 async def get_image(image_id: UUID):
     """Fetch a single image's metadata and media URLs."""
@@ -149,9 +205,14 @@ async def get_image(image_id: UUID):
     orientation_url = (
         f"/api/v1/images/{image_id}/orientation" if image.orientation_image_path else None
     )
+    video_urls = [
+        f"/api/v1/images/{image_id}/video/{i}" for i in range(len(image.video_paths or []))
+    ]
     return ImageDetailResponse(
         image=ImageResponse.model_validate(image),
         image_url=media_urls[0],
         media_urls=media_urls,
+        media_storage_paths=_media_storage_paths(image),
         orientation_image_url=orientation_url,
+        video_urls=video_urls,
     )

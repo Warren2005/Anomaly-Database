@@ -32,6 +32,14 @@ class LocalStorageService:
     def _resolve(self, object_name: str) -> Path:
         return self._images_dir / object_name
 
+    def get_path(self, object_name: str) -> Path:
+        """Resolve to the on-disk path directly, for callers that stream
+        the file (e.g. FileResponse for video playback) instead of loading
+        it fully into memory via get_image() — cheaper for a large file,
+        even though this doesn't add HTTP range-request support on its
+        own (see the video endpoint's docstring in images.py)."""
+        return self._resolve(object_name)
+
     def _upload_image_sync(
         self, object_name: str, data: bytes, content_type: str = "image/jpeg"
     ) -> str:

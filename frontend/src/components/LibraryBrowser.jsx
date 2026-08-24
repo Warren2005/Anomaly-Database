@@ -161,7 +161,9 @@ export default function LibraryBrowser() {
               image: result.image,
               image_url: result.image_url,
               media_urls: result.media_urls,
+              media_storage_paths: result.media_storage_paths,
               orientation_image_url: result.orientation_image_url,
+              video_urls: result.video_urls,
             });
           }
           load();
@@ -178,7 +180,9 @@ export default function LibraryBrowser() {
           image: selected.image,
           image_url: selected.image_url,
           media_urls: selected.media_urls,
+          media_storage_paths: selected.media_storage_paths,
           orientation_image_url: selected.orientation_image_url,
+          video_urls: selected.video_urls,
           similarity_score: null,
         }}
         onBack={() => {

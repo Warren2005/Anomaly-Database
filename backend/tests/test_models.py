@@ -24,7 +24,7 @@ def test_image_model_fields():
         "notes", "panel_tags", "beamforming_types", "tags",
         "interacts_with_other_features", "interaction_related_items",
         "zero_angle_frame_index", "track", "additional_image_paths",
-        "orientation_image_path", "pipe_angle",
+        "orientation_image_path", "pipe_angle", "video_paths",
     }
     assert field_names == expected
 

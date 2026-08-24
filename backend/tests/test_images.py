@@ -52,6 +52,64 @@ class TestGetImage:
             assert response.json()["error"]["code"] == "NOT_FOUND"
 
 
+class TestGetImageVideo:
+    def test_get_video_found(self, tmp_path):
+        """GET /images/{id}/video/{index} streams the file via FileResponse
+        (not the read-whole-file-into-memory Response the image endpoints
+        use), which avoids loading a large video fully into memory —
+        though this Starlette version's FileResponse doesn't add HTTP
+        range-request support, see images.py's docstring on this route."""
+        image_id = uuid4()
+        video_file = tmp_path / "clip.mp4"
+        video_file.write_bytes(b"fake-mp4-bytes")
+        mock_image = Image(
+            id=image_id,
+            image_path="library/primary.jpg",
+            video_paths=["library/clip.mp4"],
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+
+        with (
+            patch("app.api.v1.endpoints.images.file_store_service") as mock_store,
+            patch("app.api.v1.endpoints.images.local_storage_service") as mock_local,
+        ):
+            mock_store.get_image = AsyncMock(return_value=mock_image)
+            mock_local.get_path = lambda _object_name: video_file
+
+            client = TestClient(app)
+            response = client.get(f"/api/v1/images/{image_id}/video/0")
+
+            assert response.status_code == 200
+            assert response.headers["content-type"] == "video/mp4"
+            assert response.headers["cache-control"] == "no-store"
+            assert response.content == b"fake-mp4-bytes"
+
+    def test_get_video_index_out_of_range_is_not_found(self):
+        image_id = uuid4()
+        mock_image = Image(
+            id=image_id,
+            image_path="library/primary.jpg",
+            video_paths=["library/clip.mp4"],
+            created_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+            updated_at=datetime(2026, 1, 1, tzinfo=timezone.utc),
+        )
+        with patch("app.api.v1.endpoints.images.file_store_service") as mock_store:
+            mock_store.get_image = AsyncMock(return_value=mock_image)
+            client = TestClient(app)
+            response = client.get(f"/api/v1/images/{image_id}/video/5")
+            assert response.status_code == 404
+
+    def test_get_video_no_videos_is_not_found(self):
+        image_id = uuid4()
+        mock_image = _make_image(image_id)  # no video_paths
+        with patch("app.api.v1.endpoints.images.file_store_service") as mock_store:
+            mock_store.get_image = AsyncMock(return_value=mock_image)
+            client = TestClient(app)
+            response = client.get(f"/api/v1/images/{image_id}/video/0")
+            assert response.status_code == 404
+
+
 class TestGetFilters:
     def test_get_filters(self):
         """GET /images/filters returns distinct filter values."""

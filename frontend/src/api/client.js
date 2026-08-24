@@ -216,13 +216,16 @@ export async function checkHealth() {
   return response.json();
 }
 
-export async function uploadToLibrary(files, metadata, orientationImage) {
+export async function uploadToLibrary(files, metadata, orientationImage, videos = []) {
   const form = new FormData();
   const list = Array.isArray(files) ? files : [files];
   list.forEach((f) => form.append("files", f));
   // Reference-only image — a completely separate field from `files`, so
   // it's structurally impossible for it to end up as searchable media.
   if (orientationImage) form.append("orientation_image", orientationImage);
+  // Supporting video clips — same idea: a separate field, playback only,
+  // never touched by the search/embedding pipeline.
+  videos.forEach((v) => form.append("videos", v));
   Object.entries(metadata).forEach(([k, v]) => {
     if (v !== undefined && v !== null && v !== "") form.append(k, v);
   });
@@ -249,6 +252,8 @@ export async function updateLibraryEntry(
     primaryIndex = 0,
     newOrientationImage = null,
     removeOrientationImage = false,
+    newVideos = [],
+    removeVideoIndices = [],
   } = {},
   metadata,
   passkey
@@ -261,6 +266,8 @@ export async function updateLibraryEntry(
   form.append("primary_index", String(primaryIndex ?? 0));
   if (newOrientationImage) form.append("new_orientation_image", newOrientationImage);
   if (removeOrientationImage) form.append("remove_orientation_image", "true");
+  newVideos.forEach((v) => form.append("new_videos", v));
+  if (removeVideoIndices.length) form.append("remove_videos", removeVideoIndices.join(","));
   // Unlike upload, every field is sent even when blank — an edit form
   // always resends the current value, and a genuinely blank value means
   // "clear this field," not "wasn't provided" (see library.py's _resolved).

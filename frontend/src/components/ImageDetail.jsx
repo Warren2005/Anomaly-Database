@@ -6,6 +6,20 @@ import ImageLightbox from "./ImageLightbox";
 
 const VIEW_FOCUS = "focus";
 const VIEW_GRID = "grid";
+const GRID_TILE_SIZE_KEY = "ili-grid-tile-size";
+const GRID_TILE_MIN = 160;
+const GRID_TILE_MAX = 420;
+const GRID_TILE_DEFAULT = 280;
+
+function loadGridTileSize() {
+  try {
+    const raw = Number(localStorage.getItem(GRID_TILE_SIZE_KEY));
+    if (Number.isFinite(raw) && raw >= GRID_TILE_MIN && raw <= GRID_TILE_MAX) return raw;
+  } catch {
+    /* ignore */
+  }
+  return GRID_TILE_DEFAULT;
+}
 
 function shortPanelLabel(tag) {
   const canonical = canonicalPanelTag(tag);
@@ -43,9 +57,8 @@ export default function ImageDetail({
   const [unlockError, setUnlockError] = useState(null);
   const [lightbox, setLightbox] = useState(null);
   const [viewMode, setViewMode] = useState(VIEW_FOCUS);
-  // Collapsed by default — who last touched this entry and when is always
-  // visible in the footer regardless (see latestRevision below); the full
-  // history is opt-in so it doesn't clutter every anomaly by default.
+  const [gridTileSize, setGridTileSize] = useState(loadGridTileSize);
+  // Full revision list is opt-in; latest updater is always shown.
   const [showRevisions, setShowRevisions] = useState(false);
   const [copiedAnomalyId, setCopiedAnomalyId] = useState(false);
   const copyResetTimerRef = useRef(null);
@@ -165,6 +178,14 @@ export default function ImageDetail({
   useEffect(() => {
     if (viewMode === VIEW_GRID && !canUsePanels) setViewMode(VIEW_FOCUS);
   }, [viewMode, canUsePanels]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(GRID_TILE_SIZE_KEY, String(gridTileSize));
+    } catch {
+      /* ignore */
+    }
+  }, [gridTileSize]);
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -461,6 +482,20 @@ export default function ImageDetail({
                   </>
                 )}
               </div>
+              {viewMode === VIEW_GRID && (
+                <label className="grid-tile-size" title="Resize panel tiles">
+                  <span className="grid-tile-size-label">Tile size</span>
+                  <input
+                    type="range"
+                    min={GRID_TILE_MIN}
+                    max={GRID_TILE_MAX}
+                    step={10}
+                    value={gridTileSize}
+                    onChange={(e) => setGridTileSize(Number(e.target.value))}
+                    aria-label="Panel tile size"
+                  />
+                </label>
+              )}
               {viewMode === VIEW_FOCUS && (
                 <div className="detail-beam-mode">
                   {currentBeamformingType ? (
@@ -493,6 +528,7 @@ export default function ImageDetail({
               <div
                 className="panel-masonry"
                 aria-label="Panel grid"
+                style={{ "--panel-tile-min": `${gridTileSize}px` }}
               >
                 {media.map((url, i) => {
                   const tag = (panelTags[i] || `Image ${i + 1}`).trim();
@@ -767,40 +803,56 @@ export default function ImageDetail({
             </div>
           ) : null}
 
-          {(image.revision_history || []).length > 0 && (
+          {(image.revision_history || []).length > 0 && latestRevision && (
             <div className="detail-meta-block">
-              <button
-                type="button"
-                className="detail-meta-heading detail-revision-toggle"
-                onClick={() => setShowRevisions((open) => !open)}
-                aria-expanded={showRevisions}
-              >
-                <span>Revision history</span>
-                <span className="detail-revision-toggle-meta">
-                  {(image.revision_history || []).length}
-                  <span className="detail-revision-arrow" aria-hidden="true">
-                    {showRevisions ? "▴" : "▾"}
+              <div className="detail-meta-heading">Last updated</div>
+              <div className="detail-revision-latest">
+                <span className="detail-revision-latest-name">{latestRevision.name || "Unknown"}</span>
+                {latestRevision.timestamp && (
+                  <span className="detail-revision-latest-when">
+                    {new Date(latestRevision.timestamp).toLocaleString(undefined, {
+                      dateStyle: "medium",
+                      timeStyle: "short",
+                    })}
                   </span>
-                </span>
-              </button>
-              {showRevisions && (
-                <ul className="detail-revision-list">
-                  {[...image.revision_history]
-                    .sort((a, b) => {
-                      const ver = (b.version ?? 0) - (a.version ?? 0);
-                      if (ver !== 0) return ver;
-                      return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
-                    })
-                    .map((rev) => (
-                      <li key={rev.version}>
-                        <span className="detail-revision-ver">V{rev.version}</span>
-                        <span className="detail-revision-body">
-                          {rev.name} — {new Date(rev.timestamp).toLocaleDateString()}
-                          {rev.comment && <div className="revision-comment">{rev.comment}</div>}
-                        </span>
-                      </li>
-                    ))}
-                </ul>
+                )}
+                {latestRevision.comment && (
+                  <div className="revision-comment">{latestRevision.comment}</div>
+                )}
+              </div>
+              {(image.revision_history || []).length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    className="detail-revision-show-all"
+                    onClick={() => setShowRevisions((open) => !open)}
+                    aria-expanded={showRevisions}
+                  >
+                    {showRevisions ? "Hide full revision history" : "Show full revision history"}
+                    <span className="detail-revision-arrow" aria-hidden="true">
+                      {showRevisions ? "▴" : "▾"}
+                    </span>
+                  </button>
+                  {showRevisions && (
+                    <ul className="detail-revision-list">
+                      {[...image.revision_history]
+                        .sort((a, b) => {
+                          const ver = (b.version ?? 0) - (a.version ?? 0);
+                          if (ver !== 0) return ver;
+                          return new Date(b.timestamp || 0) - new Date(a.timestamp || 0);
+                        })
+                        .map((rev) => (
+                          <li key={rev.version}>
+                            <span className="detail-revision-ver">V{rev.version}</span>
+                            <span className="detail-revision-body">
+                              {rev.name} — {new Date(rev.timestamp).toLocaleDateString()}
+                              {rev.comment && <div className="revision-comment">{rev.comment}</div>}
+                            </span>
+                          </li>
+                        ))}
+                    </ul>
+                  )}
+                </>
               )}
             </div>
           )}
@@ -817,29 +869,16 @@ export default function ImageDetail({
           )}
 
           <div className="detail-meta-footer">
-            {(latestRevision?.name || tags.length > 0) && (
+            {tags.length > 0 && (
               <div className="detail-meta-footer-row">
-                {latestRevision?.name && (
-                  <div className="detail-meta-footer-item">
-                    <span className="detail-meta-footer-label">Last updated by</span>
-                    <span className="detail-meta-footer-value">
-                      {latestRevision.name}
-                      {latestRevision.timestamp
-                        ? ` · ${new Date(latestRevision.timestamp).toLocaleDateString()}`
-                        : ""}
-                    </span>
+                <div className="detail-meta-footer-item">
+                  <span className="detail-meta-footer-label">Tags</span>
+                  <div className="panel-tag-row detail-meta-footer-tags">
+                    {tags.map((tag) => (
+                      <span key={tag} className="badge">{tag}</span>
+                    ))}
                   </div>
-                )}
-                {tags.length > 0 && (
-                  <div className="detail-meta-footer-item">
-                    <span className="detail-meta-footer-label">Tags</span>
-                    <div className="panel-tag-row detail-meta-footer-tags">
-                      {tags.map((tag) => (
-                        <span key={tag} className="badge">{tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                </div>
               </div>
             )}
             <div className="detail-meta-footer-item">

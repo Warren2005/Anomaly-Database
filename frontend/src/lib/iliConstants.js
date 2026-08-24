@@ -157,6 +157,23 @@ export const PANEL_TAG_OPTIONS = [
   "Other",
 ];
 
+/** Guidance shown on Search by image when choosing a query panel/image. */
+export const IMAGE_UPLOAD_GUIDANCE = [
+  "Include only panels that support identification, sizing, or search for this anomaly.",
+  "Exclude the feature table and any UI chrome that is not part of the panel view.",
+  "Do not upload unrelated panels that do not help search or interpretation.",
+  "Prefer clear, well-framed screenshots of each relevant panel type.",
+];
+
+/** Catalog contribution standards shown on Add Entry / Edit Entry. */
+export const IMAGE_QUALITY_GUIDANCE = [
+  "Capture clear screenshots with sharp focus so features are easy to interpret.",
+  "Center the anomaly in the frame and crop tightly around the relevant panel view.",
+  "Use adequate illumination and contrast so signal detail is visible.",
+  "Provide enough detail and resolution for identification and sizing decisions.",
+  "Keep framing consistent across panels so entries remain comparable in the catalog.",
+];
+
 /** Default shortcuts under the Add Entry drop zone (user-customizable) */
 export const DEFAULT_PANEL_SHORTCUTS = [
   { panel: "Beamforming Panel", mode: "" },

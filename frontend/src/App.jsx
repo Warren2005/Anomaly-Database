@@ -6,7 +6,7 @@ import StatusBar from "./components/StatusBar";
 import LibraryUpload from "./components/LibraryUpload";
 import LibraryBrowser from "./components/LibraryBrowser";
 import SimilarityFilter from "./components/SimilarityFilter";
-import { PANEL_TAG_OPTIONS } from "./lib/iliConstants";
+import { PANEL_TAG_OPTIONS, IMAGE_UPLOAD_GUIDANCE } from "./lib/iliConstants";
 import logoMark from "./assets/ili-brary-logo.png";
 
 function SkeletonCard({ delay }) {
@@ -129,6 +129,7 @@ export default function App() {
   const [activeSearchPanelTag, setActiveSearchPanelTag] = useState("");
   const [panelPickerOpen, setPanelPickerOpen] = useState(false);
   const [pendingPanelTag, setPendingPanelTag] = useState("");
+  const [searchGuideOpen, setSearchGuideOpen] = useState(false);
   const pendingPanelRef = useRef("");
   const [isDark, setIsDark] = useState(
     () => (localStorage.getItem("theme") ?? "dark") === "dark"
@@ -285,11 +286,13 @@ export default function App() {
   const startImageSearch = useCallback(() => {
     setError(null);
     setPendingPanelTag(searchPanelTag);
+    setSearchGuideOpen(false);
     setPanelPickerOpen(true);
   }, [searchPanelTag]);
 
   const closePanelPicker = useCallback(() => {
     setPanelPickerOpen(false);
+    setSearchGuideOpen(false);
   }, []);
 
   const confirmPanelAndPick = useCallback(() => {
@@ -562,8 +565,31 @@ export default function App() {
           }}
         >
           <div className="leave-confirm-modal panel-picker-modal">
-            <h3 id="panel-picker-title">Select panel type</h3>
+            <div className="library-browser-title-row">
+              <h3 id="panel-picker-title">Select panel type</h3>
+              <button
+                type="button"
+                className={`info-tip-btn${searchGuideOpen ? " is-open" : ""}`}
+                aria-expanded={searchGuideOpen}
+                aria-controls="search-image-guidance"
+                title="Query image guidance"
+                onClick={() => setSearchGuideOpen((open) => !open)}
+              >
+                <span aria-hidden="true">i</span>
+                <span className="sr-only">Query image guidance</span>
+              </button>
+            </div>
             <p>Choose which panel to search against, then pick an image.</p>
+            {searchGuideOpen && (
+              <div id="search-image-guidance" className="info-tip-panel" role="note">
+                <p className="info-tip-title">How to choose a query image</p>
+                <ul className="info-tip-list">
+                  {IMAGE_UPLOAD_GUIDANCE.map((line) => (
+                    <li key={line}>{line}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <div className="panel-picker-grid" role="listbox" aria-label="Panel types">
               {PANEL_TAG_OPTIONS.map((tag) => (
                 <button

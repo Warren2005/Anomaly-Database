@@ -1392,6 +1392,17 @@ body {
   color: var(--text-muted);
 }
 
+.upload-guidance-note {
+  margin: 0 0 12px;
+  padding: 8px 12px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--text-secondary);
+  background: var(--accent-dim);
+  border-left: 3px solid var(--accent);
+  border-radius: 4px;
+}
+
 /* Full-image lightbox — centered, scroll to zoom */
 .image-lightbox {
   position: fixed;

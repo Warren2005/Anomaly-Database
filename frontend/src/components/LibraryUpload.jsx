@@ -1180,6 +1180,11 @@ export default function LibraryUpload({
               </button>
             )}
           </div>
+          <p className="upload-guidance-note">
+            Ensure each panel image contains only that panel's signal field. Don't include content from Nautilus
+            that doesn't visibly show the anomaly. This is necessary to avoid noise in the data, which will be
+            used for search.
+          </p>
           <div
             className={`dropzone${isDragging ? " dropzone-active" : ""}${fieldErrors.file ? " has-error" : ""}`}
             onDragOver={handleDragOver}

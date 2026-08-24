@@ -60,6 +60,55 @@ const FIELD_LABELS = {
   pipe_angle: "Pipe Angle",
 };
 
+const FIELD_HELP = {
+  anomaly_type: "High-level feature class (for example Corrosion, Crack-like, Dent).",
+  run_number: "ILI run this anomaly belongs to (for example ILIT0013).",
+  run_id: "Unique system ID for the selected run. Filled automatically when you choose a Run.",
+  client_id: "Optional client or project reference ID for this anomaly.",
+  identification: "More specific feature name within the selected anomaly type.",
+  anomaly_id: "Unique human-readable ID for this anomaly entry.",
+  classification_status: "Current review or classification state of this entry.",
+  zero_angle_frame_index: "Zero-angle frame index from the ILI viewer, if available.",
+  pipe_angle: "Pipe angle in degrees associated with the orientation reference image.",
+  wall_location: "Through-wall position of the feature: Internal, External, or Mid Wall.",
+  crack_image_angles: "Crack image angle polarity present for Crack-like anomalies (+, −, or Both).",
+  interacts_with_other_features: "Whether this anomaly interacts with other features on the pipe.",
+  interaction_related_items: "Which anomaly types or components this feature interacts with.",
+  depth: "Measured depth of the anomaly in millimeters.",
+  width: "Measured width of the anomaly in millimeters.",
+  length: "Measured length of the anomaly in millimeters.",
+  signal_description: "How the anomaly appears in each relevant panel used for identification or sizing.",
+  differential_diagnosis: "Lookalike features and how this finding is distinguished from them.",
+  limitations_uncertainty: "Classification confidence (High / Medium / Low) and what drives that rating.",
+  is_qc_flag: "Mark if this entry started as a QC flag rather than a routine library addition.",
+  qc_raised_by: "Who raised the original QC flag.",
+  qc_reviewer: "Who reviewed the QC flag.",
+  qc_decision_rationale: "Outcome of the QC review and the reasoning behind it.",
+  contributor_name: "Your name for the revision history on this save.",
+  contributor_comment: "Optional note describing what you added or changed.",
+  tags: "Free-form catalog tags to help find and group similar entries.",
+  orientation_image: "Optional orientation reference image shown with the entry (not used for search).",
+};
+
+function FormFieldLabel({ children, help, required = false, optional = false }) {
+  return (
+    <label className="form-label">
+      <span className="form-label-main">{children}</span>
+      {required ? <span className="req">*</span> : null}
+      {optional ? (
+        <span className="opt">{typeof optional === "string" ? optional : "optional"}</span>
+      ) : null}
+      {help ? (
+        <span className="field-help" tabIndex={0}>
+          <span className="field-help-icon" aria-hidden="true">?</span>
+          <span className="field-help-tip" role="tooltip">{help}</span>
+          <span className="sr-only">{help}</span>
+        </span>
+      ) : null}
+    </label>
+  );
+}
+
 function validationMessages(errs) {
   const messages = [];
   const seen = new Set();
@@ -1205,11 +1254,6 @@ export default function LibraryUpload({
               </button>
             )}
           </div>
-          <p className="upload-guidance-note">
-            Ensure each panel image contains only that panel's signal field. Don't include content from Nautilus
-            that doesn't visibly show the anomaly. This is necessary to avoid noise in the data, which will be
-            used for search.
-          </p>
           <div
             className={`dropzone${isDragging ? " dropzone-active" : ""}${fieldErrors.file ? " has-error" : ""}`}
             onDragOver={handleDragOver}
@@ -1520,7 +1564,7 @@ export default function LibraryUpload({
       <form className="upload-form" onSubmit={handleSubmit}>
         <div className="form-row form-row-3">
           <div className="form-field">
-            <label className="form-label">Anomaly Type <span className="req">*</span></label>
+            <FormFieldLabel help={FIELD_HELP.anomaly_type} required>Anomaly Type</FormFieldLabel>
             <select
               className={`form-select${fieldErrors.anomaly_type ? " has-error-input" : ""}`}
               value={form.anomaly_type}
@@ -1531,7 +1575,7 @@ export default function LibraryUpload({
             </select>
           </div>
           <div className="form-field">
-            <label className="form-label">Run <span className="req">*</span></label>
+            <FormFieldLabel help={FIELD_HELP.run_number} required>Run</FormFieldLabel>
             <select
               className={`form-select${fieldErrors.run_number ? " has-error-input" : ""}`}
               value={form.run_number}
@@ -1545,7 +1589,7 @@ export default function LibraryUpload({
             </select>
           </div>
           <div className="form-field">
-            <label className="form-label">Run ID</label>
+            <FormFieldLabel help={FIELD_HELP.run_id}>Run ID</FormFieldLabel>
             <input
               className="form-input"
               type="text"
@@ -1616,9 +1660,7 @@ export default function LibraryUpload({
 
         <div className="form-row form-row-3">
           <div className="form-field">
-            <label className="form-label">
-              Client ID <span className="opt">optional</span>
-            </label>
+            <FormFieldLabel help={FIELD_HELP.client_id} optional>Client ID</FormFieldLabel>
             <input
               className="form-input"
               type="text"
@@ -1628,7 +1670,7 @@ export default function LibraryUpload({
             />
           </div>
           <div className="form-field">
-            <label className="form-label">Identification <span className="req">*</span></label>
+            <FormFieldLabel help={FIELD_HELP.identification} required>Identification</FormFieldLabel>
             {identificationSelectOptions ? (
               <select
                 className={`form-select${fieldErrors.identification ? " has-error-input" : ""}`}
@@ -1659,7 +1701,7 @@ export default function LibraryUpload({
             )}
           </div>
           <div className="form-field">
-            <label className="form-label">Anomaly ID <span className="req">*</span></label>
+            <FormFieldLabel help={FIELD_HELP.anomaly_id} required>Anomaly ID</FormFieldLabel>
             <input
               className={`form-input${fieldErrors.anomaly_id ? " has-error-input" : ""}`}
               type="text"
@@ -1672,7 +1714,7 @@ export default function LibraryUpload({
 
         <div className="form-row form-row-3">
           <div className="form-field">
-            <label className="form-label">Classification Status <span className="req">*</span></label>
+            <FormFieldLabel help={FIELD_HELP.classification_status} required>Classification Status</FormFieldLabel>
             <select
               className={`form-select${fieldErrors.classification_status ? " has-error-input" : ""}`}
               value={form.classification_status}
@@ -1683,9 +1725,9 @@ export default function LibraryUpload({
             </select>
           </div>
           <div className="form-field">
-            <label className="form-label">
-              ZeroAngle Frame Index <span className="opt">optional</span>
-            </label>
+            <FormFieldLabel help={FIELD_HELP.zero_angle_frame_index} optional>
+              ZeroAngle Frame Index
+            </FormFieldLabel>
             <input
               className={`form-input${fieldErrors.zero_angle_frame_index ? " has-error-input" : ""}`}
               type="text"
@@ -1695,9 +1737,7 @@ export default function LibraryUpload({
             />
           </div>
           <div className="form-field">
-            <label className="form-label">
-              Pipe Angle <span className="opt">optional</span>
-            </label>
+            <FormFieldLabel help={FIELD_HELP.pipe_angle} optional>Pipe Angle</FormFieldLabel>
             <input
               className={`form-input${fieldErrors.pipe_angle ? " has-error-input" : ""}`}
               type="text"
@@ -1713,7 +1753,7 @@ export default function LibraryUpload({
 
         <div className="segment-controls-row">
           <div className="form-field form-field-grow">
-            <label className="form-label">Wall Location <span className="req">*</span></label>
+            <FormFieldLabel help={FIELD_HELP.wall_location} required>Wall Location</FormFieldLabel>
             <div
               className={`segment-box${fieldErrors.wall_location ? " has-error-input" : ""}`}
               role="listbox"
@@ -1742,12 +1782,13 @@ export default function LibraryUpload({
           </div>
 
           <div className={`form-field form-field-angles${form.anomaly_type === CRACK_TYPE ? "" : " is-disabled"}`}>
-            <label className="form-label">
+            <FormFieldLabel
+              help={FIELD_HELP.crack_image_angles}
+              required={form.anomaly_type === CRACK_TYPE}
+              optional={form.anomaly_type === CRACK_TYPE ? false : "Crack-like only"}
+            >
               Crack Angle
-              {form.anomaly_type === CRACK_TYPE
-                ? <span className="req"> *</span>
-                : <span className="opt"> Crack-like only</span>}
-            </label>
+            </FormFieldLabel>
             <div
               className={`segment-box segment-box-angles${
                 fieldErrors.crack_image_angles ? " has-error-input" : ""
@@ -1780,9 +1821,9 @@ export default function LibraryUpload({
           </div>
 
           <div className="form-field form-field-interact">
-            <label className="form-label">
-              Interacting? <span className="req">*</span>
-            </label>
+            <FormFieldLabel help={FIELD_HELP.interacts_with_other_features} required>
+              Interacting?
+            </FormFieldLabel>
             <div
               className={`segment-box segment-box-yesno${
                 fieldErrors.interacts_with_other_features ? " has-error-input" : ""
@@ -1825,9 +1866,9 @@ export default function LibraryUpload({
 
         {form.interacts_with_other_features === "yes" && (
           <div className="form-field">
-            <label className="form-label">
-              Related Anomaly Types / Components <span className="req">*</span>
-            </label>
+            <FormFieldLabel help={FIELD_HELP.interaction_related_items} required>
+              Related Anomaly Types / Components
+            </FormFieldLabel>
             <div className="tag-chip-row interaction-chip-row">
               {INTERACTION_OPTIONS.map((item) => (
                 <button
@@ -1851,10 +1892,9 @@ export default function LibraryUpload({
         <div className="form-row form-row-3">
           {["depth", "width", "length"].map((dim) => (
             <div className="form-field" key={dim}>
-              <label className="form-label">
+              <FormFieldLabel help={FIELD_HELP[dim]} required={requiredDims.includes(dim)}>
                 {dim.charAt(0).toUpperCase() + dim.slice(1)} (mm)
-                {requiredDims.includes(dim) && <span className="req"> *</span>}
-              </label>
+              </FormFieldLabel>
               <input
                 className={`form-input${fieldErrors[dim] ? " has-error-input" : ""}`}
                 type="text"
@@ -1868,9 +1908,9 @@ export default function LibraryUpload({
 
         <div className="comment-categories">
           <div className="form-field">
-            <label className="form-label">
-              Detection signature <span className="req">*</span>
-            </label>
+            <FormFieldLabel help={FIELD_HELP.signal_description} required>
+              Detection signature
+            </FormFieldLabel>
             <textarea
               className={`form-textarea${fieldErrors.signal_description ? " has-error-input" : ""}`}
               value={form.signal_description}
@@ -1881,9 +1921,9 @@ export default function LibraryUpload({
           </div>
 
           <div className="form-field">
-            <label className="form-label">
-              Similar anomalies / differential diagnosis <span className="req">*</span>
-            </label>
+            <FormFieldLabel help={FIELD_HELP.differential_diagnosis} required>
+              Similar anomalies / differential diagnosis
+            </FormFieldLabel>
             <textarea
               className={`form-textarea${fieldErrors.differential_diagnosis ? " has-error-input" : ""}`}
               value={form.differential_diagnosis}
@@ -1894,9 +1934,9 @@ export default function LibraryUpload({
           </div>
 
           <div className="form-field">
-            <label className="form-label">
-              Limitations / uncertainty <span className="req">*</span>
-            </label>
+            <FormFieldLabel help={FIELD_HELP.limitations_uncertainty} required>
+              Limitations / uncertainty
+            </FormFieldLabel>
             <textarea
               className={`form-textarea${fieldErrors.limitations_uncertainty ? " has-error-input" : ""}`}
               value={form.limitations_uncertainty}
@@ -1915,12 +1955,17 @@ export default function LibraryUpload({
               onChange={(e) => handleFormChange("is_qc_flag", e.target.checked)}
             />
             This entry originated as a QC flag
+            <span className="field-help field-help-inline" tabIndex={0}>
+              <span className="field-help-icon" aria-hidden="true">?</span>
+              <span className="field-help-tip" role="tooltip">{FIELD_HELP.is_qc_flag}</span>
+              <span className="sr-only">{FIELD_HELP.is_qc_flag}</span>
+            </span>
           </label>
           {form.is_qc_flag && (
             <div className="qc-fields">
               <div className="form-row">
                 <div className="form-field">
-                  <label className="form-label">QC Raised By</label>
+                  <FormFieldLabel help={FIELD_HELP.qc_raised_by}>QC Raised By</FormFieldLabel>
                   <input
                     className="form-input"
                     type="text"
@@ -1929,7 +1974,7 @@ export default function LibraryUpload({
                   />
                 </div>
                 <div className="form-field">
-                  <label className="form-label">QC Reviewer</label>
+                  <FormFieldLabel help={FIELD_HELP.qc_reviewer}>QC Reviewer</FormFieldLabel>
                   <input
                     className="form-input"
                     type="text"
@@ -1939,7 +1984,9 @@ export default function LibraryUpload({
                 </div>
               </div>
               <div className="form-field">
-                <label className="form-label">QC Decision &amp; Rationale</label>
+                <FormFieldLabel help={FIELD_HELP.qc_decision_rationale}>
+                  QC Decision &amp; Rationale
+                </FormFieldLabel>
                 <textarea
                   className="form-textarea"
                   value={form.qc_decision_rationale}
@@ -1952,7 +1999,9 @@ export default function LibraryUpload({
 
         {isEditMode && editingImage?.image?.revision_history?.length > 0 && (
           <div className="form-field revision-history-field">
-            <label className="form-label">Revision History</label>
+            <FormFieldLabel help="Prior saves for this entry. Newest revisions appear first.">
+              Revision History
+            </FormFieldLabel>
             <ul className="revision-history-list">
               {[...editingImage.image.revision_history]
                 .sort((a, b) => (b.version ?? 0) - (a.version ?? 0))
@@ -1968,9 +2017,7 @@ export default function LibraryUpload({
         )}
 
         <div className="form-field">
-          <label className="form-label">
-            Comment <span className="opt">optional</span>
-          </label>
+          <FormFieldLabel help={FIELD_HELP.contributor_comment} optional>Comment</FormFieldLabel>
           <textarea
             className="form-textarea"
             value={form.contributor_comment}
@@ -1979,9 +2026,9 @@ export default function LibraryUpload({
         </div>
 
         <div className="form-field orientation-field">
-          <label className="form-label">
-            Orientation Image <span className="opt">optional</span>
-          </label>
+          <FormFieldLabel help={FIELD_HELP.orientation_image} optional>
+            Orientation Image
+          </FormFieldLabel>
           {(orientationPreview || existingOrientationUrl) ? (
             <div className="orientation-preview">
               <button
@@ -2097,7 +2144,7 @@ export default function LibraryUpload({
         <div className="form-footer-signature">
           <div className="form-row">
             <div className="form-field">
-              <label className="form-label">Tags <span className="opt">optional</span></label>
+              <FormFieldLabel help={FIELD_HELP.tags} optional>Tags</FormFieldLabel>
               <select
                 className="form-select"
                 value={tagSelectValue}
@@ -2176,9 +2223,9 @@ export default function LibraryUpload({
               )}
             </div>
             <div className="form-field">
-              <label className="form-label">
-                {isEditMode ? "Sign this revision" : "Your Name"} <span className="req">*</span>
-              </label>
+              <FormFieldLabel help={FIELD_HELP.contributor_name} required>
+                {isEditMode ? "Sign this revision" : "Your Name"}
+              </FormFieldLabel>
               <input
                 className={`form-input${fieldErrors.contributor_name ? " has-error-input" : ""}`}
                 type="text"

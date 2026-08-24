@@ -373,6 +373,7 @@ async def browse_library(
     anomaly_status: Optional[str] = None,
     classification_status: Optional[str] = None,
     panel_tags: Optional[str] = None,
+    tags: Optional[str] = None,
     identifications: Optional[str] = None,
     wall_locations: Optional[str] = None,
     interacts_with_other_features: Optional[bool] = None,
@@ -401,6 +402,8 @@ async def browse_library(
             if t.strip()
         )
 
+    tag_set = {t.strip().lower() for t in (tags or "").split(",") if t.strip()}
+
     identification_set = set()
     if identifications:
         identification_set.update(
@@ -424,11 +427,15 @@ async def browse_library(
         if type_set and img.anomaly_type not in type_set:
             return False
         if panel_set:
-            tags = {
+            tags_on_panels = {
                 ("Raw Panel" if t == "Raw Frame" else t)
                 for t in (img.panel_tags or [])
             }
-            if not panel_set.intersection(tags):
+            if not panel_set.intersection(tags_on_panels):
+                return False
+        if tag_set:
+            entry_tags = {str(t).strip().lower() for t in (img.tags or []) if str(t).strip()}
+            if not tag_set.intersection(entry_tags):
                 return False
         if identification_set and img.identification not in identification_set:
             return False
@@ -459,6 +466,7 @@ async def browse_library(
                     None,
                     [
                         img.anomaly_id,
+                        img.client_id,
                         img.anomaly_description,
                         img.signal_description,
                         img.differential_diagnosis,

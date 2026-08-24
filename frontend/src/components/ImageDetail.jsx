@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { deleteLibraryEntry, resolveImageUrl } from "../api/client";
-import { PANEL_TAG_OPTIONS, STATUS_COLORS, canonicalBeamformingType, canonicalPanelTag, formatCrackAngle, isBeamformingPanel } from "../lib/iliConstants";
+import { PANEL_TAG_OPTIONS, STATUS_COLORS, canonicalBeamformingType, canonicalPanelTag, formatCrackAngle, isBeamformingPanel, shortcutModeLabel } from "../lib/iliConstants";
 import ZoomableImage from "./ZoomableImage";
 import ImageLightbox from "./ImageLightbox";
 
@@ -28,6 +28,25 @@ function shortPanelLabel(tag) {
 
 function panelGroupKey(tag) {
   return shortPanelLabel(tag).toLowerCase();
+}
+
+/** Unique filter id for Grid visibility — Beamforming splits by mode. */
+function gridFilterKey(tag, mode = "") {
+  const panel = panelGroupKey(tag);
+  if (isBeamformingPanel(tag)) {
+    const m = canonicalBeamformingType(mode) || "unspecified";
+    return `${panel}::${m}`;
+  }
+  return panel;
+}
+
+function gridFilterLabel(tag, mode = "") {
+  const short = shortPanelLabel(tag);
+  if (isBeamformingPanel(tag)) {
+    const m = shortcutModeLabel(mode) || "Unspecified mode";
+    return `${short} · ${m}`;
+  }
+  return short;
 }
 
 export default function ImageDetail({
@@ -60,8 +79,10 @@ export default function ImageDetail({
   const [gridTileSize, setGridTileSize] = useState(loadGridTileSize);
   // Full revision list is opt-in; latest updater is always shown.
   const [showRevisions, setShowRevisions] = useState(false);
-  /** Panel group keys visible in Grid mode. null = all panels for this anomaly. */
+  /** Filter keys hidden in Grid mode. Empty = show all. */
   const [gridHiddenPanels, setGridHiddenPanels] = useState(() => new Set());
+  const [gridFilterOpen, setGridFilterOpen] = useState(false);
+  const gridFilterRef = useRef(null);
 
   const [copiedAnomalyId, setCopiedAnomalyId] = useState(false);
   const copyResetTimerRef = useRef(null);
@@ -142,6 +163,33 @@ export default function ImageDetail({
 
   const canUsePanels = media.length > 1;
 
+  const gridFilterOptions = useMemo(() => {
+    const map = new Map();
+    media.forEach((_, i) => {
+      const tag = (panelTags[i] || `Image ${i + 1}`).trim();
+      const mode = canonicalBeamformingType(beamformingTypes[i] || "");
+      const key = gridFilterKey(tag, mode);
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          label: gridFilterLabel(tag, mode),
+          tag,
+          mode,
+          count: 0,
+        });
+      }
+      map.get(key).count += 1;
+    });
+    return [...map.values()].sort((a, b) => {
+      const ra = PANEL_TAG_OPTIONS.indexOf(canonicalPanelTag(a.tag));
+      const rb = PANEL_TAG_OPTIONS.indexOf(canonicalPanelTag(b.tag));
+      const ia = ra >= 0 ? ra : PANEL_TAG_OPTIONS.length;
+      const ib = rb >= 0 ? rb : PANEL_TAG_OPTIONS.length;
+      if (ia !== ib) return ia - ib;
+      return a.label.localeCompare(b.label);
+    });
+  }, [media, panelTags, beamformingTypes]);
+
   const toggleGridPanel = (key) => {
     setGridHiddenPanels((prev) => {
       const next = new Set(prev);
@@ -155,16 +203,25 @@ export default function ImageDetail({
     return media
       .map((url, i) => {
         const tag = (panelTags[i] || `Image ${i + 1}`).trim();
+        const mode = canonicalBeamformingType(beamformingTypes[i] || "");
         return {
           url,
           index: i,
           tag,
-          key: panelGroupKey(tag),
-          mode: canonicalBeamformingType(beamformingTypes[i] || ""),
+          mode,
+          key: gridFilterKey(tag, mode),
         };
       })
       .filter((slot) => !gridHiddenPanels.has(slot.key));
   }, [media, panelTags, beamformingTypes, gridHiddenPanels]);
+
+  const visibleFilterCount = gridFilterOptions.length - gridHiddenPanels.size;
+  const gridFilterSummary =
+    gridHiddenPanels.size === 0
+      ? "All panels"
+      : visibleFilterCount <= 0
+        ? "None selected"
+        : `${visibleFilterCount} of ${gridFilterOptions.length} panels`;
 
   const latestRevision = useMemo(() => {
     const history = image.revision_history || [];
@@ -183,6 +240,7 @@ export default function ImageDetail({
     setLightbox(null);
     setShowRevisions(false);
     setGridHiddenPanels(new Set());
+    setGridFilterOpen(false);
     setConfirmDelete(false);
     setDeleteError(null);
     setUnlockInput("");
@@ -206,6 +264,28 @@ export default function ImageDetail({
   useEffect(() => {
     if (viewMode === VIEW_GRID && !canUsePanels) setViewMode(VIEW_FOCUS);
   }, [viewMode, canUsePanels]);
+
+  useEffect(() => {
+    if (viewMode !== VIEW_GRID) setGridFilterOpen(false);
+  }, [viewMode]);
+
+  useEffect(() => {
+    if (!gridFilterOpen) return undefined;
+    const onPointerDown = (e) => {
+      if (gridFilterRef.current && !gridFilterRef.current.contains(e.target)) {
+        setGridFilterOpen(false);
+      }
+    };
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setGridFilterOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [gridFilterOpen]);
 
   useEffect(() => {
     try {
@@ -548,35 +628,53 @@ export default function ImageDetail({
                   </button>
                 ))}
                 {canUsePanels && viewMode === VIEW_GRID && (
-                  <div className="grid-panel-filters" role="group" aria-label="Panels to show in grid">
-                    {panelGroups.map((group) => {
-                      const key = panelGroupKey(group.tag);
-                      const visible = !gridHiddenPanels.has(key);
-                      return (
-                        <button
-                          key={key}
-                          type="button"
-                          className={`media-thumb grid-panel-filter${visible ? " active" : ""}`}
-                          aria-pressed={visible}
-                          onClick={() => toggleGridPanel(key)}
-                          title={
-                            visible
-                              ? `Hide ${group.tag} in grid`
-                              : `Show ${group.tag} in grid`
-                          }
-                        >
-                          {shortPanelLabel(group.tag)}
-                        </button>
-                      );
-                    })}
-                    {gridHiddenPanels.size > 0 && (
-                      <button
-                        type="button"
-                        className="btn btn-secondary grid-panel-show-all"
-                        onClick={() => setGridHiddenPanels(new Set())}
-                      >
-                        Show all
-                      </button>
+                  <div className="grid-panel-filter-dropdown" ref={gridFilterRef}>
+                    <button
+                      type="button"
+                      className={`btn btn-secondary grid-panel-filter-trigger${gridFilterOpen ? " is-open" : ""}`}
+                      aria-expanded={gridFilterOpen}
+                      aria-haspopup="listbox"
+                      onClick={() => setGridFilterOpen((open) => !open)}
+                    >
+                      <span className="grid-panel-filter-trigger-label">Show panels</span>
+                      <span className="grid-panel-filter-trigger-value">{gridFilterSummary}</span>
+                      <span className="detail-revision-arrow" aria-hidden="true">
+                        {gridFilterOpen ? "▴" : "▾"}
+                      </span>
+                    </button>
+                    {gridFilterOpen && (
+                      <div className="grid-panel-filter-menu" role="listbox" aria-label="Panels to show in grid">
+                        <div className="grid-panel-filter-menu-head">
+                          <span>Choose panels to display</span>
+                          {gridHiddenPanels.size > 0 && (
+                            <button
+                              type="button"
+                              className="grid-panel-filter-reset"
+                              onClick={() => setGridHiddenPanels(new Set())}
+                            >
+                              Show all
+                            </button>
+                          )}
+                        </div>
+                        {gridFilterOptions.map((opt) => {
+                          const visible = !gridHiddenPanels.has(opt.key);
+                          return (
+                            <label key={opt.key} className="grid-panel-filter-option">
+                              <input
+                                type="checkbox"
+                                checked={visible}
+                                onChange={() => toggleGridPanel(opt.key)}
+                              />
+                              <span className="grid-panel-filter-option-text">
+                                <span className="grid-panel-filter-option-label">{opt.label}</span>
+                                {opt.count > 1 && (
+                                  <span className="grid-panel-filter-option-count">{opt.count}</span>
+                                )}
+                              </span>
+                            </label>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 )}
@@ -588,7 +686,7 @@ export default function ImageDetail({
             <div className="panel-layout">
               {gridSlots.length === 0 ? (
                 <p className="grid-panel-empty">
-                  No panels selected. Turn on one or more panel types above to show them in the grid.
+                  No panels selected. Open Show panels and choose which views to display.
                 </p>
               ) : (
               <div
@@ -607,10 +705,12 @@ export default function ImageDetail({
                         setMediaIdx(slot.index);
                         openLightbox(resolveImageUrl(slot.url), slot.tag);
                       }}
-                      title={`Open ${slot.tag}`}
+                      title={slot.mode ? `Open ${slot.tag} · ${slot.mode}` : `Open ${slot.tag}`}
                     >
                       <div className="panel-slot-label">{shortPanelLabel(slot.tag)}</div>
-                      {slot.mode ? <div className="panel-slot-mode">{slot.mode}</div> : null}
+                      {slot.mode ? (
+                        <div className="panel-slot-mode">{shortcutModeLabel(slot.mode)}</div>
+                      ) : null}
                       <img src={resolveImageUrl(slot.url)} alt={slot.tag} />
                     </button>
                   );

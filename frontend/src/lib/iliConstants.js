@@ -172,6 +172,7 @@ export const IMAGE_QUALITY_GUIDANCE = [
   "Use adequate illumination and contrast so signal detail is visible.",
   "Provide enough detail and resolution for identification and sizing decisions.",
   "Keep framing consistent across panels so entries remain comparable in the catalog.",
+  "Include only that panel's signal field — omit Nautilus chrome or other content that does not show the anomaly, to avoid noise in search.",
 ];
 
 /** Default shortcuts under the Add Entry drop zone (user-customizable) */

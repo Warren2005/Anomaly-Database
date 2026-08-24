@@ -16,6 +16,7 @@ const EMPTY_FILTERS = {
   anomaly_types: [],
   identifications: [],
   panel_tags: [],
+  tags: [],
   wall_locations: [],
   run_number: "",
   classification_status: "",
@@ -49,6 +50,7 @@ function FilterSection({ id, label, open, onToggle, count, children }) {
 export default function LibraryBrowser() {
   const [filters, setFilters] = useState(EMPTY_FILTERS);
   const [runOptions, setRunOptions] = useState([]);
+  const [tagOptions, setTagOptions] = useState([]);
   const [items, setItems] = useState([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -71,12 +73,16 @@ export default function LibraryBrowser() {
     type: true,
     identification: true,
     panel: true,
+    tags: true,
     wall: true,
   });
 
   useEffect(() => {
     getFilters()
-      .then((data) => setRunOptions(data.run_numbers || []))
+      .then((data) => {
+        setRunOptions(data.run_numbers || []);
+        setTagOptions(data.tags || []);
+      })
       .catch(() => {});
   }, []);
 
@@ -123,6 +129,7 @@ export default function LibraryBrowser() {
     n += filters.anomaly_types.length;
     n += filters.identifications.length;
     n += filters.panel_tags.length;
+    n += filters.tags.length;
     n += filters.wall_locations.length;
     if (filters.run_number) n += 1;
     if (filters.classification_status) n += 1;
@@ -312,6 +319,32 @@ export default function LibraryBrowser() {
               </button>
             ))}
           </div>
+        </FilterSection>
+
+        <FilterSection
+          id="tags"
+          label="Tags"
+          open={!!openSections.tags}
+          onToggle={toggleSection}
+          count={filters.tags.length}
+        >
+          {tagOptions.length === 0 ? (
+            <p className="browse-filter-empty">No tags yet — add them on Add Entry.</p>
+          ) : (
+            <div className="chips-wrap">
+              {tagOptions.map((tag) => (
+                <button
+                  key={tag}
+                  type="button"
+                  className={`chip ${filters.tags.includes(tag) ? "chip-active" : ""}`}
+                  aria-pressed={filters.tags.includes(tag)}
+                  onClick={() => setFilter("tags", toggleType(filters.tags, tag))}
+                >
+                  {tag}
+                </button>
+              ))}
+            </div>
+          )}
         </FilterSection>
 
         <FilterSection

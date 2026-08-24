@@ -1,0 +1,15 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="ILI-brary">
+  <!-- Transparent background — orange split-hexagon mark only -->
+  <g
+    stroke="#F46631"
+    stroke-width="42"
+    stroke-linejoin="miter"
+    stroke-linecap="butt"
+    fill="none"
+  >
+    <!-- Left half -->
+    <path d="M242 96 H186 L100 186 V326 L186 416 H242"/>
+    <!-- Right half -->
+    <path d="M270 96 H326 L412 186 V326 L326 416 H270"/>
+  </g>
+</svg>

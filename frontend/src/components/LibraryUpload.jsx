@@ -25,6 +25,7 @@ import {
   INTERACTION_OPTIONS,
   WALL_LOCATION_OPTIONS,
   CRACK_IMAGE_ANGLE_OPTIONS,
+  IMAGE_QUALITY_GUIDANCE,
 } from "../lib/iliConstants";
 
 const ADD_NEW_RUN = "__add_new__";
@@ -302,6 +303,7 @@ export default function LibraryUpload({
   const [previews, setPreviews] = useState([]);
   const [primaryIndex, setPrimaryIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [imageQualityGuideOpen, setImageQualityGuideOpen] = useState(false);
   const [dropTargetIndex, setDropTargetIndex] = useState(null);
   const [reorderFrom, setReorderFrom] = useState(null);
   const reorderFromRef = useRef(null);
@@ -1167,12 +1169,35 @@ export default function LibraryUpload({
         <div className="upload-media-col">
           <div className="library-browser-header">
             <div>
-              <h2 className="library-browser-title">{isEditMode ? "Edit Entry" : "Add Entry"}</h2>
+              <div className="library-browser-title-row">
+                <h2 className="library-browser-title">{isEditMode ? "Edit Entry" : "Add Entry"}</h2>
+                <button
+                  type="button"
+                  className={`info-tip-btn${imageQualityGuideOpen ? " is-open" : ""}`}
+                  aria-expanded={imageQualityGuideOpen}
+                  aria-controls="image-quality-guidance"
+                  title="Image quality standards"
+                  onClick={() => setImageQualityGuideOpen((open) => !open)}
+                >
+                  <span aria-hidden="true">i</span>
+                  <span className="sr-only">Image quality standards</span>
+                </button>
+              </div>
               <p className="library-browser-subtitle">
                 {isEditMode
                   ? "Update fields or manage this anomaly's images — at least one image must remain"
                   : "Upload panel screenshots and tag each one."}
               </p>
+              {imageQualityGuideOpen && (
+                <div id="image-quality-guidance" className="info-tip-panel" role="note">
+                  <p className="info-tip-title">Image quality standards</p>
+                  <ul className="info-tip-list">
+                    {IMAGE_QUALITY_GUIDANCE.map((line) => (
+                      <li key={line}>{line}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
             {isEditMode && (
               <button type="button" className="btn btn-secondary" onClick={onCancel}>

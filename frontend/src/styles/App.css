@@ -2730,6 +2730,33 @@ button.badge {
   flex: 0 1 auto;
 }
 
+.grid-panel-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.grid-panel-filter:not(.active) {
+  opacity: 0.4;
+}
+
+.grid-panel-show-all {
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.grid-panel-empty {
+  margin: 0;
+  padding: 28px 16px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .detail-view-toggle {
   display: flex;
   flex-wrap: wrap;

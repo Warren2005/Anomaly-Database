@@ -145,11 +145,12 @@ body {
 }
 
 .brand {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-shrink: 0;
   justify-self: start;
+  line-height: 1;
 }
 
 .brand-button {
@@ -162,8 +163,8 @@ body {
 }
 
 .brand-mark {
-  width: 44px;
-  height: 44px;
+  width: 34px;
+  height: 34px;
   border-radius: 0;
   object-fit: contain;
   object-position: center;
@@ -172,18 +173,23 @@ body {
   border: none;
   background: transparent;
   padding: 0;
+  margin: 0;
+  /* Optical align with wordmark cap-height */
+  transform: translateY(1px);
   image-rendering: auto;
 }
 
 .brand-wordmark {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
   color: var(--text-primary);
   white-space: nowrap;
   line-height: 1;
   display: flex;
   align-items: center;
+  margin: 0;
+  padding: 0;
 }
 
 .brand-wordmark span {

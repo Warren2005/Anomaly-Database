@@ -376,8 +376,8 @@ export default function App() {
             className="brand-mark"
             src={logoMark}
             alt="ILI-brary"
-            width={56}
-            height={56}
+            width={34}
+            height={34}
           />
           <div className="brand-wordmark">
             ILI<span>-BRARY</span>

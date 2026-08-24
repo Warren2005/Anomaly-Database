@@ -1,15 +1,14 @@
 ﻿<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none" role="img" aria-label="ILI-brary">
-  <!-- Transparent background — orange split-hexagon mark only -->
+  <!-- Optically centered split-hexagon mark, transparent background -->
   <g
     stroke="#F46631"
-    stroke-width="42"
+    stroke-width="48"
     stroke-linejoin="miter"
     stroke-linecap="butt"
     fill="none"
+    transform="translate(0 6)"
   >
-    <!-- Left half -->
-    <path d="M242 96 H186 L100 186 V326 L186 416 H242"/>
-    <!-- Right half -->
-    <path d="M270 96 H326 L412 186 V326 L326 416 H270"/>
+    <path d="M238 88 H176 L92 186 V326 L176 424 H238"/>
+    <path d="M274 88 H336 L420 186 V326 L336 424 H274"/>
   </g>
 </svg>

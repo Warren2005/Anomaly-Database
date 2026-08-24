@@ -20,6 +20,7 @@ class ImageBase(BaseModel):
     anomaly_type: Optional[str] = None
     identification: Optional[str] = None
     anomaly_id: Optional[str] = None
+    client_id: Optional[str] = None
     wall_location: Optional[str] = None
     crack_image_angles: Optional[str] = None
     run_number: Optional[str] = None

@@ -202,6 +202,7 @@ function ShortcutPickerMenu({ anchorEl, menuRef, minWidth = 200, className = "",
 const EMPTY_FORM = {
   identification: "",
   anomaly_id: "",
+  client_id: "",
   anomaly_description: "",
   signal_description: "",
   differential_diagnosis: "",
@@ -231,6 +232,7 @@ function formFromImage(image) {
   return {
     identification: image.identification || "",
     anomaly_id: image.anomaly_id || "",
+    client_id: image.client_id || "",
     anomaly_description: image.anomaly_description || "",
     signal_description: image.signal_description || "",
     differential_diagnosis: image.differential_diagnosis || "",
@@ -1486,7 +1488,7 @@ export default function LibraryUpload({
 
       <div className="upload-form-col">
       <form className="upload-form" onSubmit={handleSubmit}>
-        <div className="form-row">
+        <div className="form-row form-row-3">
           <div className="form-field">
             <label className="form-label">Anomaly Type <span className="req">*</span></label>
             <select
@@ -1511,6 +1513,16 @@ export default function LibraryUpload({
               ))}
               <option value={ADD_NEW_RUN}>+ Add new run…</option>
             </select>
+          </div>
+          <div className="form-field">
+            <label className="form-label">Run ID</label>
+            <input
+              className="form-input"
+              type="text"
+              readOnly
+              placeholder={form.run_number ? "Unique ID pending for this run" : "Select a Run first"}
+              value={form.anomaly_description}
+            />
           </div>
         </div>
 
@@ -1574,13 +1586,15 @@ export default function LibraryUpload({
 
         <div className="form-row form-row-3">
           <div className="form-field">
-            <label className="form-label">Run ID</label>
+            <label className="form-label">
+              Client ID <span className="opt">optional</span>
+            </label>
             <input
               className="form-input"
               type="text"
-              readOnly
-              placeholder={form.run_number ? "Unique ID pending for this run" : "Select a Run first"}
-              value={form.anomaly_description}
+              value={form.client_id}
+              onChange={(e) => handleFormChange("client_id", e.target.value)}
+              autoComplete="off"
             />
           </div>
           <div className="form-field">
@@ -1831,7 +1845,8 @@ export default function LibraryUpload({
               className={`form-textarea${fieldErrors.signal_description ? " has-error-input" : ""}`}
               value={form.signal_description}
               onChange={(e) => handleFormChange("signal_description", e.target.value)}
-              placeholder="Describe how the anomaly looks in each relevant panel. Example: Image Panel: xxx — Fluid Flood: abc — Complex L-L: ghj"
+              placeholder={"Describe the anomaly appearance in each relevant panel. Example:\nImage Panel: …\nFluid Flood: …\nComplex L-L: …"}
+              rows={4}
             />
           </div>
 
@@ -1843,7 +1858,8 @@ export default function LibraryUpload({
               className={`form-textarea${fieldErrors.differential_diagnosis ? " has-error-input" : ""}`}
               value={form.differential_diagnosis}
               onChange={(e) => handleFormChange("differential_diagnosis", e.target.value)}
-              placeholder="What could this be confused with?"
+              placeholder="Identify features this finding could be confused with and the criteria used to differentiate them (for example, SSWC)."
+              rows={4}
             />
           </div>
 
@@ -1855,7 +1871,8 @@ export default function LibraryUpload({
               className={`form-textarea${fieldErrors.limitations_uncertainty ? " has-error-input" : ""}`}
               value={form.limitations_uncertainty}
               onChange={(e) => handleFormChange("limitations_uncertainty", e.target.value)}
-              placeholder="Include a classification confidence (High, Medium, Low) and explain what drives it"
+              placeholder="State classification confidence as High, Medium, or Low, and briefly justify the factors that support that rating."
+              rows={4}
             />
           </div>
         </div>

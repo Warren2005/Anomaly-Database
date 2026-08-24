@@ -154,6 +154,7 @@ export const PANEL_TAG_OPTIONS = [
   "Cross-Section Panel",
   "Dent Sizing Panel",
   "Tool Pose Panel",
+  "Other",
 ];
 
 /** Default shortcuts under the Add Entry drop zone (user-customizable) */

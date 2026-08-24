@@ -156,6 +156,7 @@ async def upload_to_library(
     anomaly_type: Optional[str] = Form(None),
     identification: Optional[str] = Form(None),
     anomaly_id: Optional[str] = Form(None),
+    client_id: Optional[str] = Form(None),
     wall_location: Optional[str] = Form(None),
     crack_image_angles: Optional[str] = Form(None),
     run_number: Optional[str] = Form(None),
@@ -196,6 +197,7 @@ async def upload_to_library(
         raise ValidationError("Anomaly ID is required.")
     anomaly_id = anomaly_id.strip()
     identification = identification.strip()
+    client_id = client_id.strip() if client_id and client_id.strip() else None
 
     if not contributor_name or not contributor_name.strip():
         raise ValidationError("Contributor name is required.")
@@ -301,6 +303,7 @@ async def upload_to_library(
         anomaly_type=anomaly_type,
         identification=identification,
         anomaly_id=anomaly_id,
+        client_id=client_id,
         wall_location=wall_location,
         crack_image_angles=crack_image_angles,
         run_number=run_number,
@@ -683,6 +686,7 @@ async def update_library_entry(
     anomaly_type: Optional[str] = Form(None),
     identification: Optional[str] = Form(None),
     anomaly_id: Optional[str] = Form(None),
+    client_id: Optional[str] = Form(None),
     wall_location: Optional[str] = Form(None),
     crack_image_angles: Optional[str] = Form(None),
     run_number: Optional[str] = Form(None),
@@ -976,6 +980,7 @@ async def update_library_entry(
         anomaly_type=_resolved(anomaly_type, existing.anomaly_type),
         identification=identification_val,
         anomaly_id=anomaly_id_val,
+        client_id=_resolved(client_id, existing.client_id),
         wall_location=_resolved(wall_location, existing.wall_location),
         crack_image_angles=_resolved(crack_image_angles, existing.crack_image_angles),
         run_number=_resolved(run_number, existing.run_number),

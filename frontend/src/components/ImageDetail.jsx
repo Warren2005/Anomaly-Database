@@ -685,6 +685,7 @@ export default function ImageDetail({
             <div className="detail-meta-heading">Identity</div>
             <dl className="detail-dl">
               <DetailItem label="Identification" value={image.identification} />
+              <DetailItem label="Client ID" value={image.client_id} />
               <DetailItem
                 label="Mode"
                 value={

@@ -36,6 +36,8 @@ class Image:
     # from `id`, the internal UUID) — enforced unique at the API layer via
     # FileStoreService.find_by_anomaly_id().
     anomaly_id: Optional[str] = None
+    # Optional client / project reference ID (not unique, not required).
+    client_id: Optional[str] = None
     wall_location: Optional[str] = None
     # Crack-like only: which image angle polarity is present ("+", "−", "Both").
     crack_image_angles: Optional[str] = None

@@ -14,7 +14,7 @@ def test_image_model_fields():
         "tissue_type", "benign_malignant", "age", "sex",
         "created_at", "updated_at",
         "anomaly_description", "anomaly_status", "anomaly_type",
-        "identification", "anomaly_id", "wall_location", "crack_image_angles", "run_number",
+        "identification", "anomaly_id", "client_id", "wall_location", "crack_image_angles", "run_number",
         "analysis_comment", "revision_history",
         # ILI / Zach reference-library fields
         "classification_status",

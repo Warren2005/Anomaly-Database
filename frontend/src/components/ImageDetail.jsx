@@ -103,16 +103,25 @@ export default function ImageDetail({
   };
 
   // Left/Right cycles through ALL of this anomaly's images (Raw,
-  // Beamforming, Image, etc. — the full `media` array), not just within
-  // one panel group like stepPanelImage above. Kept as a separate function
-  // since "see every image" and "step within one panel's sub-images" are
-  // different asks with different key bindings (Left/Right vs the ‹ ›
-  // buttons under the image).
+  // Beamforming, Image, etc.), not just within one panel group like
+  // stepPanelImage above. Kept as a separate function since "see every
+  // image" and "step within one panel's sub-images" are different asks
+  // with different key bindings (Left/Right vs the ‹ › buttons under the
+  // image). Steps through panelGroups' flattened order (the same
+  // left-to-right order the panel tabs are displayed in), not raw `media`
+  // storage order, and wraps around at both ends.
+  const orderedMediaIndexes = useMemo(
+    () => panelGroups.flatMap((g) => g.indexes),
+    [panelGroups]
+  );
+
   const stepMedia = (dir) => {
-    if (media.length < 2) return;
-    const next = mediaIdx + dir;
-    if (next < 0 || next >= media.length) return;
-    setMediaIdx(next);
+    if (orderedMediaIndexes.length < 2) return;
+    const pos = orderedMediaIndexes.indexOf(mediaIdx);
+    const currentPos = pos === -1 ? 0 : pos;
+    const total = orderedMediaIndexes.length;
+    const nextPos = (currentPos + dir + total) % total;
+    setMediaIdx(orderedMediaIndexes[nextPos]);
   };
 
   const canUsePanels = media.length > 1;

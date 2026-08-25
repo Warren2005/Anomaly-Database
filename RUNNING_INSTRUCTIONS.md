@@ -119,6 +119,59 @@ The backend binds to `0.0.0.0`, so once it's running, anyone on the same local n
 
 ---
 
+## Always-on deployment (survives sleep, recovers after a reboot)
+
+A laptop that goes to sleep stops responding to network requests, full stop — no server process can outlive that. If you need the link to stay reachable to everyone on the company network/VPN even while nobody is actively using the host machine, the fix isn't in the app, it's in the host machine's Windows configuration. This section is for whoever's machine is acting as the shared host (see `CLAUDE.md` for which machine that currently is).
+
+**This does not survive a full shutdown or a Windows Update-triggered restart** — only sleep. After a genuine restart, the steps below get the server back up automatically on the next login; there's no way to make a stopped machine start itself back up.
+
+### 1. Stop the host from sleeping
+
+Run once, in an elevated PowerShell, on the host machine:
+
+```powershell
+powercfg /change standby-timeout-ac 0
+powercfg /change hibernate-timeout-ac 0
+```
+
+This only disables sleep while plugged into AC power — leave the host plugged in at all times. If it's a laptop, also check **Settings → System → Power & Sleep → Additional power settings → Choose what closing the lid does** and set "When plugged in" to **Do nothing**, otherwise closing the lid suspends it regardless of the timeout above. Screen/monitor timeout is unrelated to this and can be left as-is — the display turning off doesn't affect the backend.
+
+### 2. Open the port to the company network
+
+```powershell
+New-NetFirewallRule -DisplayName "ILI Backend" -Direction Inbound -Protocol TCP -LocalPort <API_PORT> -Action Allow -Profile Domain,Private
+```
+
+Deliberately scoped to the `Domain`/`Private` firewall profiles, not `Public` — this keeps it off the public internet even if the machine's network location is ever misdetected. This deployment is company-network/VPN-only by design, not internet-facing — this app has no login/auth layer, so exposing it publicly would need real security work first.
+
+### 3. Get a network address that doesn't change
+
+A DHCP-assigned IP can change after a reboot, silently breaking the link everyone has bookmarked. Before sharing an address:
+
+- Run `ipconfig /all` and `hostname` on the host, then try `ping <hostname>` from another machine on the network — many corporate (Active Directory-joined) networks already resolve a machine's hostname automatically, which is the simplest fix and needs no ticket.
+- If that doesn't resolve, ask IT for a **DHCP reservation** binding this machine's MAC address to a fixed IP, so the address is stable across reboots without hand-configuring a static IP (which can conflict with the DHCP pool if done ad hoc).
+
+### 4. Auto-start the backend after a reboot
+
+The backend needs to run in the same Windows user session as the Dropbox desktop client (Dropbox syncs per-user, and `LIBRARY_DATA_DIR` depends on that sync being live and current — see "Where the data lives" above), so this uses an "At log on" Task Scheduler trigger, not a session-independent service:
+
+```powershell
+$action = New-ScheduledTaskAction -Execute "powershell.exe" `
+  -Argument '-NoProfile -ExecutionPolicy Bypass -File "C:\path\to\backend\run_server.ps1"'
+$trigger = New-ScheduledTaskTrigger -AtLogOn
+Register-ScheduledTask -TaskName "ILI Backend" -Action $action -Trigger $trigger -RunLevel Highest
+```
+
+(Adjust the `-File` path to wherever this repo lives on the host.) This runs `backend/run_server.ps1` — a small wrapper in this repo that activates the venv, reads `API_PORT` from `.env`, and launches `uvicorn`, logging to `backend/logs/uvicorn.log` for troubleshooting.
+
+For the task to fire without anyone manually logging in after a reboot, the host's Windows account needs to auto-log-in on boot (`netplwiz` → uncheck "Users must enter a password" for that account, or your IT team's preferred method). This trades a small amount of physical-console security for full recovery automation — reasonable for a machine already behind company physical security, but worth a deliberate call rather than a default. If auto-login isn't acceptable, the Task Scheduler job still saves you from having to remember the exact command — just log in manually after a reboot and it starts itself a few seconds later.
+
+### 5. Verify
+
+After setting all of the above up, test the whole recovery path once: restart the host machine, don't touch it, and from a *different* machine on the network confirm `http://<host-address>:<API_PORT>/api/v1/health` comes back healthy within a minute or two of the host finishing boot.
+
+---
+
 ## Troubleshooting
 
 - **CUDA / GPU errors on startup**: `CLIP_DEVICE=cuda` requires a CUDA build of `torch`/`torchvision` matching your driver, not the default CPU wheels `open-clip-torch` pulls in — see the comment block in `requirements.txt`. When in doubt, set `CLIP_DEVICE=cpu`; it works everywhere, just slower.

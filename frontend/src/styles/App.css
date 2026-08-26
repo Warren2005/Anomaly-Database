@@ -2799,6 +2799,13 @@ button.badge {
   color: var(--text-secondary);
 }
 
+.grid-panel-filter-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
 .grid-panel-filter-reset {
   border: none;
   background: none;
@@ -2810,8 +2817,13 @@ button.badge {
   color: var(--accent);
 }
 
-.grid-panel-filter-reset:hover {
+.grid-panel-filter-reset:hover:not(:disabled) {
   color: var(--accent-hover);
+}
+
+.grid-panel-filter-reset:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .grid-panel-filter-option {
@@ -2900,7 +2912,7 @@ button.badge {
 .panel-masonry {
   --panel-tile-min: 280px;
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(var(--panel-tile-min), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--panel-tile-min)), 1fr));
   justify-content: start;
   align-items: start;
   gap: 12px;
@@ -2973,7 +2985,7 @@ button.badge {
 
 @media (max-width: 900px) {
   .panel-masonry {
-    grid-template-columns: repeat(auto-fill, minmax(min(200px, var(--panel-tile-min)), 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--panel-tile-min)), 1fr));
   }
 }
 

@@ -8,7 +8,7 @@ const VIEW_FOCUS = "focus";
 const VIEW_GRID = "grid";
 const GRID_TILE_SIZE_KEY = "ili-grid-tile-size";
 const GRID_TILE_MIN = 160;
-const GRID_TILE_MAX = 420;
+const GRID_TILE_MAX = 1200;
 const GRID_TILE_DEFAULT = 280;
 
 function loadGridTileSize() {
@@ -659,15 +659,29 @@ export default function ImageDetail({
                       <div className="grid-panel-filter-menu" role="listbox" aria-label="Panels to show in grid">
                         <div className="grid-panel-filter-menu-head">
                           <span>Choose panels to display</span>
-                          {gridHiddenPanels.size > 0 && (
+                          <div className="grid-panel-filter-actions">
                             <button
                               type="button"
                               className="grid-panel-filter-reset"
                               onClick={() => setGridHiddenPanels(new Set())}
+                              disabled={gridHiddenPanels.size === 0}
                             >
-                              Show all
+                              Select all
                             </button>
-                          )}
+                            <button
+                              type="button"
+                              className="grid-panel-filter-reset"
+                              onClick={() =>
+                                setGridHiddenPanels(new Set(gridFilterOptions.map((opt) => opt.key)))
+                              }
+                              disabled={
+                                gridFilterOptions.length > 0
+                                && gridHiddenPanels.size === gridFilterOptions.length
+                              }
+                            >
+                              Unselect all
+                            </button>
+                          </div>
                         </div>
                         {gridFilterOptions.map((opt) => {
                           const visible = !gridHiddenPanels.has(opt.key);

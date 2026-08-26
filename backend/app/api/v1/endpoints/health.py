@@ -45,7 +45,7 @@ async def health_check():
         service_checks["embedding_model"] = "down"
 
     # Determine overall status
-    external_services = ["storage"]
+    external_services = ["storage", "embedding_model"]
     up_count = sum(1 for s in external_services if service_checks[s] == "up")
 
     if up_count == len(external_services):

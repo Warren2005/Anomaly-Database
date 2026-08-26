@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
     try:
         await embedding_service.load_model()
     except Exception as e:
-        logger.error(f"Failed to load CLIP model: {e}")
+        logger.error(f"Failed to load primary embedding model: {e}")
 
     if settings.rerank_enabled:
         try:

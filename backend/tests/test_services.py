@@ -497,9 +497,10 @@ def test_health_healthy_when_all_up():
     assert "version" in data
 
 
-def test_health_unhealthy_when_storage_down():
-    """Storage is the only external service checked now, so it failing
-    makes the overall status 'unhealthy' rather than 'degraded'."""
+def test_health_degraded_when_storage_down():
+    """Storage and the embedding model are both checked now, so one being
+    down while the other is up makes the overall status 'degraded' rather
+    than 'unhealthy' — 'unhealthy' is reserved for both being down."""
     from app.main import app
 
     with patch("app.api.v1.endpoints.health.file_store_service") as mock_store:
@@ -509,5 +510,28 @@ def test_health_unhealthy_when_storage_down():
         response = client.get("/api/v1/health")
         data = response.json()
 
+        assert data["status"] == "degraded"
+        assert data["services"]["storage"] == "down"
+
+
+def test_health_unhealthy_when_all_external_services_down():
+    """Storage and the embedding model both down makes the overall status
+    'unhealthy' — this is the case that previously went unnoticed: the
+    embedding model failing to load at startup left search/upload broken
+    while /health still reported 'healthy' because only storage gated the
+    overall status."""
+    from app.main import app
+
+    with patch("app.api.v1.endpoints.health.file_store_service") as mock_store, patch(
+        "app.api.v1.endpoints.health.embedding_service"
+    ) as mock_embedding:
+        mock_store.health_check.side_effect = ConnectionError("down")
+        mock_embedding.health_check.return_value = False
+
+        client = TestClient(app)
+        response = client.get("/api/v1/health")
+        data = response.json()
+
         assert data["status"] == "unhealthy"
         assert data["services"]["storage"] == "down"
+        assert data["services"]["embedding_model"] == "down"

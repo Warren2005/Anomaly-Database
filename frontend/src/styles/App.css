@@ -2779,10 +2779,13 @@ button.badge {
   max-height: min(360px, 50vh);
   overflow: auto;
   padding: 8px;
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: 10px;
-  background: var(--bg-elevated);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+  /* Opaque — do not use glass/surface tokens (they're translucent). */
+  background: var(--select-bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
 .grid-panel-filter-menu-head {
@@ -4226,7 +4229,7 @@ button.badge {
   vertical-align: middle;
 }
 
-.field-help-inline {
+.checkbox-label .field-help {
   margin-left: 6px;
 }
 
@@ -4239,35 +4242,45 @@ button.badge {
 }
 
 .field-help-tip {
-  position: absolute;
-  left: 50%;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%);
-  width: max-content;
-  max-width: min(280px, 70vw);
+  box-sizing: border-box;
   padding: 8px 10px;
   border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-elevated);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  /* Opaque — do not use glass/surface tokens (they're translucent). */
+  background: var(--select-bg);
+  background-color: var(--select-bg);
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   color: var(--text-primary);
   font-size: 12px;
   font-weight: 500;
   line-height: 1.4;
   letter-spacing: 0;
   text-transform: none;
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
-  opacity: 0;
-  visibility: hidden;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
   pointer-events: none;
-  transition: opacity 0.12s ease, visibility 0.12s ease;
-  z-index: 50;
+  isolation: isolate;
+  z-index: 3000;
 }
 
-.field-help:hover .field-help-tip,
-.field-help:focus .field-help-tip,
-.field-help:focus-within .field-help-tip {
+.field-help-tip-portal {
+  position: fixed;
+  transform: translateY(-100%);
+  max-width: none;
   opacity: 1;
   visibility: visible;
+}
+
+.field-help-tip-portal.is-below {
+  transform: none;
+}
+
+[data-theme="light"] .field-help-tip {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: var(--select-bg);
+  background-color: var(--select-bg);
+  color: var(--text-primary);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.18);
 }
 
 .form-input,

@@ -90,6 +90,86 @@ const FIELD_HELP = {
   orientation_image: "Optional orientation reference image shown with the entry (not used for search).",
 };
 
+function FieldHelp({ text }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 240, placeBelow: false });
+  const iconRef = useRef(null);
+  const tipRef = useRef(null);
+
+  const placeTip = useCallback(() => {
+    const el = iconRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const width = Math.min(280, Math.max(160, window.innerWidth * 0.7));
+    let left = rect.left + rect.width / 2 - width / 2;
+    left = Math.max(8, Math.min(left, window.innerWidth - width - 8));
+
+    const tipEl = tipRef.current;
+    const tipHeight = tipEl?.offsetHeight || 48;
+    const spaceAbove = rect.top - 8;
+    const placeBelow = spaceAbove < tipHeight + 8;
+    const top = placeBelow ? rect.bottom + 8 : rect.top - 8;
+
+    setPos({ top, left, width, placeBelow });
+  }, []);
+
+  const show = useCallback(() => {
+    placeTip();
+    setOpen(true);
+  }, [placeTip]);
+
+  const hide = useCallback(() => setOpen(false), []);
+
+  useLayoutEffect(() => {
+    if (open) placeTip();
+  }, [open, placeTip]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onReposition = () => placeTip();
+    window.addEventListener("resize", onReposition);
+    window.addEventListener("scroll", onReposition, true);
+    return () => {
+      window.removeEventListener("resize", onReposition);
+      window.removeEventListener("scroll", onReposition, true);
+    };
+  }, [open, placeTip]);
+
+  return (
+    <>
+      <span
+        ref={iconRef}
+        className="field-help"
+        tabIndex={0}
+        onMouseEnter={show}
+        onMouseLeave={hide}
+        onFocus={show}
+        onBlur={hide}
+      >
+        <span className="field-help-icon" aria-hidden="true">?</span>
+        <span className="sr-only">{text}</span>
+      </span>
+      {open
+        ? createPortal(
+            <span
+              ref={tipRef}
+              className={`field-help-tip field-help-tip-portal${pos.placeBelow ? " is-below" : ""}`}
+              role="tooltip"
+              style={{
+                top: `${pos.top}px`,
+                left: `${pos.left}px`,
+                width: `${pos.width}px`,
+              }}
+            >
+              {text}
+            </span>,
+            document.body
+          )
+        : null}
+    </>
+  );
+}
+
 function FormFieldLabel({ children, help, required = false, optional = false }) {
   return (
     <label className="form-label">
@@ -98,13 +178,7 @@ function FormFieldLabel({ children, help, required = false, optional = false }) 
       {optional ? (
         <span className="opt">{typeof optional === "string" ? optional : "optional"}</span>
       ) : null}
-      {help ? (
-        <span className="field-help" tabIndex={0}>
-          <span className="field-help-icon" aria-hidden="true">?</span>
-          <span className="field-help-tip" role="tooltip">{help}</span>
-          <span className="sr-only">{help}</span>
-        </span>
-      ) : null}
+      {help ? <FieldHelp text={help} /> : null}
     </label>
   );
 }
@@ -1955,11 +2029,7 @@ export default function LibraryUpload({
               onChange={(e) => handleFormChange("is_qc_flag", e.target.checked)}
             />
             This entry originated as a QC flag
-            <span className="field-help field-help-inline" tabIndex={0}>
-              <span className="field-help-icon" aria-hidden="true">?</span>
-              <span className="field-help-tip" role="tooltip">{FIELD_HELP.is_qc_flag}</span>
-              <span className="sr-only">{FIELD_HELP.is_qc_flag}</span>
-            </span>
+            <FieldHelp text={FIELD_HELP.is_qc_flag} />
           </label>
           {form.is_qc_flag && (
             <div className="qc-fields">

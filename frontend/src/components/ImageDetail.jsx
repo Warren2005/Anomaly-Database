@@ -375,6 +375,9 @@ export default function ImageDetail({
     const onWheel = (e) => {
       if (e.ctrlKey || e.metaKey) return;
       if (e.target.closest(".zoomable-image-wrap")) return;
+      // Grid tiles / panel filter own their own overflow — don't steal the wheel
+      // for the metadata pane or the masonry can't scroll.
+      if (e.target.closest(".panel-masonry, .grid-panel-filter-menu")) return;
       e.preventDefault();
       metaPane.scrollTop += e.deltaY;
     };

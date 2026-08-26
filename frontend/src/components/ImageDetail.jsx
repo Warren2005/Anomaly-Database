@@ -8,7 +8,7 @@ const VIEW_FOCUS = "focus";
 const VIEW_GRID = "grid";
 const GRID_TILE_SIZE_KEY = "ili-grid-tile-size";
 const GRID_TILE_MIN = 160;
-const GRID_TILE_MAX = 1200;
+const GRID_TILE_MAX = 420;
 const GRID_TILE_DEFAULT = 280;
 
 function loadGridTileSize() {
@@ -299,7 +299,8 @@ export default function ImageDetail({
 
   useEffect(() => {
     try {
-      localStorage.setItem(GRID_TILE_SIZE_KEY, String(gridTileSize));
+      const clamped = Math.min(GRID_TILE_MAX, Math.max(GRID_TILE_MIN, gridTileSize));
+      localStorage.setItem(GRID_TILE_SIZE_KEY, String(clamped));
     } catch {
       /* ignore */
     }
@@ -659,29 +660,19 @@ export default function ImageDetail({
                       <div className="grid-panel-filter-menu" role="listbox" aria-label="Panels to show in grid">
                         <div className="grid-panel-filter-menu-head">
                           <span>Choose panels to display</span>
-                          <div className="grid-panel-filter-actions">
-                            <button
-                              type="button"
-                              className="grid-panel-filter-reset"
-                              onClick={() => setGridHiddenPanels(new Set())}
-                              disabled={gridHiddenPanels.size === 0}
-                            >
-                              Select all
-                            </button>
-                            <button
-                              type="button"
-                              className="grid-panel-filter-reset"
-                              onClick={() =>
-                                setGridHiddenPanels(new Set(gridFilterOptions.map((opt) => opt.key)))
+                          <button
+                            type="button"
+                            className="grid-panel-filter-reset"
+                            onClick={() => {
+                              if (gridHiddenPanels.size === 0) {
+                                setGridHiddenPanels(new Set(gridFilterOptions.map((opt) => opt.key)));
+                              } else {
+                                setGridHiddenPanels(new Set());
                               }
-                              disabled={
-                                gridFilterOptions.length > 0
-                                && gridHiddenPanels.size === gridFilterOptions.length
-                              }
-                            >
-                              Unselect all
-                            </button>
-                          </div>
+                            }}
+                          >
+                            {gridHiddenPanels.size === 0 ? "Unselect all" : "Select all"}
+                          </button>
                         </div>
                         {gridFilterOptions.map((opt) => {
                           const visible = !gridHiddenPanels.has(opt.key);
@@ -997,44 +988,46 @@ export default function ImageDetail({
 
           {(image.revision_history || []).length > 0 && (createdRevision || latestRevision) && (
             <div className="detail-meta-block">
-              {createdRevision && (
-                <>
-                  <div className="detail-meta-heading">Created by</div>
-                  <div className="detail-revision-latest">
-                    <span className="detail-revision-latest-name">{createdRevision.name || "Unknown"}</span>
-                    {createdRevision.timestamp && (
-                      <span className="detail-revision-latest-when">
-                        {new Date(createdRevision.timestamp).toLocaleString(undefined, {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </span>
-                    )}
-                    {createdRevision.comment && (
-                      <div className="revision-comment">{createdRevision.comment}</div>
-                    )}
+              <div className="detail-revision-columns">
+                {latestRevision && (
+                  <div className="detail-revision-col">
+                    <div className="detail-meta-heading">Last updated</div>
+                    <div className="detail-revision-latest">
+                      <span className="detail-revision-latest-name">{latestRevision.name || "Unknown"}</span>
+                      {latestRevision.timestamp && (
+                        <span className="detail-revision-latest-when">
+                          {new Date(latestRevision.timestamp).toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </span>
+                      )}
+                      {latestRevision.comment && (
+                        <div className="revision-comment">{latestRevision.comment}</div>
+                      )}
+                    </div>
                   </div>
-                </>
-              )}
-              {latestRevision && (
-                <>
-                  <div className="detail-meta-heading">Last updated</div>
-                  <div className="detail-revision-latest">
-                    <span className="detail-revision-latest-name">{latestRevision.name || "Unknown"}</span>
-                    {latestRevision.timestamp && (
-                      <span className="detail-revision-latest-when">
-                        {new Date(latestRevision.timestamp).toLocaleString(undefined, {
-                          dateStyle: "medium",
-                          timeStyle: "short",
-                        })}
-                      </span>
-                    )}
-                    {latestRevision.comment && (
-                      <div className="revision-comment">{latestRevision.comment}</div>
-                    )}
+                )}
+                {createdRevision && (
+                  <div className="detail-revision-col">
+                    <div className="detail-meta-heading">Created by</div>
+                    <div className="detail-revision-latest">
+                      <span className="detail-revision-latest-name">{createdRevision.name || "Unknown"}</span>
+                      {createdRevision.timestamp && (
+                        <span className="detail-revision-latest-when">
+                          {new Date(createdRevision.timestamp).toLocaleString(undefined, {
+                            dateStyle: "medium",
+                            timeStyle: "short",
+                          })}
+                        </span>
+                      )}
+                      {createdRevision.comment && (
+                        <div className="revision-comment">{createdRevision.comment}</div>
+                      )}
+                    </div>
                   </div>
-                </>
-              )}
+                )}
+              </div>
               {(image.revision_history || []).length > 1 && (
                 <>
                   <button
@@ -1090,7 +1083,7 @@ export default function ImageDetail({
                   <span className="detail-meta-footer-label">Tags</span>
                   <div className="panel-tag-row detail-meta-footer-tags">
                     {tags.map((tag) => (
-                      <span key={tag} className="badge">{tag}</span>
+                      <span key={tag} className="badge badge-tag">{tag}</span>
                     ))}
                   </div>
                 </div>

@@ -233,6 +233,16 @@ export default function ImageDetail({
     })[0];
   }, [image.revision_history]);
 
+  const createdRevision = useMemo(() => {
+    const history = image.revision_history || [];
+    if (!history.length) return null;
+    return [...history].sort((a, b) => {
+      const ver = (a.version ?? 0) - (b.version ?? 0);
+      if (ver !== 0) return ver;
+      return new Date(a.timestamp || 0) - new Date(b.timestamp || 0);
+    })[0];
+  }, [image.revision_history]);
+
   // Reset per-image UI state when navigating to another similar result
   useEffect(() => {
     setMediaIdx(typeof media_index === "number" ? media_index : 0);
@@ -971,23 +981,46 @@ export default function ImageDetail({
             </div>
           ) : null}
 
-          {(image.revision_history || []).length > 0 && latestRevision && (
+          {(image.revision_history || []).length > 0 && (createdRevision || latestRevision) && (
             <div className="detail-meta-block">
-              <div className="detail-meta-heading">Last updated</div>
-              <div className="detail-revision-latest">
-                <span className="detail-revision-latest-name">{latestRevision.name || "Unknown"}</span>
-                {latestRevision.timestamp && (
-                  <span className="detail-revision-latest-when">
-                    {new Date(latestRevision.timestamp).toLocaleString(undefined, {
-                      dateStyle: "medium",
-                      timeStyle: "short",
-                    })}
-                  </span>
-                )}
-                {latestRevision.comment && (
-                  <div className="revision-comment">{latestRevision.comment}</div>
-                )}
-              </div>
+              {createdRevision && (
+                <>
+                  <div className="detail-meta-heading">Created by</div>
+                  <div className="detail-revision-latest">
+                    <span className="detail-revision-latest-name">{createdRevision.name || "Unknown"}</span>
+                    {createdRevision.timestamp && (
+                      <span className="detail-revision-latest-when">
+                        {new Date(createdRevision.timestamp).toLocaleString(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    )}
+                    {createdRevision.comment && (
+                      <div className="revision-comment">{createdRevision.comment}</div>
+                    )}
+                  </div>
+                </>
+              )}
+              {latestRevision && (
+                <>
+                  <div className="detail-meta-heading">Last updated</div>
+                  <div className="detail-revision-latest">
+                    <span className="detail-revision-latest-name">{latestRevision.name || "Unknown"}</span>
+                    {latestRevision.timestamp && (
+                      <span className="detail-revision-latest-when">
+                        {new Date(latestRevision.timestamp).toLocaleString(undefined, {
+                          dateStyle: "medium",
+                          timeStyle: "short",
+                        })}
+                      </span>
+                    )}
+                    {latestRevision.comment && (
+                      <div className="revision-comment">{latestRevision.comment}</div>
+                    )}
+                  </div>
+                </>
+              )}
               {(image.revision_history || []).length > 1 && (
                 <>
                   <button

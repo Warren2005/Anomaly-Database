@@ -187,6 +187,14 @@ class Dinov2HeadEmbeddingService:
         )
 
     def _compute_embedding(self, image_bytes: bytes) -> list[float]:
+        if self.model is None or self._head is None or self._transform is None:
+            from app.core.errors import ServiceUnavailableError
+
+            raise ServiceUnavailableError(
+                "Embedding model is not loaded — uploads and search are unavailable "
+                "until the DINOv2 backbone and metric head finish loading. Check "
+                "LIBRARY_DATA_DIR / models/dinov2_base_head_v2.pt and backend logs."
+            )
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
         tensor = self._transform(image).unsqueeze(0).to(self._device)
         with torch.no_grad():

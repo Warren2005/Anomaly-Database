@@ -3391,6 +3391,10 @@ button.badge {
   margin-bottom: 8px;
 }
 
+.detail-meta-block > .detail-meta-heading + .detail-revision-latest + .detail-meta-heading {
+  margin-top: 4px;
+}
+
 .detail-revision-latest-name {
   font-size: var(--lib-body);
   font-weight: 600;

@@ -219,7 +219,7 @@ export async function checkHealth() {
   return response.json();
 }
 
-export async function uploadToLibrary(files, metadata, orientationImage, videos = []) {
+export async function uploadToLibrary(files, metadata, orientationImage, videos = [], passkey) {
   const form = new FormData();
   const list = Array.isArray(files) ? files : [files];
   list.forEach((f) => form.append("files", f));
@@ -234,12 +234,14 @@ export async function uploadToLibrary(files, metadata, orientationImage, videos 
   });
   const response = await fetch(`${BASE_URL}/library/upload`, {
     method: "POST",
+    headers: { "X-Delete-Passkey": passkey ?? "" },
     body: form,
   });
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
     const error = new Error(err?.error?.message || `Upload failed: ${response.status}`);
     error.details = err?.error?.details;
+    error.status = response.status;
     throw error;
   }
   return response.json();

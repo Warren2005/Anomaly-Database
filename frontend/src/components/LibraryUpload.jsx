@@ -1236,7 +1236,13 @@ export default function LibraryUpload({
           )
           .join(",");
         payload.primary_index = String(primaryIndex);
-        const result = await uploadToLibrary(files, payload, orientationFile, videoFiles);
+        const result = await uploadToLibrary(
+          files,
+          payload,
+          orientationFile,
+          videoFiles,
+          adminPasskey
+        );
         setSuccess(result);
         if (onSuccess) onSuccess();
       }
@@ -1245,7 +1251,7 @@ export default function LibraryUpload({
       if (err.details?.field) {
         setFieldErrors((prev) => ({ ...prev, [err.details.field]: err.message }));
       }
-      if (isEditMode && err.status === 403) onAuthError?.();
+      if (err.status === 403) onAuthError?.();
     } finally {
       setUploading(false);
     }

@@ -2551,6 +2551,33 @@ button.badge {
   flex: none;
 }
 
+.add-entry-unlock {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  min-height: 40vh;
+  padding: 24px;
+  text-align: center;
+}
+
+.add-entry-unlock-title {
+  margin: 0;
+  font-size: 1.35rem;
+  font-weight: 600;
+}
+
+.add-entry-unlock-text {
+  margin: 0;
+  max-width: 28rem;
+  color: var(--text-muted);
+}
+
+.add-entry-unlock-error {
+  margin: 0;
+}
+
 .add-run-panel {
   display: flex;
   flex-direction: column;

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { searchSimilar, checkHealth } from "./api/client";
+import { searchSimilar, checkHealth, verifyPasskey } from "./api/client";
 import ResultsGrid from "./components/ResultsGrid";
 import ImageDetail from "./components/ImageDetail";
 import StatusBar from "./components/StatusBar";
@@ -138,6 +138,10 @@ export default function App() {
   const [minSimilarity, setMinSimilarity] = useState(0);
   const [maxSimilarity, setMaxSimilarity] = useState(100);
   const [addEntryDirty, setAddEntryDirty] = useState(false);
+  const [addAdminPasskey, setAddAdminPasskey] = useState(null);
+  const [addUnlockInput, setAddUnlockInput] = useState("");
+  const [addUnlocking, setAddUnlocking] = useState(false);
+  const [addUnlockError, setAddUnlockError] = useState(null);
   const [leaveAddConfirm, setLeaveAddConfirm] = useState(null);
   const imageSearchRef = useRef(null);
   const [queryPreview, setQueryPreview] = useState(null);
@@ -157,23 +161,49 @@ export default function App() {
     setAddEntryDirty(Boolean(dirty));
   }, []);
 
+  const clearAddAdminPasskey = useCallback(() => {
+    setAddAdminPasskey(null);
+    setAddUnlockInput("");
+    setAddUnlockError(null);
+  }, []);
+
   const requestModeChange = useCallback((nextMode, after) => {
     if (mode === "add" && addEntryDirty && nextMode !== "add") {
       setLeaveAddConfirm({ nextMode, after });
       return;
     }
+    if (mode === "add" && nextMode !== "add") {
+      clearAddAdminPasskey();
+    }
     setMode(nextMode);
     after?.();
-  }, [mode, addEntryDirty]);
+  }, [mode, addEntryDirty, clearAddAdminPasskey]);
 
   const confirmLeaveAdd = useCallback(() => {
     if (!leaveAddConfirm) return;
     const { nextMode, after } = leaveAddConfirm;
     setLeaveAddConfirm(null);
     setAddEntryDirty(false);
+    clearAddAdminPasskey();
     setMode(nextMode);
     after?.();
-  }, [leaveAddConfirm]);
+  }, [leaveAddConfirm, clearAddAdminPasskey]);
+
+  const handleAddUnlock = useCallback(async (e) => {
+    e.preventDefault();
+    if (!addUnlockInput || addUnlocking) return;
+    setAddUnlocking(true);
+    setAddUnlockError(null);
+    try {
+      await verifyPasskey(addUnlockInput);
+      setAddAdminPasskey(addUnlockInput);
+      setAddUnlockInput("");
+    } catch (err) {
+      setAddUnlockError(err.message);
+    } finally {
+      setAddUnlocking(false);
+    }
+  }, [addUnlockInput, addUnlocking]);
 
   const runWithLeaveGuard = useCallback((nextMode, action) => {
     if (mode === "add" && addEntryDirty) {
@@ -445,8 +475,41 @@ export default function App() {
 
         {mode === "browse" && <LibraryBrowser />}
 
-        {mode === "add" && (
-          <LibraryUpload onDirtyChange={handleAddDirtyChange} />
+        {mode === "add" && !addAdminPasskey && (
+          <section className="add-entry-unlock">
+            <h2 className="add-entry-unlock-title">Add Entry</h2>
+            <p className="add-entry-unlock-text">
+              Admin passkey required to create new library entries.
+            </p>
+            <form className="delete-confirm detail-unlock-form" onSubmit={handleAddUnlock}>
+              <input
+                type="password"
+                className="form-input delete-passkey-input detail-unlock-input"
+                placeholder="Admin key to add entry"
+                value={addUnlockInput}
+                onChange={(e) => setAddUnlockInput(e.target.value)}
+                autoComplete="off"
+              />
+              <button
+                type="submit"
+                className="btn btn-secondary"
+                disabled={addUnlocking || !addUnlockInput}
+              >
+                {addUnlocking ? "Checking…" : "Unlock"}
+              </button>
+            </form>
+            {addUnlockError && (
+              <p className="form-error add-entry-unlock-error">{addUnlockError}</p>
+            )}
+          </section>
+        )}
+
+        {mode === "add" && addAdminPasskey && (
+          <LibraryUpload
+            onDirtyChange={handleAddDirtyChange}
+            adminPasskey={addAdminPasskey}
+            onAuthError={clearAddAdminPasskey}
+          />
         )}
 
         {mode === "search" && state === "searching" && (
